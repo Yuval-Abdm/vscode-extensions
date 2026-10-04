@@ -1,6 +1,8 @@
-// Outils de test partagés : analyseur prêt à l'emploi.
+// Outils de test partagés : analyseur prêt à l'emploi, extraction depuis du code, curseur « | » dans un extrait.
 import { createRequire } from 'node:module';
+import { extractFile } from '../src/server/model/extract.ts';
 import { createParser, initParser, parsePhp, type Parser, type Tree, type WasmPaths } from '../src/server/parser/parser.ts';
+import type { FileSymbols, Position } from '../src/shared/types.ts';
 
 const require = createRequire(import.meta.url);
 
@@ -16,4 +18,19 @@ export async function parser(): Promise<Parser> {
 
 export async function parse(code: string): Promise<Tree> {
   return parsePhp(await parser(), code);
+}
+
+export async function extract(code: string, uri = 'file:///test.php'): Promise<FileSymbols> {
+  return extractFile(await parse(code), uri);
+}
+
+/** Retire le marqueur « | » du code et renvoie sa position. */
+export function cursor(code: string): { text: string; position: Position } {
+  const offset = code.indexOf('|');
+  if (offset < 0) throw new Error('missing | marker');
+  const before = code.slice(0, offset).split('\n');
+  return {
+    text: code.slice(0, offset) + code.slice(offset + 1),
+    position: { line: before.length - 1, character: before[before.length - 1].length },
+  };
 }
