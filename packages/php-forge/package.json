@@ -1,0 +1,43 @@
+{
+  "name": "php-forge",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.1.0",
+  "preview": true,
+  "publisher": "yuval-abdm",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions.git",
+    "directory": "packages/php-forge"
+  },
+  "bugs": {
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions/issues"
+  },
+  "homepage": "https://github.com/Yuval-Abdm/vscode-extensions/tree/main/packages/php-forge#readme",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "main": "./dist/client.cjs",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@vscode/l10n": "^0.0.18",
+    "minimatch": "^10.2.6",
+    "tree-sitter-php": "0.24.2",
+    "vscode-languageclient": "^10.1.2",
+    "vscode-languageserver": "^10.1.2",
+    "vscode-languageserver-textdocument": "^1.0.15",
+    "vscode-uri": "^3.2.0",
+    "web-tree-sitter": "0.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/vscode": "~1.91.0",
+    "typescript": "^5.9.3",
+    "vscode-jsonrpc": "9.0.3"
+  }
+}

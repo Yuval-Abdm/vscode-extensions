@@ -5,3 +5,6 @@ ruvector.db
 .swarm/
 dist/
 .vscode-test/
+.cache/
+bench-results/
+.superpowers/
