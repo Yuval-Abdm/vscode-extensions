@@ -5,7 +5,9 @@ import type { FileSymbols, IncludeKind, NameScope, PhpParam, PhpSymbol, SymbolKi
 import { getLanguage, type Node, type Tree } from '../parser/parser.ts';
 import { typeFromNode } from '../types/declType.ts';
 import { parseDocType } from '../types/docType.ts';
+import { Inferrer } from '../types/infer.ts';
 import { levelTypeAware, parametersOf, pickType } from '../types/params.ts';
+import { union } from '../types/type.ts';
 import { newScope, resolveClassName, scopeAt } from './names.ts';
 import { docComment, docMethods, docMixins, docParents, docProperties, docReturn, docTag, docTemplates, docVar } from './phpdoc.ts';
 import { rangeOf } from './ranges.ts';
@@ -38,6 +40,18 @@ const INCLUDE_KINDS: Record<string, IncludeKind> = {
 const NAME_TYPES = new Set(['name', 'qualified_name', 'relative_name']);
 const MEMBER_LISTS = new Set(['declaration_list', 'enum_declaration_list']);
 
+/** Déclaration dont le type sera déduit du code une fois le fichier entièrement lu. */
+interface Pending {
+  symbol: PhpSymbol;
+  /** Fonction ou méthode, élément de propriété, élément de constante, ou argument valeur d'un define */
+  node: Node;
+  /** Pour une propriété : la classe (affectations $this->x) */
+  owner?: Node;
+}
+
+/** Au-delà, un type déduit n'est pas conservé (taille du cache) */
+const MAX_INFERRED = 2000;
+
 let query: Query | undefined;
 
 export function extractFile(tree: Tree, uri: string): FileSymbols {
@@ -45,6 +59,7 @@ export function extractFile(tree: Tree, uri: string): FileSymbols {
   const fileEnd = rangeOf(root).end;
   const fileScope = newScope('', rangeOf(root));
   const out: FileSymbols = { uri, symbols: [], includes: [], scopes: [fileScope], syntaxError: root.hasError };
+  const pending: Pending[] = [];
   let open = fileScope; // portée ouverte par `namespace X;` (au départ : celle du fichier)
   query ??= new Query(getLanguage(), PATTERNS);
 
@@ -67,13 +82,13 @@ export function extractFile(tree: Tree, uri: string): FileSymbols {
         addUses(scope, node);
         break;
       case 'class':
-        out.symbols.push(classSymbol(node, scope));
+        out.symbols.push(classSymbol(node, scope, pending));
         break;
       case 'function':
-        out.symbols.push(functionSymbol(node, scope));
+        out.symbols.push(functionSymbol(node, scope, pending));
         break;
       case 'const':
-        if (!MEMBER_LISTS.has(node.parent?.type ?? '')) out.symbols.push(...constSymbols(node, scope, true));
+        if (!MEMBER_LISTS.has(node.parent?.type ?? '')) out.symbols.push(...constSymbols(node, scope, true, pending));
         break;
       case 'include': {
         let path = node.namedChildren[0];
@@ -82,12 +97,13 @@ export function extractFile(tree: Tree, uri: string): FileSymbols {
         break;
       }
       case 'define': {
-        const symbol = defineSymbol(node);
+        const symbol = defineSymbol(node, pending);
         if (symbol) out.symbols.push(symbol);
         break;
       }
     }
   }
+  inferPending(out, pending);
   return out;
 }
 
@@ -151,7 +167,7 @@ function versionInfo(symbol: PhpSymbol, doc: string | undefined, attributes: str
   if (removed) symbol.removed = removed;
 }
 
-function classSymbol(node: Node, scope: NameScope): PhpSymbol {
+function classSymbol(node: Node, scope: NameScope, pending: Pending[]): PhpSymbol {
   const kind = CLASS_KINDS[node.type];
   const nameNode = node.childForFieldName('name')!;
   const symbol = declare(kind, nameNode.text, node, nameNode, classSignature(node, kind));
@@ -177,9 +193,9 @@ function classSymbol(node: Node, scope: NameScope): PhpSymbol {
   const children: PhpSymbol[] = [];
   const traits: string[] = [];
   for (const member of node.childForFieldName('body')?.namedChildren ?? []) {
-    if (member.type === 'method_declaration') children.push(...methodSymbols(member, scope, templates));
-    else if (member.type === 'property_declaration') children.push(...propertySymbols(member, scope, templates));
-    else if (member.type === 'const_declaration') children.push(...constSymbols(member, scope, false));
+    if (member.type === 'method_declaration') children.push(...methodSymbols(member, scope, templates, pending));
+    else if (member.type === 'property_declaration') children.push(...propertySymbols(member, scope, templates, node, pending));
+    else if (member.type === 'const_declaration') children.push(...constSymbols(member, scope, false, pending));
     else if (member.type === 'use_declaration') traits.push(...classNames(member, scope));
     else if (member.type === 'enum_case') children.push(enumCaseSymbol(member));
   }
@@ -196,7 +212,7 @@ function returnType(node: Node, doc: string | undefined, scope: NameScope, templ
   return pickType(declared, documented ? parseDocType(documented, scope, templates) : undefined);
 }
 
-function methodSymbols(node: Node, scope: NameScope, classTemplates: string[]): PhpSymbol[] {
+function methodSymbols(node: Node, scope: NameScope, classTemplates: string[], pending: Pending[]): PhpSymbol[] {
   const nameNode = node.childForFieldName('name')!;
   const method = declare('method', nameNode.text, node, nameNode, functionSignature(node));
   const own = docTemplates(method.doc);
@@ -205,6 +221,7 @@ function methodSymbols(node: Node, scope: NameScope, classTemplates: string[]): 
   method.params = parametersOf(node, scope, templates, method.doc);
   const type = returnType(node, method.doc, scope, templates);
   if (type) method.type = type;
+  else pending.push({ symbol: method, node });
   const out = [method];
   for (const parameter of node.childForFieldName('parameters')?.namedChildren ?? []) {
     if (parameter.type !== 'property_promotion_parameter') continue;
@@ -218,7 +235,7 @@ function methodSymbols(node: Node, scope: NameScope, classTemplates: string[]): 
   return out;
 }
 
-function propertySymbols(declaration: Node, scope: NameScope, templates: string[]): PhpSymbol[] {
+function propertySymbols(declaration: Node, scope: NameScope, templates: string[], owner: Node, pending: Pending[]): PhpSymbol[] {
   const elements = declaration.namedChildren.filter((c) => c.type === 'property_element');
   const declared = typeFromNode(declaration.childForFieldName('type'), scope);
   const vars = docVar(docComment(declaration));
@@ -229,12 +246,13 @@ function propertySymbols(declaration: Node, scope: NameScope, templates: string[
     const documented = vars.find((v) => !v.name || v.name === symbol.name)?.type;
     const type = pickType(declared, documented ? parseDocType(documented, scope, templates) : undefined);
     if (type) symbol.type = type;
+    else pending.push({ symbol, node: element, owner });
     return symbol;
   });
 }
 
 /** Constantes d'un `const` : globales (avec nom complet) ou de classe. */
-function constSymbols(declaration: Node, scope: NameScope, global: boolean): PhpSymbol[] {
+function constSymbols(declaration: Node, scope: NameScope, global: boolean, pending: Pending[]): PhpSymbol[] {
   const elements = declaration.namedChildren.filter((c) => c.type === 'const_element');
   const declared = typeFromNode(declaration.childForFieldName('type'), scope);
   return elements.map((element) => {
@@ -243,11 +261,12 @@ function constSymbols(declaration: Node, scope: NameScope, global: boolean): Php
     const symbol = declare(global ? 'constant' : 'classConstant', nameNode.text, node, nameNode, constSignature(declaration, element), declaration);
     if (global) symbol.fqn = qualify(scope, nameNode.text);
     if (declared) symbol.type = declared;
+    else pending.push({ symbol, node: element });
     return symbol;
   });
 }
 
-function functionSymbol(node: Node, scope: NameScope): PhpSymbol {
+function functionSymbol(node: Node, scope: NameScope, pending: Pending[]): PhpSymbol {
   const nameNode = node.childForFieldName('name')!;
   const symbol = declare('function', nameNode.text, node, nameNode, functionSignature(node));
   symbol.fqn = qualify(scope, nameNode.text);
@@ -256,6 +275,7 @@ function functionSymbol(node: Node, scope: NameScope): PhpSymbol {
   symbol.params = parametersOf(node, scope, templates, symbol.doc);
   const type = returnType(node, symbol.doc, scope, templates);
   if (type) symbol.type = type;
+  else pending.push({ symbol, node });
   return symbol;
 }
 
@@ -309,7 +329,7 @@ function literalString(node: Node): string | undefined {
 }
 
 /** `define('NOM', valeur)` : constante globale (le nom peut contenir un namespace). */
-function defineSymbol(call: Node): PhpSymbol | undefined {
+function defineSymbol(call: Node, pending: Pending[]): PhpSymbol | undefined {
   const args = call.childForFieldName('arguments')?.namedChildren.filter((a) => a.type === 'argument') ?? [];
   const nameNode = args[0]?.namedChildren[0];
   const name = nameNode && literalString(nameNode);
@@ -317,5 +337,60 @@ function defineSymbol(call: Node): PhpSymbol | undefined {
   const fqn = name.replace(/^\\/, '');
   const statement = call.parent?.type === 'expression_statement' ? call.parent : call;
   const signature = squash(`define('${fqn}', ${truncate(args[1]?.text ?? '')})`);
-  return { ...declare('constant', fqn.slice(fqn.lastIndexOf('\\') + 1), call, nameNode, signature, statement), fqn };
+  const symbol: PhpSymbol = { ...declare('constant', fqn.slice(fqn.lastIndexOf('\\') + 1), call, nameNode, signature, statement), fqn };
+  if (args[1]) pending.push({ symbol, node: args[1] });
+  return symbol;
+}
+
+/** Types déduits du code pour les déclarations sans type : retours, valeurs, affectations $this->x. */
+function inferPending(file: FileSymbols, pending: Pending[]): void {
+  if (!pending.length) return;
+  const inferrer = new Inferrer(file.scopes);
+  const assignments = new Map<number, Map<string, Node[]>>();
+  for (const { symbol, node, owner } of pending) {
+    let type: TypeExpr | undefined;
+    if (symbol.kind === 'function' || symbol.kind === 'method') {
+      type = inferrer.inferReturn(node);
+    } else if (symbol.kind === 'property') {
+      const values: TypeExpr[] = [];
+      const initial = node.childForFieldName('default_value');
+      if (initial) values.push(inferrer.expr(initial));
+      if (owner) {
+        let byName = assignments.get(owner.id);
+        if (!byName) assignments.set(owner.id, (byName = thisAssignments(owner)));
+        for (const right of byName.get(symbol.name) ?? []) values.push(inferrer.expr(right));
+      }
+      if (values.length) type = union(...values);
+    } else {
+      // Constante : `NOM = valeur` (le nom est le premier enfant) ou argument valeur d'un define
+      const children = node.namedChildren;
+      const value = children[children.length - 1];
+      if (value && (node.type !== 'const_element' || children.length > 1)) type = inferrer.expr(value);
+    }
+    if (type && type.kind !== 'mixed' && JSON.stringify(type).length <= MAX_INFERRED) symbol.inferred = type;
+  }
+}
+
+/** Affectations `$this->nom = valeur` dans les méthodes d'une classe, par nom de propriété. */
+function thisAssignments(owner: Node): Map<string, Node[]> {
+  const out = new Map<string, Node[]>();
+  const visit = (node: Node): void => {
+    for (const child of node.namedChildren) {
+      if (child.type === 'class_declaration' || child.type === 'anonymous_class') continue;
+      if (child.type === 'assignment_expression') {
+        const left = child.childForFieldName('left');
+        const object = left?.childForFieldName('object');
+        const name = left?.childForFieldName('name');
+        const right = child.childForFieldName('right');
+        if (left?.type === 'member_access_expression' && object?.text === '$this' && name?.type === 'name' && right) {
+          const list = out.get(name.text);
+          if (list) list.push(right);
+          else out.set(name.text, [right]);
+        }
+      }
+      visit(child);
+    }
+  };
+  visit(owner.childForFieldName('body') ?? owner);
+  return out;
 }

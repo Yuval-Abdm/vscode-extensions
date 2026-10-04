@@ -7,7 +7,7 @@ import { gunzip, gzip } from 'node:zlib';
 import type { FileSymbols } from '../../shared/types.ts';
 
 /** À incrémenter à chaque changement du format des résumés (FileSymbols) ou de l'extraction. */
-export const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
 
 export interface CacheEntry {
   size: number;
