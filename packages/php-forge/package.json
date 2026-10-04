@@ -7,6 +7,11 @@
   "publisher": "yuval-abdm",
   "license": "MIT",
   "type": "module",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#2b2140",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/Yuval-Abdm/vscode-extensions.git",
@@ -19,11 +24,33 @@
   "engines": {
     "vscode": "^1.91.0"
   },
+  "l10n": "./l10n",
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "php",
+    "intellisense",
+    "language server",
+    "intelephense",
+    "go to definition",
+    "include",
+    "legacy",
+    "diagnostics"
+  ],
   "main": "./dist/client.cjs",
+  "activationEvents": [
+    "onLanguage:php",
+    "workspaceContains:**/*.php"
+  ],
   "scripts": {
     "build": "node scripts/build-stubs.ts && node scripts/build.ts",
     "typecheck": "tsc -p .",
-    "test": "node scripts/build.ts --dev && node --test \"test/**/*.test.ts\""
+    "test": "node scripts/build.ts --dev && node --test \"test/**/*.test.ts\"",
+    "bench": "node scripts/bench.ts",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
   },
   "dependencies": {
     "@vscode/l10n": "^0.0.18",
@@ -40,5 +67,56 @@
     "@types/vscode": "~1.91.0",
     "typescript": "^5.9.3",
     "vscode-jsonrpc": "9.0.3"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "phpForge.restartServer",
+        "title": "%phpForge.restartServer.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.reindex",
+        "title": "%phpForge.reindex.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showOutput",
+        "title": "%phpForge.showOutput.title%",
+        "category": "PHP Forge"
+      }
+    ],
+    "configuration": {
+      "title": "PHP Forge",
+      "properties": {
+        "phpForge.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/.git/**"
+          ],
+          "markdownDescription": "%phpForge.exclude.description%"
+        },
+        "phpForge.maxFileSize": {
+          "type": "number",
+          "default": 2000000,
+          "minimum": 10000,
+          "markdownDescription": "%phpForge.maxFileSize.description%"
+        },
+        "phpForge.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "%phpForge.trace.server.description%"
+        }
+      }
+    }
   }
 }

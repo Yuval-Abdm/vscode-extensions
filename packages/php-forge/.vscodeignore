@@ -1,0 +1,15 @@
+src/**
+test/**
+scripts/**
+node_modules/**
+.cache/**
+bench-results/**
+tsconfig.json
+**/*.map
+*.vsix
+media/icon.svg
+dist/stubs.tag
+.claude-flow/**
+.claude/**
+.swarm/**
+ruvector.db

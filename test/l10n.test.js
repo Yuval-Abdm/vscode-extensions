@@ -7,14 +7,14 @@ const path = require('path');
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 
-const PACKAGES = ['changed-files-explorer', 'ftp-sftp-deploy'];
+const PACKAGES = ['changed-files-explorer', 'ftp-sftp-deploy', 'php-forge'];
 const root = path.join(__dirname, '..', 'packages');
 
-/** Clés l10n du code : vscode.l10n.t('…') et t('…') (traducteur passé en paramètre). */
+/** Clés l10n du code (.js et .ts, sous-dossiers compris) : vscode.l10n.t('…'), l10n.t('…') et t('…'). */
 function keysInCode(dir) {
   const keys = new Set();
-  const call = /(?:vscode\.l10n\.t|(?<![\w.])t)\(\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g;
-  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.js'))) {
+  const call = /(?:(?:vscode\.)?l10n\.t|(?<![\w.])t)\(\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g;
+  for (const file of fs.readdirSync(dir, { recursive: true }).filter((f) => /\.(js|ts)$/.test(f))) {
     const src = fs.readFileSync(path.join(dir, file), 'utf8');
     for (const m of src.matchAll(call)) keys.add(eval(m[1])); // littéral JS → chaîne
   }

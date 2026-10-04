@@ -1,0 +1,13 @@
+{
+  "Show extension": "Afficher l'extension",
+  "Don't show again": "Ne plus afficher",
+  "{0} is also enabled: completions and diagnostics will be duplicated. You can disable it for this workspace.": "{0} est aussi activée : complétions et diagnostics seront en double. Vous pouvez la désactiver pour cet espace de travail.",
+  "Indexing {0}…": "Indexation de {0}…",
+  "Syntax error: missing \"{0}\"": "Erreur de syntaxe : « {0} » manquant",
+  "Syntax error: unexpected \"{0}\"": "Erreur de syntaxe : « {0} » inattendu",
+  "**Deprecated**": "**Obsolète**",
+  "Available since PHP {0}": "Disponible depuis PHP {0}",
+  "Available up to PHP {0}": "Disponible jusqu'à PHP {0}",
+  "Removed in PHP {0}": "Supprimée en PHP {0}",
+  "{0} other declarations": "{0} autres déclarations"
+}

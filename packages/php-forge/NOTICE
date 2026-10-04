@@ -1,0 +1,13 @@
+PHP Forge
+Copyright (c) 2026 Yuval-Abdm — MIT License (see LICENSE)
+
+This extension bundles third-party components:
+
+- JetBrains/phpstorm-stubs (https://github.com/JetBrains/phpstorm-stubs)
+  Declarations of PHP functions, classes and constants, converted into dist/stubs.json.gz.
+  Copyright JetBrains s.r.o. — Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+
+- tree-sitter-php (https://github.com/tree-sitter/tree-sitter-php) — MIT License
+- web-tree-sitter (https://github.com/tree-sitter/tree-sitter) — MIT License
+- vscode-languageserver, vscode-languageclient, vscode-uri, @vscode/l10n (Microsoft) — MIT License
+- minimatch (Isaac Z. Schlueter) — BlueOak-1.0.0 License

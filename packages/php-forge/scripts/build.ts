@@ -1,4 +1,4 @@
-// Bundles esbuild (CommonJS) du serveur et du worker d'indexation, et copie des fichiers WASM dans dist/.
+// Bundles esbuild (CommonJS) du client, du serveur et du worker d'indexation, et copie des fichiers WASM dans dist/.
 // --dev : sans minification (tests).
 import { copyFileSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -32,6 +32,7 @@ const common: BuildOptions = {
 
 mkdirSync(dist, { recursive: true });
 await Promise.all([
+  build({ ...common, entryPoints: [path.join(root, 'src/client/extension.ts')], outfile: path.join(dist, 'client.cjs'), external: ['vscode'] }),
   build({ ...common, entryPoints: [path.join(root, 'src/server/server.ts')], outfile: path.join(dist, 'server.cjs') }),
   build({ ...common, entryPoints: [path.join(root, 'src/server/index/worker.ts')], outfile: path.join(dist, 'worker.cjs') }),
 ]);
