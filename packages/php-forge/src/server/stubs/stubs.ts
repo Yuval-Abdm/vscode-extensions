@@ -6,7 +6,7 @@ import { SymbolIndex } from '../index/symbolIndex.ts';
 
 export const STUBS_TAG = 'v2026.2';
 /** À incrémenter si le format du fichier généré change */
-export const STUBS_FORMAT = 1;
+export const STUBS_FORMAT = 2;
 
 interface StubsFile {
   format: number;

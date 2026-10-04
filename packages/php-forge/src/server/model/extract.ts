@@ -1,10 +1,13 @@
-// Arbre tree-sitter → résumé sérialisable d'un fichier : portées de noms, déclarations, inclusions.
+// Arbre tree-sitter → résumé sérialisable d'un fichier : portées de noms, déclarations typées, inclusions.
 // Une requête tree-sitter (exécutée en WASM) repère les nœuds utiles, traités dans l'ordre du fichier.
 import { Query } from 'web-tree-sitter';
-import type { FileSymbols, IncludeKind, NameScope, PhpSymbol, SymbolKind } from '../../shared/types.ts';
+import type { FileSymbols, IncludeKind, NameScope, PhpParam, PhpSymbol, SymbolKind, TypeExpr } from '../../shared/types.ts';
 import { getLanguage, type Node, type Tree } from '../parser/parser.ts';
+import { typeFromNode } from '../types/declType.ts';
+import { parseDocType } from '../types/docType.ts';
+import { levelTypeAware, parametersOf, pickType } from '../types/params.ts';
 import { newScope, resolveClassName, scopeAt } from './names.ts';
-import { docComment, docTag } from './phpdoc.ts';
+import { docComment, docMethods, docMixins, docParents, docProperties, docReturn, docTag, docTemplates, docVar } from './phpdoc.ts';
 import { rangeOf } from './ranges.ts';
 import { classSignature, constSignature, functionSignature, modifiersOf, propertySignature, squash, truncate, withoutAttributes } from './signature.ts';
 
@@ -70,7 +73,7 @@ export function extractFile(tree: Tree, uri: string): FileSymbols {
         out.symbols.push(functionSymbol(node, scope));
         break;
       case 'const':
-        if (!MEMBER_LISTS.has(node.parent?.type ?? '')) out.symbols.push(...constSymbols(node, scope));
+        if (!MEMBER_LISTS.has(node.parent?.type ?? '')) out.symbols.push(...constSymbols(node, scope, true));
         break;
       case 'include': {
         let path = node.namedChildren[0];
@@ -153,67 +156,149 @@ function classSymbol(node: Node, scope: NameScope): PhpSymbol {
   const nameNode = node.childForFieldName('name')!;
   const symbol = declare(kind, nameNode.text, node, nameNode, classSignature(node, kind));
   symbol.fqn = qualify(scope, nameNode.text);
+  const templates = docTemplates(symbol.doc);
+  if (templates.length) symbol.templates = templates;
   const parents = classNames(childOfType(node, 'base_clause'), scope);
   const interfaces = classNames(childOfType(node, 'class_interface_clause'), scope);
+  if (kind === 'enum') interfaces.push(node.namedChildren.some((c) => c.type === 'primitive_type') ? 'BackedEnum' : 'UnitEnum');
   if (parents.length) symbol.extends = parents;
   if (interfaces.length) symbol.implements = interfaces;
+  const parentArgs: Record<string, TypeExpr[]> = {};
+  for (const text of docParents(symbol.doc)) {
+    const type = parseDocType(text, scope, templates);
+    if (type?.kind === 'class' && type.args) parentArgs[type.fqn.toLowerCase()] = type.args;
+  }
+  if (Object.keys(parentArgs).length) symbol.parentArgs = parentArgs;
+  const mixins = docMixins(symbol.doc)
+    .map((name) => resolveClassName(name.replace(/<.*$/, ''), scope))
+    .filter((name): name is string => !!name);
+  if (mixins.length) symbol.mixins = mixins;
 
   const children: PhpSymbol[] = [];
   const traits: string[] = [];
   for (const member of node.childForFieldName('body')?.namedChildren ?? []) {
-    if (member.type === 'method_declaration') children.push(...methodSymbols(member));
-    else if (member.type === 'property_declaration') children.push(...propertySymbols(member));
-    else if (member.type === 'const_declaration') children.push(...constSymbols(member));
+    if (member.type === 'method_declaration') children.push(...methodSymbols(member, scope, templates));
+    else if (member.type === 'property_declaration') children.push(...propertySymbols(member, scope, templates));
+    else if (member.type === 'const_declaration') children.push(...constSymbols(member, scope, false));
     else if (member.type === 'use_declaration') traits.push(...classNames(member, scope));
     else if (member.type === 'enum_case') children.push(enumCaseSymbol(member));
   }
+  children.push(...virtualMembers(symbol, scope, templates));
   if (traits.length) symbol.uses = traits;
   if (children.length) symbol.children = children;
   return symbol;
 }
 
-function methodSymbols(node: Node): PhpSymbol[] {
+/** Type de retour : déclaré (ou attribut des stubs) complété par @return. */
+function returnType(node: Node, doc: string | undefined, scope: NameScope, templates: string[]): TypeExpr | undefined {
+  const declared = typeFromNode(node.childForFieldName('return_type'), scope) ?? levelTypeAware(node, scope, templates);
+  const documented = docReturn(doc);
+  return pickType(declared, documented ? parseDocType(documented, scope, templates) : undefined);
+}
+
+function methodSymbols(node: Node, scope: NameScope, classTemplates: string[]): PhpSymbol[] {
   const nameNode = node.childForFieldName('name')!;
-  const out = [declare('method', nameNode.text, node, nameNode, functionSignature(node))];
+  const method = declare('method', nameNode.text, node, nameNode, functionSignature(node));
+  const own = docTemplates(method.doc);
+  if (own.length) method.templates = own;
+  const templates = [...classTemplates, ...own];
+  method.params = parametersOf(node, scope, templates, method.doc);
+  const type = returnType(node, method.doc, scope, templates);
+  if (type) method.type = type;
+  const out = [method];
   for (const parameter of node.childForFieldName('parameters')?.namedChildren ?? []) {
     if (parameter.type !== 'property_promotion_parameter') continue;
     const variable = parameter.childForFieldName('name')!;
-    out.push(declare('property', variable.text.slice(1), parameter, variable, withoutAttributes(parameter)));
+    const property = declare('property', variable.text.slice(1), parameter, variable, withoutAttributes(parameter));
+    const param = method.params.find((p) => p.name === property.name);
+    if (param?.type) property.type = param.type;
+    if (param?.doc && !property.doc) property.doc = param.doc;
+    out.push(property);
   }
   return out;
 }
 
-function propertySymbols(declaration: Node): PhpSymbol[] {
+function propertySymbols(declaration: Node, scope: NameScope, templates: string[]): PhpSymbol[] {
   const elements = declaration.namedChildren.filter((c) => c.type === 'property_element');
+  const declared = typeFromNode(declaration.childForFieldName('type'), scope);
+  const vars = docVar(docComment(declaration));
   return elements.map((element) => {
     const variable = element.childForFieldName('name')!;
     const node = elements.length === 1 ? declaration : element;
-    return declare('property', variable.text.slice(1), node, variable, propertySignature(declaration, element), declaration);
-  });
-}
-
-/** Constantes d'un `const` : globales (avec portée) ou de classe (sans). */
-function constSymbols(declaration: Node, scope?: NameScope): PhpSymbol[] {
-  const elements = declaration.namedChildren.filter((c) => c.type === 'const_element');
-  return elements.map((element) => {
-    const nameNode = element.namedChildren.find((c) => c.type === 'name')!;
-    const node = elements.length === 1 ? declaration : element;
-    const symbol = declare(scope ? 'constant' : 'classConstant', nameNode.text, node, nameNode, constSignature(declaration, element), declaration);
-    if (scope) symbol.fqn = qualify(scope, nameNode.text);
+    const symbol = declare('property', variable.text.slice(1), node, variable, propertySignature(declaration, element), declaration);
+    const documented = vars.find((v) => !v.name || v.name === symbol.name)?.type;
+    const type = pickType(declared, documented ? parseDocType(documented, scope, templates) : undefined);
+    if (type) symbol.type = type;
     return symbol;
   });
 }
 
-function enumCaseSymbol(node: Node): PhpSymbol {
-  const nameNode = node.childForFieldName('name')!;
-  return declare('enumCase', nameNode.text, node, nameNode, squash(node.text.replace(/;\s*$/, '')));
+/** Constantes d'un `const` : globales (avec nom complet) ou de classe. */
+function constSymbols(declaration: Node, scope: NameScope, global: boolean): PhpSymbol[] {
+  const elements = declaration.namedChildren.filter((c) => c.type === 'const_element');
+  const declared = typeFromNode(declaration.childForFieldName('type'), scope);
+  return elements.map((element) => {
+    const nameNode = element.namedChildren.find((c) => c.type === 'name')!;
+    const node = elements.length === 1 ? declaration : element;
+    const symbol = declare(global ? 'constant' : 'classConstant', nameNode.text, node, nameNode, constSignature(declaration, element), declaration);
+    if (global) symbol.fqn = qualify(scope, nameNode.text);
+    if (declared) symbol.type = declared;
+    return symbol;
+  });
 }
 
 function functionSymbol(node: Node, scope: NameScope): PhpSymbol {
   const nameNode = node.childForFieldName('name')!;
   const symbol = declare('function', nameNode.text, node, nameNode, functionSignature(node));
   symbol.fqn = qualify(scope, nameNode.text);
+  const templates = docTemplates(symbol.doc);
+  if (templates.length) symbol.templates = templates;
+  symbol.params = parametersOf(node, scope, templates, symbol.doc);
+  const type = returnType(node, symbol.doc, scope, templates);
+  if (type) symbol.type = type;
   return symbol;
+}
+
+/** « Type $name = défaut » d'un @method. */
+function docParam(text: string, scope: NameScope, templates: string[]): PhpParam | undefined {
+  const match = /^(?:(.*?)\s+)?(&)?(\.\.\.)?\$(\w+)(?:\s*=\s*(.*))?$/.exec(text.trim());
+  if (!match) return undefined;
+  const param: PhpParam = { name: match[4] };
+  const type = match[1] ? parseDocType(match[1], scope, templates) : undefined;
+  if (type) param.type = type;
+  if (match[2]) param.byRef = true;
+  if (match[3]) param.variadic = true;
+  if (match[5] !== undefined) param.defaultValue = match[5].trim();
+  return param;
+}
+
+/** Membres déclarés par @property et @method dans la doc de la classe. */
+function virtualMembers(owner: PhpSymbol, scope: NameScope, templates: string[]): PhpSymbol[] {
+  const at = owner.selectionRange;
+  const out: PhpSymbol[] = [];
+  for (const property of docProperties(owner.doc)) {
+    const symbol: PhpSymbol = { kind: 'property', name: property.name, range: at, selectionRange: at, signature: squash(`@property ${property.type ?? ''} $${property.name}`), virtual: true };
+    const type = property.type ? parseDocType(property.type, scope, templates) : undefined;
+    if (type) symbol.type = type;
+    if (property.description) symbol.doc = property.description;
+    out.push(symbol);
+  }
+  for (const method of docMethods(owner.doc)) {
+    const params = method.params.map((p) => docParam(p, scope, templates)).filter((p): p is PhpParam => !!p);
+    const signature = squash(`${method.isStatic ? 'static ' : ''}function ${method.name}(${method.params.join(', ')})${method.returns ? `: ${method.returns}` : ''}`);
+    const symbol: PhpSymbol = { kind: 'method', name: method.name, range: at, selectionRange: at, signature, virtual: true, params };
+    if (method.isStatic) symbol.modifiers = ['public', 'static'];
+    const type = method.returns ? parseDocType(method.returns, scope, templates) : undefined;
+    if (type) symbol.type = type;
+    if (method.description) symbol.doc = method.description;
+    out.push(symbol);
+  }
+  return out;
+}
+
+function enumCaseSymbol(node: Node): PhpSymbol {
+  const nameNode = node.childForFieldName('name')!;
+  return declare('enumCase', nameNode.text, node, nameNode, squash(node.text.replace(/;\s*$/, '')));
 }
 
 /** Valeur d'une chaîne littérale sans interpolation, sinon undefined. */
