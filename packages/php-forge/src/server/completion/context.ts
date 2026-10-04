@@ -38,17 +38,21 @@ export function completionContext(parser: Parser, text: string, offset: number, 
   // Accolades pas encore fermées (fonction en cours d'écriture) : fermées à la fin du document, sans
   // décaler les positions avant le curseur, pour que la fonction et ses paramètres existent dans l'arbre
   const closing = '}'.repeat(unclosedBraces(text));
-  const patched = text.slice(0, offset) + PLACEHOLDER + text.slice(offset) + closing;
+  // Rien après le curseur sur la ligne : « ; » termine l'instruction, sinon la ligne suivante s'y rattache
+  // (« $a = $b->PhpForgeCursor⏎$c = 1 » devient « $b->{…}$c », une propriété dynamique)
+  const lineEnd = text.indexOf('\n', offset);
+  const inserted = PLACEHOLDER + (/^\s*$/.test(text.slice(offset, lineEnd < 0 ? text.length : lineEnd)) ? ';' : '');
+  const patched = text.slice(0, offset) + inserted + text.slice(offset) + closing;
   let old: Tree | undefined;
   if (base) {
     old = base.tree.copy();
     const at = { row: base.position.line, column: base.position.character };
-    const inserted = { row: at.row, column: at.column + PLACEHOLDER.length };
-    old.edit(new Edit({ startIndex: offset, oldEndIndex: offset, newEndIndex: offset + PLACEHOLDER.length, startPosition: at, oldEndPosition: at, newEndPosition: inserted }));
+    const after = { row: at.row, column: at.column + inserted.length };
+    old.edit(new Edit({ startIndex: offset, oldEndIndex: offset, newEndIndex: offset + inserted.length, startPosition: at, oldEndPosition: at, newEndPosition: after }));
     if (closing) {
-      const length = text.length + PLACEHOLDER.length;
+      const length = text.length + inserted.length;
       const lastLine = text.lastIndexOf('\n');
-      const end = { row: text.split('\n').length - 1, column: text.length - lastLine - 1 + (lastLine < offset ? PLACEHOLDER.length : 0) };
+      const end = { row: text.split('\n').length - 1, column: text.length - lastLine - 1 + (lastLine < offset ? inserted.length : 0) };
       old.edit(new Edit({ startIndex: length, oldEndIndex: length, newEndIndex: length + closing.length, startPosition: end, oldEndPosition: end, newEndPosition: { row: end.row, column: end.column + closing.length } }));
     }
   }

@@ -32,6 +32,16 @@ describe('contexte de complétion', () => {
     assert.deepEqual(context('<?php $this->a->|\n$x = 1;'), { kind: 'member', prefix: '', object: '$this->a' });
   });
 
+  it('dans une affectation suivie d’autres lignes : membre, statique, new', () => {
+    assert.deepEqual(context('<?php function f() {\n  $a = $this->|\n  $c = 1;\n}'), { kind: 'member', prefix: '', object: '$this' });
+    assert.deepEqual(context('<?php function f() {\n  $a = $this->get|\n  return $a;\n}'), { kind: 'member', prefix: 'get', object: '$this' });
+    assert.deepEqual(context('<?php $a = $b?->|\n$c = 1;'), { kind: 'member', prefix: '', object: '$b' });
+    assert.deepEqual(context('<?php $a = $b->c()->|\n$c = 1;'), { kind: 'member', prefix: '', object: '$b->c()' });
+    assert.deepEqual(context('<?php $a = Foo::|\n$c = 1;'), { kind: 'static', prefix: '', scope: 'Foo', variable: false });
+    assert.deepEqual(context('<?php $a = Foo::$|\n$c = 1;'), { kind: 'static', prefix: '', scope: 'Foo', variable: true });
+    assert.deepEqual(context('<?php $a = new Fo|\n$c = 1;'), { kind: 'name', prefix: 'Fo', mode: 'new' });
+  });
+
   it('membres statiques', () => {
     assert.deepEqual(context('<?php Foo::|'), { kind: 'static', prefix: '', scope: 'Foo', variable: false });
     assert.deepEqual(context('<?php Foo::$c|'), { kind: 'static', prefix: 'c', scope: 'Foo', variable: true });
