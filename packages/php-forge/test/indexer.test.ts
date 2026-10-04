@@ -43,6 +43,21 @@ describe('parcours des fichiers', () => {
     assert.deepEqual(files, ['a.php', 'big.php', 'bin.php', 'latin1.php', path.join('sub', 'b.php')]);
   });
 
+  it('isIndexable applique les exclusions exactement comme le parcours initial', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'php-forge-globs-'));
+    for (const rel of ['vendor/a.php', 'cache/b.php', 'src/cache/c.php', 'storage/logs/d.php', 'src/e.php']) {
+      mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+      writeFileSync(path.join(root, rel), '<?php');
+    }
+    for (const exclude of [['vendor'], ['cache'], ['**/cache'], ['storage/logs'], ['**/vendor/**'], ['vendor/**']]) {
+      const scanned = new Set(await listPhpFiles(root, exclude));
+      for (const rel of ['vendor/a.php', 'cache/b.php', 'src/cache/c.php', 'storage/logs/d.php', 'src/e.php']) {
+        const file = path.join(root, rel);
+        assert.equal(isIndexable(root, file, exclude), scanned.has(file), `${JSON.stringify(exclude)} ${rel}`);
+      }
+    }
+  });
+
   it('isIndexable', () => {
     const root = '/projet';
     assert.equal(isIndexable(root, '/projet/a.php', ['**/vendor/**']), true);

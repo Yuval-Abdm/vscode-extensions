@@ -43,5 +43,8 @@ export function isIndexable(root: string, filePath: string, exclude: string[]): 
   const parts = rel.split(path.sep);
   if (parts.some((part) => ALWAYS_SKIPPED.has(part))) return false;
   if (!PHP_EXTENSIONS.includes(path.extname(filePath).toLowerCase())) return false;
-  return !excluder(exclude)(parts.join('/'), false);
+  // Mêmes règles que le parcours : chaque dossier parent, puis le fichier
+  const excluded = excluder(exclude);
+  for (let i = 1; i < parts.length; i++) if (excluded(parts.slice(0, i).join('/'), true)) return false;
+  return !excluded(parts.join('/'), false);
 }
