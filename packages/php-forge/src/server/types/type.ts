@@ -7,7 +7,50 @@ export const scalar = (name: ScalarName): TypeExpr => ({ kind: 'scalar', name })
 
 export const classType = (fqn: string, args?: TypeExpr[]): TypeExpr => (args?.length ? { kind: 'class', fqn, args } : { kind: 'class', fqn });
 
-export const ref = (r: TypeRef): TypeExpr => ({ kind: 'ref', ref: r });
+/** Au-delà de ce nombre de nœuds, un type devient mixed (types auto-référents qui doubleraient à chaque ligne). */
+export const MAX_TYPE_SIZE = 200;
+
+const SIZES = new WeakMap<TypeExpr, number>();
+
+/** Nombre de nœuds d'un type, mémorisé par objet : linéaire même quand des sous-types sont partagés. */
+export function sizeOf(type: TypeExpr): number {
+  const known = SIZES.get(type);
+  if (known !== undefined) return known;
+  let size = 1;
+  const add = (t: TypeExpr | undefined) => {
+    if (t) size += sizeOf(t);
+  };
+  switch (type.kind) {
+    case 'union':
+    case 'intersection':
+      type.types.forEach(add);
+      break;
+    case 'class':
+      type.args?.forEach(add);
+      break;
+    case 'array':
+      add(type.key);
+      add(type.value);
+      if (type.shape) Object.values(type.shape).forEach(add);
+      break;
+    case 'closure':
+      add(type.returns);
+      break;
+    case 'ref': {
+      const r = type.ref;
+      if ('on' in r) add(r.on);
+      if ('args' in r) r.args?.forEach(add);
+      break;
+    }
+  }
+  SIZES.set(type, size);
+  return size;
+}
+
+export const ref = (r: TypeRef): TypeExpr => {
+  const type: TypeExpr = { kind: 'ref', ref: r };
+  return sizeOf(type) > MAX_TYPE_SIZE ? MIXED : type;
+};
 
 /** Membres d'une union, ou le type seul. */
 export const members = (type: TypeExpr): TypeExpr[] => (type.kind === 'union' ? type.types : [type]);
@@ -28,7 +71,13 @@ export function union(...types: (TypeExpr | undefined)[]): TypeExpr {
     seen.add(key);
     out.push(type);
   };
-  for (const type of types) if (type) add(type);
+  let size = 0;
+  for (const type of types) {
+    if (!type) continue;
+    size += sizeOf(type);
+    if (size > MAX_TYPE_SIZE) return MIXED;
+    add(type);
+  }
   if (!out.length) return MIXED;
   return out.length === 1 ? out[0] : { kind: 'union', types: out };
 }

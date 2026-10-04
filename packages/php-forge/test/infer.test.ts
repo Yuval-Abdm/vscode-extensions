@@ -4,7 +4,7 @@ import { extractFile } from '../src/server/model/extract.ts';
 import { Inferrer } from '../src/server/types/infer.ts';
 import { formatType } from '../src/server/types/type.ts';
 import type { TypeExpr } from '../src/shared/types.ts';
-import { cursor, expressionAt, parse } from './helpers.ts';
+import { cursor, expressionAt, extract, parse } from './helpers.ts';
 
 /** Affichage avec les types différés lisibles (noms complets des classes). */
 function show(type: TypeExpr): string {
@@ -158,5 +158,20 @@ describe('Inferrer : appels et membres (types différés)', () => {
     assert.equal(await infer('<?php function f() { yield 1; }'), 'Generator');
     assert.equal(await infer('<?php function f($c) { if ($c) return; return 1; }'), 'null|int');
     assert.equal(await infer('<?php function f() { $db = new Db(); return $db; }'), 'Db');
+  });
+});
+
+describe('Inferrer : taille des types bornée', () => {
+  it('auto-références répétées : pas d’explosion', async () => {
+    const code = `<?php\n${'$x = $x ?? $x->y;\n'.repeat(25)}|$x;`;
+    const started = performance.now();
+    await typeAt(code);
+    assert.ok(performance.now() - started < 200, `${Math.round(performance.now() - started)} ms`);
+  });
+
+  it('extraction d’une fonction qui le fait : rapide aussi', async () => {
+    const started = performance.now();
+    await extract(`<?php function f($x) {\n${'$x = $x ?? $x->y;\n'.repeat(25)}return $x;\n}`);
+    assert.ok(performance.now() - started < 200, `${Math.round(performance.now() - started)} ms`);
   });
 });
