@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FTP SFTP Deploy configuration",
+  "type": "object",
+  "required": [
+    "profiles"
+  ],
+  "definitions": {
+    "ignore": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Patterns excluded from deployment. Without \"/\", a pattern matches any path segment (e.g. \"node_modules\", \"*.log\"); otherwise it matches the relative path (e.g. \"config/secret.php\", \"dist/**\").",
+      "default": [
+        ".git",
+        ".vscode",
+        ".DS_Store",
+        "node_modules"
+      ]
+    },
+    "uploadOnSave": {
+      "type": "boolean",
+      "description": "Automatically upload a file every time it is saved.",
+      "default": false
+    },
+    "profile": {
+      "type": "object",
+      "required": [
+        "host"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "enum": [
+            "ftp",
+            "ftps",
+            "sftp"
+          ],
+          "default": "ftp",
+          "description": "ftp, ftps (FTP over TLS) or sftp (SSH)."
+        },
+        "host": {
+          "type": "string",
+          "description": "Server host name or IP address."
+        },
+        "port": {
+          "type": "integer",
+          "description": "Port (defaults: 21 for ftp/ftps, 22 for sftp)."
+        },
+        "username": {
+          "type": "string",
+          "description": "User name. The password is asked on first connection, then kept in VS Code secret storage."
+        },
+        "remotePath": {
+          "type": "string",
+          "default": "/",
+          "description": "Remote folder matching the project root."
+        },
+        "secure": {
+          "enum": [
+            true,
+            false,
+            "implicit"
+          ],
+          "description": "ftps: explicit TLS (true, default) or implicit TLS (\"implicit\", usually port 990)."
+        },
+        "rejectUnauthorized": {
+          "type": "boolean",
+          "default": true,
+          "description": "ftps: reject invalid/self-signed certificates. Set to false for a self-signed certificate."
+        },
+        "privateKeyPath": {
+          "type": "string",
+          "description": "sftp: path to the SSH private key (~ allowed). If omitted, password authentication is used."
+        },
+        "agent": {
+          "type": "boolean",
+          "default": false,
+          "description": "sftp: use the SSH agent (SSH_AUTH_SOCK)."
+        },
+        "uploadOnSave": {
+          "$ref": "#/definitions/uploadOnSave"
+        },
+        "ignore": {
+          "$ref": "#/definitions/ignore"
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Connection timeout in milliseconds (default 30000)."
+        }
+      }
+    }
+  },
+  "properties": {
+    "defaultProfile": {
+      "type": "string",
+      "description": "Profile active by default (can be switched from the status bar)."
+    },
+    "uploadOnSave": {
+      "$ref": "#/definitions/uploadOnSave"
+    },
+    "ignore": {
+      "$ref": "#/definitions/ignore"
+    },
+    "rejectUnauthorized": {
+      "type": "boolean",
+      "description": "Default value for all profiles."
+    },
+    "timeout": {
+      "type": "integer",
+      "description": "Default value for all profiles (ms)."
+    },
+    "profiles": {
+      "type": "object",
+      "description": "Deployment servers, by name.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/definitions/profile"
+      }
+    }
+  }
+}

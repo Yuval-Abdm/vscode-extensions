@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run both extensions",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/changed-files-explorer",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/ftp-sftp-deploy"
+      ],
+      "outFiles": ["${workspaceFolder}/packages/*/dist/**/*.js"],
+      "preLaunchTask": "npm: build"
+    }
+  ]
+}

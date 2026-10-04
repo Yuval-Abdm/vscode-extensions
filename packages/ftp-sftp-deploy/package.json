@@ -1,0 +1,428 @@
+{
+  "name": "ftp-sftp-deploy",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#122e3c",
+    "theme": "dark"
+  },
+  "version": "1.0.1",
+  "publisher": "yuval-abdm",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions.git",
+    "directory": "packages/ftp-sftp-deploy"
+  },
+  "bugs": {
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions/issues"
+  },
+  "homepage": "https://github.com/Yuval-Abdm/vscode-extensions/tree/main/packages/ftp-sftp-deploy#readme",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "l10n": "./l10n",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "ftp",
+    "sftp",
+    "ftps",
+    "deploy",
+    "upload",
+    "remote",
+    "ssh",
+    "sync",
+    "server"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onFileSystem:ftp-sftp-deploy"
+  ],
+  "scripts": {
+    "build": "esbuild src/extension.js --bundle --platform=node --target=node18 --format=cjs --outfile=dist/extension.js --external:vscode --external:cpu-features --external:*.node --minify --keep-names --sourcemap",
+    "test": "node --test test/*.test.js",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "basic-ftp": "^6.2.2",
+    "minimatch": "^10.2.6",
+    "ssh2": "^1.17.0"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ftpSftpDeploy",
+          "title": "%container.title%",
+          "icon": "media/deploy.svg"
+        }
+      ]
+    },
+    "views": {
+      "ftpSftpDeploy": [
+        {
+          "id": "ftpSftpDeploy.remote",
+          "name": "%view.remote%",
+          "icon": "media/deploy.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ftpSftpDeploy.remote",
+        "when": "!ftpSftpDeploy.hasConfig",
+        "contents": "%view.welcome%"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "**/.vscode/deploy.json",
+        "url": "./schema/deploy.schema.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "ftpSftpDeploy.upload",
+        "title": "%ftpSftpDeploy.upload.title%",
+        "icon": "$(cloud-upload)",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.download",
+        "title": "%ftpSftpDeploy.download.title%",
+        "icon": "$(cloud-download)",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.diff",
+        "title": "%ftpSftpDeploy.diff.title%",
+        "icon": "$(cloud)",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.deleteRemote",
+        "title": "%ftpSftpDeploy.deleteRemote.title%",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.switchProfile",
+        "title": "%ftpSftpDeploy.switchProfile.title%",
+        "icon": "$(server-environment)",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.createConfig",
+        "title": "%ftpSftpDeploy.createConfig.title%",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.openConfig",
+        "title": "%ftpSftpDeploy.openConfig.title%",
+        "icon": "$(gear)",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.importSftp",
+        "title": "%ftpSftpDeploy.importSftp.title%",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.forgetPassword",
+        "title": "%ftpSftpDeploy.forgetPassword.title%",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.showLog",
+        "title": "%ftpSftpDeploy.showLog.title%",
+        "icon": "$(output)",
+        "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.refresh",
+        "title": "%ftpSftpDeploy.remote.refresh.title%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.newFile",
+        "title": "%ftpSftpDeploy.remote.newFile.title%",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.newFolder",
+        "title": "%ftpSftpDeploy.remote.newFolder.title%",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.rename",
+        "title": "%ftpSftpDeploy.remote.rename.title%"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.delete",
+        "title": "%ftpSftpDeploy.remote.delete.title%"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.open",
+        "title": "%ftpSftpDeploy.remote.open.title%"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.download",
+        "title": "%ftpSftpDeploy.remote.download.title%",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.diffWithLocal",
+        "title": "%ftpSftpDeploy.remote.diffWithLocal.title%",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.revealLocal",
+        "title": "%ftpSftpDeploy.remote.revealLocal.title%"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.copyRemotePath",
+        "title": "%ftpSftpDeploy.remote.copyRemotePath.title%"
+      },
+      {
+        "command": "ftpSftpDeploy.migrateAll",
+        "title": "%ftpSftpDeploy.migrateAll.title%",
+        "category": "FTP SFTP Deploy"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ftpSftpDeploy.remote.refresh",
+          "when": "view == ftpSftpDeploy.remote",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ftpSftpDeploy.switchProfile",
+          "when": "view == ftpSftpDeploy.remote && ftpSftpDeploy.hasConfig",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ftpSftpDeploy.openConfig",
+          "when": "view == ftpSftpDeploy.remote && ftpSftpDeploy.hasConfig",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ftpSftpDeploy.importSftp",
+          "when": "view == ftpSftpDeploy.remote",
+          "group": "1_config@1"
+        },
+        {
+          "command": "ftpSftpDeploy.forgetPassword",
+          "when": "view == ftpSftpDeploy.remote && ftpSftpDeploy.hasConfig",
+          "group": "1_config@2"
+        },
+        {
+          "command": "ftpSftpDeploy.showLog",
+          "when": "view == ftpSftpDeploy.remote",
+          "group": "2_log@1"
+        },
+        {
+          "command": "ftpSftpDeploy.migrateAll",
+          "when": "view == ftpSftpDeploy.remote",
+          "group": "1_config@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ftpSftpDeploy.remote.newFile",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.newFolder",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.diffWithLocal",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteFile)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.open",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteFile)$/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.diffWithLocal",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteFile)$/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.newFile",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir)$/",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.newFolder",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir)$/",
+          "group": "navigation@4"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.download",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir|remoteFile)$/",
+          "group": "2_transfer@1"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.revealLocal",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteFile|remoteDir)$/",
+          "group": "2_transfer@2"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.copyRemotePath",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir|remoteFile)$/",
+          "group": "6_copypath@1"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.refresh",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir)$/",
+          "group": "7_refresh@1"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.rename",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteDir|remoteFile)$/",
+          "group": "8_modification@1"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.delete",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteDir|remoteFile)$/",
+          "group": "8_modification@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "ftpSftpDeploy.upload",
+          "when": "ftpSftpDeploy.hasConfig",
+          "group": "z_deploy@1"
+        },
+        {
+          "command": "ftpSftpDeploy.download",
+          "when": "ftpSftpDeploy.hasConfig",
+          "group": "z_deploy@2"
+        },
+        {
+          "command": "ftpSftpDeploy.diff",
+          "when": "ftpSftpDeploy.hasConfig && !explorerResourceIsFolder",
+          "group": "z_deploy@3"
+        },
+        {
+          "command": "ftpSftpDeploy.deleteRemote",
+          "when": "ftpSftpDeploy.hasConfig",
+          "group": "z_deploy@4"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ftpSftpDeploy.upload",
+          "when": "ftpSftpDeploy.hasConfig && resourceScheme == file",
+          "group": "z_deploy@1"
+        },
+        {
+          "command": "ftpSftpDeploy.diff",
+          "when": "ftpSftpDeploy.hasConfig && resourceScheme == file",
+          "group": "z_deploy@2"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "ftpSftpDeploy.upload",
+          "when": "ftpSftpDeploy.hasConfig && resourceScheme == file",
+          "group": "z_deploy@1"
+        },
+        {
+          "command": "ftpSftpDeploy.diff",
+          "when": "ftpSftpDeploy.hasConfig && resourceScheme == file",
+          "group": "z_deploy@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ftpSftpDeploy.remote.refresh",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.newFile",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.newFolder",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.rename",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.delete",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.open",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.download",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.diffWithLocal",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.revealLocal",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.copyRemotePath",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.upload",
+          "when": "ftpSftpDeploy.hasConfig && resourceScheme == file"
+        },
+        {
+          "command": "ftpSftpDeploy.download",
+          "when": "ftpSftpDeploy.hasConfig && resourceScheme == file"
+        },
+        {
+          "command": "ftpSftpDeploy.diff",
+          "when": "ftpSftpDeploy.hasConfig && resourceScheme == file"
+        },
+        {
+          "command": "ftpSftpDeploy.deleteRemote",
+          "when": "ftpSftpDeploy.hasConfig && resourceScheme == file"
+        },
+        {
+          "command": "ftpSftpDeploy.switchProfile",
+          "when": "ftpSftpDeploy.hasConfig"
+        },
+        {
+          "command": "ftpSftpDeploy.forgetPassword",
+          "when": "ftpSftpDeploy.hasConfig"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ftpSftpDeploy.remote.rename",
+        "key": "f2",
+        "when": "focusedView == ftpSftpDeploy.remote && !inputFocus"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.delete",
+        "key": "delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == ftpSftpDeploy.remote && !inputFocus"
+      }
+    ]
+  }
+}

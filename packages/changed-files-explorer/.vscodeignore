@@ -1,0 +1,11 @@
+src/**
+test/**
+node_modules/**
+**/*.map
+*.vsix
+.vscode-test/**
+.claude-flow/**
+.claude/**
+.swarm/**
+ruvector.db
+media/icon.svg

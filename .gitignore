@@ -1,0 +1,7 @@
+*.vsix
+node_modules/
+.claude-flow/
+ruvector.db
+.swarm/
+dist/
+.vscode-test/

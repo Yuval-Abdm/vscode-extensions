@@ -1,0 +1,439 @@
+{
+  "name": "changed-files-explorer",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1d2640",
+    "theme": "dark"
+  },
+  "version": "1.0.1",
+  "publisher": "yuval-abdm",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions.git",
+    "directory": "packages/changed-files-explorer"
+  },
+  "bugs": {
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions/issues"
+  },
+  "homepage": "https://github.com/Yuval-Abdm/vscode-extensions/tree/main/packages/changed-files-explorer#readme",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "l10n": "./l10n",
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "changed files",
+    "modified files",
+    "scm",
+    "explorer",
+    "diff",
+    "deploy"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "build": "esbuild src/extension.js --bundle --platform=node --target=node18 --format=cjs --outfile=dist/extension.js --external:vscode --minify --keep-names --sourcemap",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
+  },
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "changedFiles",
+          "name": "%view.name%",
+          "icon": "$(git-compare)"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "changedFiles",
+        "contents": "%view.welcome%"
+      }
+    ],
+    "commands": [
+      {
+        "command": "changedFiles.refresh",
+        "title": "%changedFiles.refresh.title%",
+        "icon": "$(refresh)",
+        "category": "Changed Files Explorer"
+      },
+      {
+        "command": "changedFiles.toggleGrouping",
+        "title": "%changedFiles.toggleGrouping.title%",
+        "icon": "$(list-tree)",
+        "category": "Changed Files Explorer"
+      },
+      {
+        "command": "changedFiles.selectBaseBranch",
+        "title": "%changedFiles.selectBaseBranch.title%",
+        "icon": "$(git-branch)",
+        "category": "Changed Files Explorer"
+      },
+      {
+        "command": "changedFiles.copyList",
+        "title": "%changedFiles.copyList.title%",
+        "icon": "$(copy)",
+        "category": "Changed Files Explorer"
+      },
+      {
+        "command": "changedFiles.openFile",
+        "title": "%changedFiles.openFile.title%",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "changedFiles.openToSide",
+        "title": "%changedFiles.openToSide.title%"
+      },
+      {
+        "command": "changedFiles.openDiff",
+        "title": "%changedFiles.openDiff.title%",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "changedFiles.revealInOS",
+        "title": "%changedFiles.revealInOS.title%"
+      },
+      {
+        "command": "changedFiles.revealInExplorer",
+        "title": "%changedFiles.revealInExplorer.title%"
+      },
+      {
+        "command": "changedFiles.openInTerminal",
+        "title": "%changedFiles.openInTerminal.title%"
+      },
+      {
+        "command": "changedFiles.findInFolder",
+        "title": "%changedFiles.findInFolder.title%"
+      },
+      {
+        "command": "changedFiles.copyPath",
+        "title": "%changedFiles.copyPath.title%"
+      },
+      {
+        "command": "changedFiles.copyRelativePath",
+        "title": "%changedFiles.copyRelativePath.title%"
+      },
+      {
+        "command": "changedFiles.rename",
+        "title": "%changedFiles.rename.title%"
+      },
+      {
+        "command": "changedFiles.delete",
+        "title": "%changedFiles.delete.title%"
+      },
+      {
+        "command": "changedFiles.stage",
+        "title": "%changedFiles.stage.title%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "changedFiles.unstage",
+        "title": "%changedFiles.unstage.title%",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "changedFiles.discard",
+        "title": "%changedFiles.discard.title%",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "changedFiles.uploadAll",
+        "title": "%changedFiles.uploadAll.title%",
+        "icon": "$(cloud-upload)",
+        "category": "Changed Files Explorer"
+      },
+      {
+        "command": "changedFiles.uploadCategory",
+        "title": "%changedFiles.uploadCategory.title%",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "changedFiles.uploadSelection",
+        "title": "%changedFiles.uploadSelection.title%"
+      },
+      {
+        "command": "changedFiles.deleteRemote",
+        "title": "%changedFiles.deleteRemote.title%"
+      },
+      {
+        "command": "changedFiles.diffWithServer",
+        "title": "%changedFiles.diffWithServer.title%",
+        "icon": "$(cloud)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "changedFiles.uploadAll",
+          "when": "view == changedFiles && ftpSftpDeploy.hasConfig",
+          "group": "navigation@1"
+        },
+        {
+          "command": "changedFiles.selectBaseBranch",
+          "when": "view == changedFiles",
+          "group": "navigation@2"
+        },
+        {
+          "command": "changedFiles.toggleGrouping",
+          "when": "view == changedFiles",
+          "group": "navigation@3"
+        },
+        {
+          "command": "changedFiles.copyList",
+          "when": "view == changedFiles",
+          "group": "navigation@4"
+        },
+        {
+          "command": "changedFiles.refresh",
+          "when": "view == changedFiles",
+          "group": "navigation@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "changedFiles.openDiff",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "inline@1"
+        },
+        {
+          "command": "changedFiles.stage",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "inline@2"
+        },
+        {
+          "command": "changedFiles.unstage",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "inline@3"
+        },
+        {
+          "command": "changedFiles.openToSide",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "navigation@1"
+        },
+        {
+          "command": "changedFiles.openDiff",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "navigation@2"
+        },
+        {
+          "command": "changedFiles.revealInOS",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "2_reveal@1"
+        },
+        {
+          "command": "changedFiles.revealInExplorer",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "2_reveal@2"
+        },
+        {
+          "command": "changedFiles.openInTerminal",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "2_reveal@3"
+        },
+        {
+          "command": "changedFiles.findInFolder",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "4_search@1"
+        },
+        {
+          "command": "changedFiles.copyPath",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "6_copypath@1"
+        },
+        {
+          "command": "changedFiles.copyRelativePath",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "6_copypath@2"
+        },
+        {
+          "command": "changedFiles.stage",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "7_git@1"
+        },
+        {
+          "command": "changedFiles.unstage",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "7_git@2"
+        },
+        {
+          "command": "changedFiles.discard",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "7_git@3"
+        },
+        {
+          "command": "changedFiles.rename",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "8_modification@1"
+        },
+        {
+          "command": "changedFiles.delete",
+          "when": "view == changedFiles && viewItem == file",
+          "group": "8_modification@2"
+        },
+        {
+          "command": "changedFiles.uploadSelection",
+          "when": "view == changedFiles && viewItem == file && ftpSftpDeploy.hasConfig",
+          "group": "3_trans@1"
+        },
+        {
+          "command": "changedFiles.uploadCategory",
+          "when": "view == changedFiles && viewItem == category && ftpSftpDeploy.hasConfig",
+          "group": "inline"
+        },
+        {
+          "command": "changedFiles.uploadCategory",
+          "when": "view == changedFiles && viewItem == category && ftpSftpDeploy.hasConfig",
+          "group": "1_trans@1"
+        },
+        {
+          "command": "changedFiles.diffWithServer",
+          "when": "view == changedFiles && viewItem == file && ftpSftpDeploy.hasConfig",
+          "group": "3_trans@3"
+        },
+        {
+          "command": "changedFiles.deleteRemote",
+          "when": "view == changedFiles && viewItem == file && ftpSftpDeploy.hasConfig",
+          "group": "3_trans@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "changedFiles.openFile",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.openToSide",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.openDiff",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.revealInOS",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.revealInExplorer",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.openInTerminal",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.findInFolder",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.copyPath",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.copyRelativePath",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.rename",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.delete",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.stage",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.unstage",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.discard",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.uploadCategory",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.uploadSelection",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.deleteRemote",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.diffWithServer",
+          "when": "false"
+        },
+        {
+          "command": "changedFiles.uploadAll",
+          "when": "ftpSftpDeploy.hasConfig"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "changedFiles.rename",
+        "key": "f2",
+        "when": "focusedView == changedFiles && !inputFocus"
+      },
+      {
+        "command": "changedFiles.delete",
+        "key": "delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == changedFiles && !inputFocus"
+      },
+      {
+        "command": "changedFiles.openToSide",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "focusedView == changedFiles && !inputFocus"
+      },
+      {
+        "command": "changedFiles.copyPath",
+        "key": "shift+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "focusedView == changedFiles && !inputFocus"
+      },
+      {
+        "command": "changedFiles.copyRelativePath",
+        "key": "ctrl+shift+alt+c",
+        "mac": "cmd+shift+alt+c",
+        "when": "focusedView == changedFiles && !inputFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Changed Files Explorer",
+      "properties": {
+        "changedFiles.groupByStatus": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.groupByStatus%"
+        },
+        "changedFiles.baseBranch": {
+          "type": "string",
+          "default": "",
+          "description": "%config.baseBranch%"
+        }
+      }
+    }
+  }
+}
