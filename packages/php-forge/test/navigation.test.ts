@@ -19,14 +19,15 @@ class Foo extends Base {
 class Base { protected function escape() {} }
 enum Suit { case Hearts; }
 function helper() {}
-define('ROOT_PATH', '/var/www');`;
+define('ROOT_PATH', '/var/www');
+class Other { public function bar() {} }`;
 
 /** Index (lib.php + document courant) et stubs ; `current` contient le curseur « | ». */
 async function setup(current: string) {
   const workspace = new SymbolIndex();
   workspace.set(await extract(LIB, 'file:///lib.php'));
   const stubs = new SymbolIndex();
-  stubs.set(await extract('<?php\n/** Returns string length */\nfunction strlen(string $string): int {}', 'phpstub:/standard/basic.php'));
+  stubs.set(await extract('<?php\n/**\n * Returns string length\n * @link https://php.net/manual/en/function.strlen.php\n */\nfunction strlen(string $string): int {}', 'phpstub:/standard/basic.php'));
   const { text, position } = cursor(current);
   const tree = await parse(text);
   const file = extractFile(tree, 'file:///current.php');
@@ -55,7 +56,11 @@ describe('definition', () => {
   it('self::', async () => {
     assert.deepEqual(await targets('<?php namespace Lib; class Child extends Foo { function m() { self::|C; } }'), ['lib.php:4']);
   });
-  it('objet de type inconnu : toutes les méthodes de ce nom', async () => assert.deepEqual(await targets('<?php $x->ba|r();'), ['lib.php:6']));
+  it('objet de type inconnu : toutes les méthodes de ce nom', async () => assert.deepEqual(await targets('<?php $x->ba|r();'), ['lib.php:6', 'lib.php:13']));
+  it('objet typé : la méthode de sa classe seulement', async () => assert.deepEqual(await targets('<?php $u = new \\Lib\\Foo(); $u->ba|r();'), ['lib.php:6']));
+  it('méthode redéfinie : la déclaration la plus proche', async () => {
+    assert.deepEqual(await targets('<?php namespace Lib; class Child extends Foo { public function bar() {} function m() { $this->ba|r(); } }'), ['current.php:0']);
+  });
   it('use function', async () => assert.deepEqual(await targets('<?php use function Lib\\helper; help|er();'), ['lib.php:11']));
   it('fonction du namespace courant', async () => assert.deepEqual(await targets('<?php namespace Lib; help|er();'), ['lib.php:11']));
   it('constante définie par define', async () => assert.deepEqual(await targets('<?php echo ROOT_PA|TH;'), ['lib.php:12']));
@@ -80,6 +85,21 @@ describe('hover', () => {
     const value = (hover(s.lookup, s.file, s.tree, s.position)!.contents as { value: string }).value;
     assert.match(value, /namespace Lib;\nclass Foo extends Base/);
     assert.match(value, /A foo/);
+  });
+
+  it('variable : son type', async () => {
+    const s = await setup('<?php $u = new \\Lib\\Foo(); $|u;');
+    assert.match((hover(s.lookup, s.file, s.tree, s.position)!.contents as { value: string }).value, /Foo \$u/);
+  });
+
+  it('$this : la classe englobante', async () => {
+    const s = await setup('<?php namespace Lib; class Child extends Foo { function m() { $th|is; } }');
+    assert.match((hover(s.lookup, s.file, s.tree, s.position)!.contents as { value: string }).value, /Child \$this/);
+  });
+
+  it('lien vers la documentation PHP', async () => {
+    const s = await setup("<?php str|len('a');");
+    assert.match((hover(s.lookup, s.file, s.tree, s.position)!.contents as { value: string }).value, /\[php\.net\]\(https:\/\/php\.net\/manual\/en\/function\.strlen\.php\)/);
   });
 
   it('rien sous le curseur : null', async () => {

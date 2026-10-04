@@ -1,9 +1,15 @@
-// Symboles désignés à une position : résolution des noms (namespace, use, self / parent) puis recherche.
-import type { FileSymbols, NameScope, Position, SymbolKind } from '../../shared/types.ts';
+// Symboles désignés à une position : résolution des noms (namespace, use, self / parent), type de l'objet
+// (inférence) puis recherche dans l'index ; pour un membre redéfini, la déclaration la plus proche.
+import type { FileSymbols, Position, SymbolKind } from '../../shared/types.ts';
 import type { Lookup } from '../index/lookup.ts';
 import type { IndexedSymbol } from '../index/symbolIndex.ts';
+import { enclosingClass } from '../model/context.ts';
 import { resolveClassName, resolveFunctionOrConstant, scopeAt } from '../model/names.ts';
+import { rangeOf } from '../model/ranges.ts';
 import type { Node, Tree } from '../parser/parser.ts';
+import { bindingAt, TypeResolver, type Receiver } from '../types/expand.ts';
+import { Inferrer } from '../types/infer.ts';
+import { members } from '../types/type.ts';
 import { nameAt, type MemberKind, type Owner } from './nameAt.ts';
 
 const MEMBER_KINDS: Record<MemberKind, SymbolKind[]> = {
@@ -11,15 +17,14 @@ const MEMBER_KINDS: Record<MemberKind, SymbolKind[]> = {
   property: ['property'],
   classConstant: ['classConstant', 'enumCase'],
 };
-const CLASS_DECLARATIONS = new Set(['class_declaration', 'interface_declaration', 'trait_declaration', 'enum_declaration']);
 
-export function resolveAt(lookup: Lookup, file: FileSymbols, tree: Tree, pos: Position): IndexedSymbol[] {
+export function resolveAt(lookup: Lookup, file: FileSymbols, tree: Tree, pos: Position, resolver = new TypeResolver(lookup)): IndexedSymbol[] {
   const ref = nameAt(tree, pos);
   if (!ref) return [];
   const scope = scopeAt(file.scopes, pos);
   switch (ref.kind) {
     case 'class': {
-      const fqn = classOf(ref.name, ref.node, scope, lookup);
+      const fqn = classOf(ref.name, ref.node, file, resolver);
       return fqn ? lookup.findClass(fqn) : [];
     }
     case 'function':
@@ -27,9 +32,20 @@ export function resolveAt(lookup: Lookup, file: FileSymbols, tree: Tree, pos: Po
     case 'constant':
       return firstHit(resolveFunctionOrConstant(ref.name, 'constant', scope), (n) => lookup.findConstant(n));
     case 'member': {
-      const owner = ownerOf(ref.owner, ref.node, scope, lookup);
       const kinds = MEMBER_KINDS[ref.member];
-      return owner ? lookup.findMembers(owner, ref.name, kinds) : lookup.findMembersAnywhere(ref.name, kinds);
+      const receivers = ownerReceivers(ref.owner, ref.node, file, resolver);
+      const hits: IndexedSymbol[] = [];
+      const seen = new Set<string>();
+      for (const receiver of receivers) {
+        for (const hit of resolver.findMember(receiver, ref.name, kinds)) {
+          const key = `${hit.owner.uri}#${hit.member.selectionRange.start.line}:${hit.member.selectionRange.start.character}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          hits.push({ uri: hit.owner.uri, symbol: hit.member });
+        }
+      }
+      // Type de l'objet inconnu : toutes les déclarations de ce nom (code historique sans types)
+      return receivers.length ? hits : lookup.findMembersAnywhere(ref.name, kinds);
     }
   }
 }
@@ -43,35 +59,34 @@ function firstHit(candidates: string[], find: (name: string) => IndexedSymbol[])
 }
 
 /** Nom complet d'une classe écrite `name`, y compris self / static / parent. */
-function classOf(name: string, node: Node, scope: NameScope, lookup: Lookup): string | undefined {
+function classOf(name: string, node: Node, file: FileSymbols, resolver: TypeResolver): string | undefined {
   const lower = name.toLowerCase();
-  if (lower === 'self' || lower === 'static') return enclosingClass(node, scope);
-  if (lower === 'parent') return parentOf(enclosingClass(node, scope), lookup);
-  return resolveClassName(name, scope);
+  const self = enclosingClass(node, file.scopes);
+  if (lower === 'self' || lower === 'static') return self;
+  if (lower === 'parent') return self && resolver.parentOf(self);
+  return resolveClassName(name, scopeAt(file.scopes, rangeOf(node).start));
 }
 
-function ownerOf(owner: Owner, node: Node, scope: NameScope, lookup: Lookup): string | undefined {
+/** Classes possibles du propriétaire d'un membre ; vide si son type est inconnu. */
+export function ownerReceivers(owner: Owner, node: Node, file: FileSymbols, resolver: TypeResolver): Receiver[] {
+  const self = enclosingClass(node, file.scopes);
+  let fqn: string | undefined;
   switch (owner.kind) {
     case 'class':
-      return classOf(owner.name, node, scope, lookup);
+      fqn = classOf(owner.name, node, file, resolver);
+      break;
     case 'self':
-      return enclosingClass(node, scope);
+      fqn = self;
+      break;
     case 'parent':
-      return parentOf(enclosingClass(node, scope), lookup);
+      fqn = self && resolver.parentOf(self);
+      break;
+    case 'expression': {
+      const type = resolver.expand(new Inferrer(file.scopes).expr(owner.node), bindingAt(node, file.scopes));
+      return members(type).flatMap((t) => (t.kind === 'class' ? [t.args ? { fqn: t.fqn, args: t.args } : { fqn: t.fqn }] : []));
+    }
     case 'unknown':
-      return undefined;
+      return [];
   }
-}
-
-function enclosingClass(node: Node, scope: NameScope): string | undefined {
-  for (let n = node.parent; n; n = n.parent) {
-    if (!CLASS_DECLARATIONS.has(n.type)) continue;
-    const name = n.childForFieldName('name')?.text;
-    return name && (scope.namespace ? `${scope.namespace}\\${name}` : name);
-  }
-  return undefined;
-}
-
-function parentOf(fqn: string | undefined, lookup: Lookup): string | undefined {
-  return fqn ? lookup.findClass(fqn)[0]?.symbol.extends?.[0] : undefined;
+  return fqn ? [{ fqn }] : [];
 }

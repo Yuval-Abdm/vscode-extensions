@@ -4,8 +4,13 @@ import type { Node, Tree } from '../parser/parser.ts';
 
 export type MemberKind = 'method' | 'property' | 'classConstant';
 
-/** Propriétaire d'un membre : classe nommée, classe englobante (self/static/$this), son parent, ou inconnu. */
-export type Owner = { kind: 'class'; name: string } | { kind: 'self' } | { kind: 'parent' } | { kind: 'unknown' };
+/** Propriétaire d'un membre : classe nommée, classe englobante (self / static / $this), son parent, une expression typable, ou inconnu. */
+export type Owner =
+  | { kind: 'class'; name: string }
+  | { kind: 'self' }
+  | { kind: 'parent' }
+  | { kind: 'expression'; node: Node }
+  | { kind: 'unknown' };
 
 export type Reference =
   | { kind: 'class' | 'function' | 'constant'; name: string; node: Node }
@@ -100,15 +105,17 @@ function propertyAt(variable: Node): Reference | undefined {
 }
 
 function staticOwner(scope: Node | null): Owner {
-  const text = scope?.text.replace(/\s+/g, '') ?? '';
+  if (!scope) return { kind: 'unknown' };
+  const text = scope.text.replace(/\s+/g, '');
   const lower = text.toLowerCase();
   if (lower === 'self' || lower === 'static') return { kind: 'self' };
   if (lower === 'parent') return { kind: 'parent' };
-  return scope && NAME_TYPES.has(scope.type) ? { kind: 'class', name: text } : { kind: 'unknown' };
+  return NAME_TYPES.has(scope.type) ? { kind: 'class', name: text } : { kind: 'expression', node: scope };
 }
 
 function instanceOwner(object: Node | null): Owner {
-  return object?.type === 'variable_name' && object.text === '$this' ? { kind: 'self' } : { kind: 'unknown' };
+  if (!object) return { kind: 'unknown' };
+  return object.type === 'variable_name' && object.text === '$this' ? { kind: 'self' } : { kind: 'expression', node: object };
 }
 
 function insideClass(node: Node): boolean {
@@ -131,4 +138,18 @@ function useTarget(clause: Node, name: string, node: Node): Reference {
   const full = `\\${prefix ? `${prefix}\\` : ''}${name.replace(/^\\/, '')}`;
   const keyword = [clause, declaration].flatMap((n) => n?.children ?? []).find((c) => !c.isNamed && (c.type === 'function' || c.type === 'const'))?.type;
   return { kind: keyword === 'function' ? 'function' : keyword === 'const' ? 'constant' : 'class', name: full, node };
+}
+
+const NOT_A_VARIABLE = new Set(['scoped_property_access_expression', 'property_element', 'property_promotion_parameter']);
+
+/** Variable sous le curseur (ou juste avant), hors propriétés `A::$x` et déclarations de propriétés. */
+export function variableAt(tree: Tree, pos: Position): Node | undefined {
+  const at = (character: number): Node | undefined => {
+    let node: Node | null = tree.rootNode.namedDescendantForPosition({ row: pos.line, column: character });
+    if (node?.type === 'name' && node.parent?.type === 'variable_name') node = node.parent;
+    return node?.type === 'variable_name' ? node : undefined;
+  };
+  const node = at(pos.character) ?? (pos.character > 0 ? at(pos.character - 1) : undefined);
+  if (!node || NOT_A_VARIABLE.has(node.parent?.type ?? '')) return undefined;
+  return node;
 }

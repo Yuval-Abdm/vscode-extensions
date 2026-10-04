@@ -1,13 +1,23 @@
-// Survol : signature (avec son namespace), versions de PHP, obsolescence, phpdoc.
+// Survol : type d'une variable ; pour une déclaration, signature (avec son namespace), versions de PHP,
+// obsolescence et phpdoc (lien @link vers la documentation).
 import * as l10n from '@vscode/l10n';
 import type { Hover } from 'vscode-languageserver/node';
 import type { FileSymbols, PhpSymbol, Position } from '../../shared/types.ts';
 import type { Lookup } from '../index/lookup.ts';
 import type { Tree } from '../parser/parser.ts';
+import { bindingAt, TypeResolver } from '../types/expand.ts';
+import { Inferrer } from '../types/infer.ts';
+import { formatType } from '../types/type.ts';
+import { variableAt } from './nameAt.ts';
 import { resolveAt } from './resolve.ts';
 
-export function hover(lookup: Lookup, file: FileSymbols, tree: Tree, pos: Position): Hover | null {
-  const hits = resolveAt(lookup, file, tree, pos);
+export function hover(lookup: Lookup, file: FileSymbols, tree: Tree, pos: Position, resolver = new TypeResolver(lookup)): Hover | null {
+  const variable = variableAt(tree, pos);
+  if (variable) {
+    const type = resolver.expand(new Inferrer(file.scopes).expr(variable), bindingAt(variable, file.scopes));
+    return { contents: { kind: 'markdown', value: `\`\`\`php\n<?php\n${formatType(type)} ${variable.text}\n\`\`\`` } };
+  }
+  const hits = resolveAt(lookup, file, tree, pos, resolver);
   if (!hits.length) return null;
   return { contents: { kind: 'markdown', value: hoverMarkdown(hits[0].symbol, hits.length) } };
 }
@@ -26,10 +36,20 @@ export function hoverMarkdown(symbol: PhpSymbol, count: number): string {
   return parts.join('\n\n---\n\n');
 }
 
-/** Balises phpdoc en italique, une par ligne. */
+/** Balises phpdoc en italique, une par ligne ; @link devient un lien. */
 function formatDoc(doc: string): string {
   return doc
     .split('\n')
-    .map((line) => line.replace(/^(@\w+)/, '_$1_'))
+    .map((line) => {
+      const link = /^@link\s+(\S+)/.exec(line);
+      if (!link) return line.replace(/^(@\w+)/, '_$1_');
+      let label = link[1];
+      try {
+        label = new URL(link[1]).host.replace(/^www\./, '');
+      } catch {
+        // pas une URL : texte brut
+      }
+      return `[${label}](${link[1]})`;
+    })
     .join('  \n');
 }
