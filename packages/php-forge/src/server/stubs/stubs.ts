@@ -14,13 +14,16 @@ interface StubsFile {
   files: FileSymbols[];
 }
 
-/** Index des stubs ; vide si le fichier est absent, illisible ou d'un autre format. */
-export function loadStubs(file: string): SymbolIndex {
+/** Index des stubs (des extensions demandées, ou toutes) ; vide si le fichier est absent, illisible ou d'un autre format. */
+export function loadStubs(file: string, extensions?: string[]): SymbolIndex {
   const index = new SymbolIndex();
+  const wanted = extensions && new Set(extensions.map((e) => e.toLowerCase()));
   try {
     const data = JSON.parse(gunzipSync(readFileSync(file)).toString('utf8')) as StubsFile;
     if (data.format !== STUBS_FORMAT) return index;
-    for (const stub of data.files) index.set(stub);
+    for (const stub of data.files) {
+      if (!wanted || wanted.has(stubExtension(stub.uri).toLowerCase())) index.set(stub);
+    }
   } catch {
     // absent ou illisible
   }
