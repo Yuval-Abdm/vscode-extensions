@@ -45,6 +45,21 @@ describe('DocumentStore', () => {
   });
 });
 
+describe('DocumentStore : types déduits différés', () => {
+  it('une modification ne déduit pas les types ; inferTypes le fait une fois', () => {
+    const store = new DocumentStore(php);
+    store.open('file:///w.php', 'php', 1, '<?php function f() { return 1; }');
+    assert.equal(store.get('file:///w.php')!.symbols.symbols[0].inferred?.kind, 'scalar');
+    const changed = store.change('file:///w.php', 2, [{ range: r(0, 21, 0, 21), text: ' ' }])!;
+    assert.equal(changed.symbols.symbols[0].inferred, undefined);
+    assert.equal(changed.pendingInference, true);
+    const inferred = store.inferTypes('file:///w.php')!;
+    assert.equal(inferred.symbols.symbols[0].inferred?.kind, 'scalar');
+    assert.equal(inferred.pendingInference, false);
+    assert.equal(store.inferTypes('file:///w.php'), undefined, 'rien à refaire');
+  });
+});
+
 describe('syntaxDiagnostics', () => {
   it('aucune erreur sur un fichier valide', async () => assert.deepEqual(syntaxDiagnostics(await parse('<?php echo 1;')), []));
 

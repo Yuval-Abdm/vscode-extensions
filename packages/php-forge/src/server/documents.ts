@@ -9,6 +9,8 @@ export interface OpenDocument {
   doc: TextDocument;
   tree: Tree;
   symbols: FileSymbols;
+  /** Résumé extrait sans les types déduits du code (après une modification) */
+  pendingInference: boolean;
 }
 
 /** Changement LSP : remplacement d'une plage, ou texte complet si `range` est absent. */
@@ -57,7 +59,7 @@ export class DocumentStore {
     this.close(uri);
     const doc = TextDocument.create(uri, languageId, version, text);
     const tree = parsePhp(this.#parser, text);
-    const entry: OpenDocument = { uri, doc, tree, symbols: extractFile(tree, uri) };
+    const entry: OpenDocument = { uri, doc, tree, symbols: extractFile(tree, uri), pendingInference: false };
     this.#docs.set(uri, entry);
     return entry;
   }
@@ -78,7 +80,18 @@ export class DocumentStore {
     const old = entry.tree;
     entry.tree = parsePhp(this.#parser, entry.doc.getText(), full ? undefined : old);
     old.delete();
+    // Les types déduits coûtent cher sur les gros fichiers sans types : calculés plus tard (inferTypes)
+    entry.symbols = extractFile(entry.tree, uri, { infer: false });
+    entry.pendingInference = true;
+    return entry;
+  }
+
+  /** Types déduits du code d'un document modifié ; undefined s'il n'y a rien à faire. */
+  inferTypes(uri: string): OpenDocument | undefined {
+    const entry = this.#docs.get(uri);
+    if (!entry?.pendingInference) return undefined;
     entry.symbols = extractFile(entry.tree, uri);
+    entry.pendingInference = false;
     return entry;
   }
 

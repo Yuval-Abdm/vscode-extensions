@@ -48,6 +48,9 @@ let storagePath: string | undefined;
 let folders: string[] = [];
 let progressSupported = false;
 let indexing: Promise<void> = Promise.resolve();
+/** Types déduits des documents modifiés, calculés après une pause de frappe */
+const inference = new Map<string, ReturnType<typeof setTimeout>>();
+const INFERENCE_DELAY = 300;
 
 /** Gestionnaire protégé : une exception est journalisée et le résultat par défaut renvoyé. */
 function safe<A extends unknown[], R>(fallback: R, handler: (...args: A) => R | Promise<R>): (...args: A) => Promise<R> {
@@ -165,12 +168,28 @@ connection.onDidOpenTextDocument(
 connection.onDidChangeTextDocument(
   safe(undefined, ({ textDocument, contentChanges }) => {
     const doc = documents.change(textDocument.uri, textDocument.version, contentChanges);
-    if (doc) refresh(doc);
+    if (!doc) return;
+    refresh(doc);
+    clearTimeout(inference.get(doc.uri));
+    inference.set(
+      doc.uri,
+      setTimeout(() => {
+        inference.delete(doc.uri);
+        try {
+          const inferred = documents.inferTypes(doc.uri);
+          if (inferred) workspace.set(inferred.symbols);
+        } catch (err) {
+          connection.console.error(String((err as Error)?.stack ?? err));
+        }
+      }, INFERENCE_DELAY),
+    );
   }),
 );
 
 connection.onDidCloseTextDocument(
   safe(undefined, ({ textDocument }) => {
+    clearTimeout(inference.get(textDocument.uri));
+    inference.delete(textDocument.uri);
     documents.close(textDocument.uri);
     void connection.sendDiagnostics({ uri: textDocument.uri, diagnostics: [] });
     const uri = URI.parse(textDocument.uri);
