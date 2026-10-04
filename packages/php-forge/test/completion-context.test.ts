@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { completionContext } from '../src/server/completion/context.ts';
+import { completionContext, unclosedBraces } from '../src/server/completion/context.ts';
 import { parser } from './helpers.ts';
 
 const php = await parser();
@@ -60,5 +60,14 @@ describe('contexte de complétion', () => {
     for (const code of ['<?php // @par|', "<?php echo 'te|xt';", '<p>Hel|lo</p>', '<?php class Fo| {}', '<?php function f($a|) {}']) {
       assert.deepEqual(context(code), { kind: 'none' }, code);
     }
+  });
+});
+
+describe('accolades non fermées', () => {
+  it('compte seulement le PHP, hors chaînes et commentaires', () => {
+    assert.equal(unclosedBraces("<p>l'école</p><?php function f() {"), 1);
+    assert.equal(unclosedBraces("<?php $s = '{'; // {\n/* { */ if ($a) {"), 1);
+    assert.equal(unclosedBraces('<style>a { color: red; }</style><?php if ($a) { ?><b>{</b><?php } ?>'), 0);
+    assert.equal(unclosedBraces('<?php function f() {}'), 0);
   });
 });

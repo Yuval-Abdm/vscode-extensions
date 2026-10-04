@@ -30,9 +30,41 @@ const DECLARATIONS = new Set([
 const PARAMETERS = new Set(['property_element', 'simple_parameter', 'variadic_parameter', 'property_promotion_parameter']);
 
 export function completionContext(parser: Parser, text: string, offset: number): { tree: Tree; context: CompletionContext } {
-  const patched = text.slice(0, offset) + PLACEHOLDER + text.slice(offset);
+  // Accolades pas encore fermées (fonction en cours d'écriture) : fermées à la fin du document, sans
+  // décaler les positions avant le curseur, pour que la fonction et ses paramètres existent dans l'arbre
+  const patched = text.slice(0, offset) + PLACEHOLDER + text.slice(offset) + '}'.repeat(unclosedBraces(text));
   const tree = parsePhp(parser, patched);
   return { tree, context: classify(tree, patched, offset) };
+}
+
+/** Accolades ouvertes non fermées dans les blocs PHP, hors chaînes et commentaires. */
+export function unclosedBraces(text: string): number {
+  let depth = 0;
+  let php = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (!php) {
+      if (c === '<' && text[i + 1] === '?') {
+        php = true;
+        i++;
+      }
+      continue;
+    }
+    if (c === '?' && text[i + 1] === '>') {
+      php = false;
+      i++;
+    } else if (c === "'" || c === '"') {
+      for (i++; i < text.length && text[i] !== c; i++) if (text[i] === '\\') i++;
+    } else if (c === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      i = end < 0 ? text.length : end + 1;
+    } else if ((c === '/' && text[i + 1] === '/') || c === '#') {
+      const end = text.indexOf('\n', i);
+      i = end < 0 ? text.length : end;
+    } else if (c === '{') depth++;
+    else if (c === '}' && depth > 0) depth--;
+  }
+  return depth;
 }
 
 function fieldOf(node: Node): string | null {
