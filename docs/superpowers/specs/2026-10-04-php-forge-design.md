@@ -94,8 +94,8 @@ packages/php-forge/
   pool de worker threads (cœurs − 1) ; inférence fine à la demande, mise en cache.
 - **Mémoire** : arbres conservés uniquement pour les documents ouverts ; le reste du projet est réduit à
   des résumés sérialisables.
-- **Cache disque** dans le `globalStorage` de VS Code, par workspace, invalidé par fichier (taille, date,
-  hash du contenu) et par version du format de cache.
+- **Cache disque** dans le `globalStorage` de VS Code, par workspace, invalidé par fichier (taille et date de modification)
+  et par version du format de cache.
 - **Encodage** : UTF-8 si valide, sinon Windows-1252 (fichiers historiques Latin-1).
 - **Stubs** : `JetBrains/phpstorm-stubs` (tag figé), compilés au build en un index compact. Disponibilité
   par version (`#[PhpStormStubsElementAvailable]`, `@since`, `@removed`, `@deprecated`) et par extension PHP.
