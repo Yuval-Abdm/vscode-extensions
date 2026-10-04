@@ -72,4 +72,22 @@ describe('aide aux paramètres', () => {
   });
 
   it('hors d’un appel : null', async () => assert.equal(await help('<?php $x = 1|;'), null));
+
+  it('ré-analyse incrémentale depuis l’arbre du document, jamais complète', async () => {
+    const parse = php.parse.bind(php);
+    const fresh: number[] = [];
+    php.parse = ((text: string, old?: unknown) => {
+      if (!old) fresh.push(text.length);
+      return parse(text, old as never);
+    }) as typeof php.parse;
+    try {
+      const { text, position } = cursor('<?php\nif (|\n$x = 1;');
+      const doc = new DocumentStore(php).open('file:///if.php', 'php', 1, text);
+      fresh.length = 0;
+      signatureHelp({ resolver: new TypeResolver(new Lookup(new SymbolIndex(), new SymbolIndex())), parser: php }, doc, position);
+      assert.deepEqual(fresh, []);
+    } finally {
+      php.parse = parse;
+    }
+  });
 });

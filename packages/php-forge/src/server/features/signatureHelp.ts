@@ -1,11 +1,12 @@
 // Aide aux paramètres : signature de l'appel en cours, paramètre actif (position ou argument nommé),
 // documentation de la fonction et des paramètres. Code incomplet (parenthèse non fermée) : le document est
-// ré-analysé avec une parenthèse fermante au curseur.
+// ré-analysé (de façon incrémentale) avec une parenthèse fermante au curseur.
 import type { ParameterInformation, SignatureHelp, SignatureInformation } from 'vscode-languageserver/node';
 import type { Position, TypeExpr } from '../../shared/types.ts';
 import type { OpenDocument } from '../documents.ts';
 import { docSummary } from '../model/phpdoc.ts';
-import { parsePhp, type Parser, type Tree } from '../parser/parser.ts';
+import { parseWithInsertion } from '../parser/insert.ts';
+import type { Parser, Tree } from '../parser/parser.ts';
 import type { TypeResolver } from '../types/expand.ts';
 import { Inferrer } from '../types/infer.ts';
 import { formatParam, formatType } from '../types/type.ts';
@@ -15,8 +16,7 @@ export function signatureHelp(env: { resolver: TypeResolver; parser: Parser }, d
   const offset = doc.doc.offsetAt(position);
   const result = helpAt(env.resolver, doc, doc.tree, offset);
   if (result !== undefined) return result;
-  const text = doc.doc.getText();
-  const patched = parsePhp(env.parser, `${text.slice(0, offset)})${text.slice(offset)}`);
+  const patched = parseWithInsertion(env.parser, doc.doc.getText(), offset, ')', '', { tree: doc.tree, position });
   try {
     return helpAt(env.resolver, doc, patched, offset) ?? null;
   } finally {
