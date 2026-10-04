@@ -21,8 +21,9 @@
   },
   "main": "./dist/client.cjs",
   "scripts": {
+    "build": "node scripts/build-stubs.ts && node scripts/build.ts",
     "typecheck": "tsc -p .",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node scripts/build.ts --dev && node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@vscode/l10n": "^0.0.18",
