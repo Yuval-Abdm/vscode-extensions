@@ -1,9 +1,18 @@
 # Changelog
 
-## 0.1.0 — préversion
+## 0.2.0 — preview
 
-- Serveur de langage PHP (tree-sitter-php) : indexation de tout le workspace en arrière-plan, worker threads, cache disque.
-- Plan du fichier, recherche de symboles dans le workspace (Ctrl+T), aller à la définition, survol (signature, phpdoc, versions de PHP).
-- Fonctions, classes et constantes natives de PHP (JetBrains phpstorm-stubs).
-- Erreurs de syntaxe en direct.
-- Fichiers Latin-1 / Windows-1252 pris en charge.
+- Type inference: declared types and phpdoc (generics, array shapes, templates, `@property`, `@method`, `@mixin`), types inferred from code (return values, properties assigned in constructors, constants), variable flow with narrowing (`instanceof`, `is_*`, null checks, `assert`).
+- Completion: variables, members by type (visibility respected), static members, functions / classes / constants filtered by PHP version and enabled extensions, keywords, include paths, known array keys, phpdoc tags; documentation on demand.
+- Signature help and inlay hints (parameter names; variable and return types optional).
+- Typed go to definition (closest override), go to implementation, document highlights, folding, smart selection, semantic highlighting.
+- Hover shows variable types and php.net links.
+- PHP version (`phpForge.phpVersion`, detected from `composer.json` or the `php` executable) shown in the status bar; `phpForge.stubs` selects PHP extensions.
+
+## 0.1.0 — preview
+
+- PHP language server (tree-sitter-php): whole-workspace indexing in the background, worker threads, disk cache.
+- Document outline, workspace symbol search (Ctrl+T), go to definition, hover (signature, phpdoc, PHP versions).
+- Native PHP functions, classes and constants (JetBrains phpstorm-stubs).
+- Live syntax errors.
+- Latin-1 / Windows-1252 files supported.

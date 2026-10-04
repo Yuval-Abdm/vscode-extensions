@@ -1,7 +1,8 @@
 // Contexte de complétion : le document est ré-analysé avec un identifiant factice au curseur, ce qui donne un
 // arbre complet même pendant la frappe (« $obj-> » devient « $obj->PhpForgeCursor ») ; le nœud qui contient
 // cet identifiant dit quoi proposer.
-import { parsePhp, type Node, type Parser, type Tree } from '../parser/parser.ts';
+import type { Position } from '../../shared/types.ts';
+import { Edit, parsePhp, type Node, type Parser, type Tree } from '../parser/parser.ts';
 
 export const PLACEHOLDER = 'PhpForgeCursor';
 
@@ -29,12 +30,34 @@ const DECLARATIONS = new Set([
 ]);
 const PARAMETERS = new Set(['property_element', 'simple_parameter', 'variadic_parameter', 'property_promotion_parameter']);
 
-export function completionContext(parser: Parser, text: string, offset: number): { tree: Tree; context: CompletionContext } {
+/**
+ * `base` : arbre actuel du document (`text`) et position du curseur ; l'analyse repart alors d'une copie de cet
+ * arbre et ne ré-analyse que la zone modifiée (fichiers historiques de plusieurs centaines de Ko).
+ */
+export function completionContext(parser: Parser, text: string, offset: number, base?: { tree: Tree; position: Position }): { tree: Tree; context: CompletionContext } {
   // Accolades pas encore fermées (fonction en cours d'écriture) : fermées à la fin du document, sans
   // décaler les positions avant le curseur, pour que la fonction et ses paramètres existent dans l'arbre
-  const patched = text.slice(0, offset) + PLACEHOLDER + text.slice(offset) + '}'.repeat(unclosedBraces(text));
-  const tree = parsePhp(parser, patched);
-  return { tree, context: classify(tree, patched, offset) };
+  const closing = '}'.repeat(unclosedBraces(text));
+  const patched = text.slice(0, offset) + PLACEHOLDER + text.slice(offset) + closing;
+  let old: Tree | undefined;
+  if (base) {
+    old = base.tree.copy();
+    const at = { row: base.position.line, column: base.position.character };
+    const inserted = { row: at.row, column: at.column + PLACEHOLDER.length };
+    old.edit(new Edit({ startIndex: offset, oldEndIndex: offset, newEndIndex: offset + PLACEHOLDER.length, startPosition: at, oldEndPosition: at, newEndPosition: inserted }));
+    if (closing) {
+      const length = text.length + PLACEHOLDER.length;
+      const lastLine = text.lastIndexOf('\n');
+      const end = { row: text.split('\n').length - 1, column: text.length - lastLine - 1 + (lastLine < offset ? PLACEHOLDER.length : 0) };
+      old.edit(new Edit({ startIndex: length, oldEndIndex: length, newEndIndex: length + closing.length, startPosition: end, oldEndPosition: end, newEndPosition: { row: end.row, column: end.column + closing.length } }));
+    }
+  }
+  try {
+    const tree = parsePhp(parser, patched, old);
+    return { tree, context: classify(tree, patched, offset) };
+  } finally {
+    old?.delete();
+  }
 }
 
 /** Accolades ouvertes non fermées dans les blocs PHP, hors chaînes et commentaires. */

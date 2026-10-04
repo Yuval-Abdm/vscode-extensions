@@ -2,7 +2,7 @@
   "name": "php-forge",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "preview": true,
   "publisher": "yuval-abdm",
   "license": "MIT",
@@ -37,7 +37,10 @@
     "go to definition",
     "include",
     "legacy",
-    "diagnostics"
+    "diagnostics",
+    "completion",
+    "autocomplete",
+    "type inference"
   ],
   "main": "./dist/client.cjs",
   "activationEvents": [
@@ -105,6 +108,87 @@
           "default": 2000000,
           "minimum": 10000,
           "markdownDescription": "%phpForge.maxFileSize.description%"
+        },
+        "phpForge.phpVersion": {
+          "type": "string",
+          "default": "",
+          "pattern": "^(\\d+(\\.\\d+)?)?$",
+          "markdownDescription": "%phpForge.phpVersion.description%"
+        },
+        "phpForge.stubs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "apache",
+            "bcmath",
+            "bz2",
+            "calendar",
+            "Core",
+            "ctype",
+            "curl",
+            "date",
+            "dom",
+            "exif",
+            "fileinfo",
+            "filter",
+            "ftp",
+            "gd",
+            "gettext",
+            "gmp",
+            "hash",
+            "iconv",
+            "imap",
+            "intl",
+            "json",
+            "libxml",
+            "mbstring",
+            "mysql",
+            "mysqli",
+            "openssl",
+            "pcntl",
+            "pcre",
+            "PDO",
+            "Phar",
+            "posix",
+            "random",
+            "readline",
+            "Reflection",
+            "regex",
+            "session",
+            "SimpleXML",
+            "soap",
+            "sockets",
+            "sodium",
+            "SPL",
+            "sqlite3",
+            "standard",
+            "superglobals",
+            "tokenizer",
+            "xml",
+            "xmlreader",
+            "xmlwriter",
+            "xsl",
+            "zip",
+            "zlib"
+          ],
+          "markdownDescription": "%phpForge.stubs.description%"
+        },
+        "phpForge.inlayHints.parameterNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "%phpForge.inlayHints.parameterNames.description%"
+        },
+        "phpForge.inlayHints.variableTypes": {
+          "type": "boolean",
+          "default": false,
+          "description": "%phpForge.inlayHints.variableTypes.description%"
+        },
+        "phpForge.inlayHints.returnTypes": {
+          "type": "boolean",
+          "default": false,
+          "description": "%phpForge.inlayHints.returnTypes.description%"
         },
         "phpForge.trace.server": {
           "type": "string",

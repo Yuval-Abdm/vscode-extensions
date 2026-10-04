@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { completionContext, unclosedBraces } from '../src/server/completion/context.ts';
+import { DocumentStore } from '../src/server/documents.ts';
 import { parser } from './helpers.ts';
 
 const php = await parser();
@@ -69,5 +70,22 @@ describe('accolades non fermées', () => {
     assert.equal(unclosedBraces("<?php $s = '{'; // {\n/* { */ if ($a) {"), 1);
     assert.equal(unclosedBraces('<style>a { color: red; }</style><?php if ($a) { ?><b>{</b><?php } ?>'), 0);
     assert.equal(unclosedBraces('<?php function f() {}'), 0);
+  });
+});
+
+describe('analyse incrémentale depuis l’arbre du document', () => {
+  it('même arbre et même contexte qu’une analyse complète', () => {
+    for (const code of ['<?php function f(int $a) {\n  $b = 1;\n  $b->|\n', '<?php\n$x = new Foo();\n$x->na|\necho 1;', "<p>l'été</p><?php if ($a) { str|"]) {
+      const offset = code.indexOf('|');
+      const text = code.replace('|', '');
+      const doc = new DocumentStore(php).open('file:///t.php', 'php', 1, text);
+      const full = completionContext(php, text, offset);
+      const incremental = completionContext(php, text, offset, { tree: doc.tree, position: doc.doc.positionAt(offset) });
+      assert.equal(incremental.tree.rootNode.toString(), full.tree.rootNode.toString(), code);
+      assert.equal(incremental.context.kind, full.context.kind);
+      full.tree.delete();
+      incremental.tree.delete();
+      assert.equal(doc.tree.rootNode.text, text, 'l’arbre du document est intact');
+    }
   });
 });

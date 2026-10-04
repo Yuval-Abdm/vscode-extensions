@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter, type MessageConnection } from 'vscode-jsonrpc/node';
 import { URI } from 'vscode-uri';
-import type { IndexedParams } from '../src/shared/protocol.ts';
+import type { IndexedParams, StatusParams } from '../src/shared/protocol.ts';
 
 const pkg = path.join(import.meta.dirname, '..');
 const fixture = path.join(pkg, 'test/fixtures/basic-project');
@@ -19,6 +19,7 @@ interface Server {
   connection: MessageConnection;
   indexed: IndexedParams;
   diagnostics: Map<string, { code: string; range: { start: { line: number } } }[]>;
+  statuses: StatusParams[];
 }
 
 async function startServer(storagePath: string): Promise<Server> {
@@ -30,6 +31,10 @@ async function startServer(storagePath: string): Promise<Server> {
     const p = params as { uri: string; diagnostics: Server['diagnostics'] extends Map<string, infer D> ? D : never };
     diagnostics.set(p.uri, p.diagnostics);
   });
+  const statuses: StatusParams[] = [];
+  connection.onNotification('phpForge/status', (params) => {
+    statuses.push(params as StatusParams);
+  });
   connection.onRequest(() => null);
   connection.listen();
   await connection.sendRequest('initialize', {
@@ -40,7 +45,7 @@ async function startServer(storagePath: string): Promise<Server> {
     initializationOptions: { storagePath },
   });
   await connection.sendNotification('initialized', {});
-  return { child, connection, indexed: await indexed, diagnostics };
+  return { child, connection, indexed: await indexed, diagnostics, statuses };
 }
 
 async function stopServer(server: Server): Promise<void> {
@@ -125,6 +130,43 @@ describe('serveur LSP', () => {
     assert.deepEqual(await waitFor(async () => ((await names()).includes('Helper') ? undefined : await names()), 'suppression'), []);
     await server.connection.sendNotification('workspace/didChangeWatchedFiles', { changes: [{ uri: uri('includes'), type: 1 }] });
     assert.ok(await waitFor(async () => ((await names()).includes('Helper') ? true : undefined), 'création'));
+  });
+
+  it('version de PHP envoyée au client', async () => {
+    const status = await waitFor(() => server.statuses[0], 'status');
+    assert.ok(['composer', 'php', 'default'].includes(status.source));
+  });
+
+  it('complétion des membres typés', async () => {
+    await open(server, 'complete.php', "<?php\nrequire 'includes/classes.php';\n$h = new Helper();\n$h->");
+    const result = (await server.connection.sendRequest('textDocument/completion', {
+      textDocument: { uri: uri('complete.php') }, position: { line: 3, character: 4 },
+    })) as { items: { label: string }[] };
+    const labels = result.items.map((i) => i.label);
+    assert.ok(labels.includes('render'));
+    assert.ok(!labels.includes('escape'));
+  });
+
+  it('aide aux paramètres', async () => {
+    await open(server, 'signature.php', '<?php format_price(');
+    const result = (await server.connection.sendRequest('textDocument/signatureHelp', {
+      textDocument: { uri: uri('signature.php') }, position: { line: 0, character: 19 },
+    })) as { signatures: { label: string }[] };
+    assert.match(result.signatures[0].label, /^format_price\(float \$amount\)/);
+  });
+
+  it('indications inline et tokens sémantiques', async () => {
+    const hints = (await server.connection.sendRequest('textDocument/inlayHint', {
+      textDocument: { uri: uri('index.php') }, range: { start: { line: 0, character: 0 }, end: { line: 20, character: 0 } },
+    })) as { label: string }[];
+    assert.ok(hints.some((h) => h.label === 'amount:'));
+    const tokens = (await server.connection.sendRequest('textDocument/semanticTokens/full', { textDocument: { uri: uri('index.php') } })) as { data: number[] };
+    assert.ok(tokens.data.length > 0 && tokens.data.length % 5 === 0);
+  });
+
+  it('changement de réglage : nouvelle version de PHP', async () => {
+    await server.connection.sendNotification('workspace/didChangeConfiguration', { settings: { phpForge: { phpVersion: '5.6' } } });
+    assert.ok(await waitFor(() => server.statuses.find((s) => s.phpVersion === '5.6'), 'statut 5.6'));
   });
 
   it('second démarrage : tout vient du cache', async () => {

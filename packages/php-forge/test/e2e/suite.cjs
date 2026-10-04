@@ -73,6 +73,41 @@ test('erreurs de syntaxe', async () => {
   assert.strictEqual(diagnostics[0].source, 'PHP Forge');
 });
 
+test('complétion des membres', async () => {
+  const doc = await vscode.workspace.openTextDocument(ws('index.php'));
+  const editor = await vscode.window.showTextDocument(doc);
+  const end = doc.lineAt(doc.lineCount - 1).range.end;
+  await editor.edit((e) => e.insert(end, '\n$helper->'));
+  const position = doc.lineAt(doc.lineCount - 1).range.end;
+  const labels = await waitFor(async () => {
+    const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, position);
+    const found = (list?.items ?? []).map((i) => (typeof i.label === 'string' ? i.label : i.label.label));
+    return found.includes('render') ? found : false;
+  }, 'complétion');
+  assert.ok(labels.includes('render'));
+});
+
+test('aide aux paramètres', async () => {
+  const doc = await vscode.workspace.openTextDocument(ws('index.php'));
+  const position = doc.positionAt(doc.getText().indexOf('format_price(') + 'format_price('.length);
+  const help = await waitFor(async () => {
+    const h = await vscode.commands.executeCommand('vscode.executeSignatureHelpProvider', doc.uri, position);
+    return h && h.signatures.length ? h : false;
+  }, 'aide aux paramètres');
+  assert.match(help.signatures[0].label, /^format_price\(/);
+});
+
+test('indications inline', async () => {
+  const doc = await vscode.workspace.openTextDocument(ws('index.php'));
+  const range = new vscode.Range(0, 0, doc.lineCount, 0);
+  const hints = await waitFor(async () => {
+    const h = await vscode.commands.executeCommand('vscode.executeInlayHintProvider', doc.uri, range);
+    const labels = (h ?? []).map((x) => (typeof x.label === 'string' ? x.label : x.label.map((p) => p.value).join('')));
+    return labels.includes('amount:') ? labels : false;
+  }, 'indications inline');
+  assert.ok(hints.includes('amount:'));
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {

@@ -1,10 +1,15 @@
 {
   "displayName": "PHP Forge",
-  "description": "Free PHP language server: navigation, diagnostics and include-aware analysis for modern and legacy PHP.",
+  "description": "Free PHP language server: completion, type inference, navigation and include-aware analysis for modern and legacy PHP.",
   "phpForge.restartServer.title": "Restart Language Server",
   "phpForge.reindex.title": "Reindex Workspace",
   "phpForge.showOutput.title": "Show Output",
   "phpForge.exclude.description": "Glob patterns (relative to the workspace folder) of files and folders that are neither indexed nor analyzed, e.g. `**/cache/**`.",
   "phpForge.maxFileSize.description": "Files larger than this size, in bytes, are ignored.",
-  "phpForge.trace.server.description": "Traces the communication between VS Code and the PHP Forge language server."
+  "phpForge.trace.server.description": "Traces the communication between VS Code and the PHP Forge language server.",
+  "phpForge.phpVersion.description": "PHP version of the project, e.g. `7.3`: completion only offers what exists in this version. Empty: read from `composer.json`, then from the `php` executable, otherwise 8.3.",
+  "phpForge.stubs.description": "PHP extensions whose native functions, classes and constants are known (folder names of JetBrains phpstorm-stubs).",
+  "phpForge.inlayHints.parameterNames.description": "Show parameter names before literal arguments.",
+  "phpForge.inlayHints.variableTypes.description": "Show the inferred type of assigned variables.",
+  "phpForge.inlayHints.returnTypes.description": "Show the inferred return type of functions without a declared type."
 }

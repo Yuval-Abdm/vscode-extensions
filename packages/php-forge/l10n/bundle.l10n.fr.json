@@ -9,5 +9,10 @@
   "Available since PHP {0}": "Disponible depuis PHP {0}",
   "Available up to PHP {0}": "Disponible jusqu'à PHP {0}",
   "Removed in PHP {0}": "Supprimée en PHP {0}",
-  "{0} other declarations": "{0} autres déclarations"
+  "{0} other declarations": "{0} autres déclarations",
+  "Change": "Modifier",
+  "from settings": "depuis les réglages",
+  "from composer.json": "depuis composer.json",
+  "from the php executable": "depuis l'exécutable php",
+  "default version": "version par défaut"
 }

@@ -67,7 +67,7 @@ const isStatic = (symbol: PhpSymbol) => symbol.modifiers?.includes('static') ?? 
 
 export function complete(env: CompletionEnv, doc: OpenDocument, position: Position): CompletionList {
   const offset = doc.doc.offsetAt(position);
-  const { tree, context } = completionContext(env.parser, doc.doc.getText(), offset);
+  const { tree, context } = completionContext(env.parser, doc.doc.getText(), offset, { tree: doc.tree, position });
   try {
     return new Completion(env, doc, position, offset).run(context);
   } finally {

@@ -1,10 +1,15 @@
 {
   "displayName": "PHP Forge",
-  "description": "Serveur de langage PHP gratuit : navigation, diagnostics et analyse des inclusions pour le PHP moderne et historique.",
+  "description": "Serveur de langage PHP gratuit : complétion, inférence de types, navigation et analyse des inclusions pour le PHP moderne et historique.",
   "phpForge.restartServer.title": "Redémarrer le serveur de langage",
   "phpForge.reindex.title": "Réindexer l'espace de travail",
   "phpForge.showOutput.title": "Afficher la sortie",
   "phpForge.exclude.description": "Globs (relatifs au dossier de l'espace de travail) des fichiers et dossiers ni indexés ni analysés, par exemple `**/cache/**`.",
   "phpForge.maxFileSize.description": "Les fichiers plus gros que cette taille, en octets, sont ignorés.",
-  "phpForge.trace.server.description": "Trace les échanges entre VS Code et le serveur de langage PHP Forge."
+  "phpForge.trace.server.description": "Trace les échanges entre VS Code et le serveur de langage PHP Forge.",
+  "phpForge.phpVersion.description": "Version de PHP du projet, par exemple `7.3` : la complétion ne propose que ce qui existe dans cette version. Vide : lue dans `composer.json`, puis auprès de l'exécutable `php`, sinon 8.3.",
+  "phpForge.stubs.description": "Extensions PHP dont les fonctions, classes et constantes natives sont connues (noms des dossiers de JetBrains phpstorm-stubs).",
+  "phpForge.inlayHints.parameterNames.description": "Afficher le nom des paramètres devant les arguments littéraux.",
+  "phpForge.inlayHints.variableTypes.description": "Afficher le type déduit des variables affectées.",
+  "phpForge.inlayHints.returnTypes.description": "Afficher le type de retour déduit des fonctions sans type déclaré."
 }

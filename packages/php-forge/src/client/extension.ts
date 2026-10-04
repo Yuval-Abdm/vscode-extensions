@@ -1,7 +1,8 @@
-// PHP Forge (client VS Code) : démarre le serveur de langage, commandes, cohabitation avec d'autres extensions PHP.
+// PHP Forge (client VS Code) : démarre le serveur de langage, transmet les réglages, affiche la version de PHP
+// utilisée, commandes, cohabitation avec d'autres extensions PHP.
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
-import { REINDEX_REQUEST, type InitOptions, type Settings } from '../shared/protocol.ts';
+import { REINDEX_REQUEST, STATUS_NOTIFICATION, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
 
 /** Extensions PHP dont la complétion et les diagnostics feraient doublon. */
 const COMPETITORS = ['bmewburn.vscode-intelephense-client', 'DEVSENSE.phptools-vscode'];
@@ -20,6 +21,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { scheme: 'untitled', language: 'php' },
     ],
     synchronize: {
+      configurationSection: 'phpForge',
       fileEvents: [
         vscode.workspace.createFileSystemWatcher('**/*.{php,php4,php5,phtml,ctp}'),
         // Dossiers créés, renommés ou supprimés : l'éditeur ne signale que le dossier, pas ses fichiers
@@ -34,7 +36,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   client = new LanguageClient('phpForge', 'PHP Forge', serverOptions, clientOptions);
 
+  const status = vscode.languages.createLanguageStatusItem('phpForge.phpVersion', { language: 'php' });
+  status.name = 'PHP Forge';
+  status.text = 'PHP';
+  status.command = { title: vscode.l10n.t('Change'), command: 'workbench.action.openSettings', arguments: ['phpForge.phpVersion'] };
+  client.onNotification(STATUS_NOTIFICATION, (params: StatusParams) => {
+    status.text = `PHP ${params.phpVersion}`;
+    status.detail = sourceLabel(params.source);
+  });
+
   context.subscriptions.push(
+    status,
     vscode.commands.registerCommand('phpForge.restartServer', () => client?.restart()),
     vscode.commands.registerCommand('phpForge.reindex', () => client?.sendRequest(REINDEX_REQUEST)),
     vscode.commands.registerCommand('phpForge.showOutput', () => client?.outputChannel.show()),
@@ -50,13 +62,35 @@ export async function deactivate(): Promise<void> {
   await client?.stop();
 }
 
+function sourceLabel(source: PhpVersionSource): string {
+  switch (source) {
+    case 'setting':
+      return vscode.l10n.t('from settings');
+    case 'composer':
+      return vscode.l10n.t('from composer.json');
+    case 'php':
+      return vscode.l10n.t('from the php executable');
+    case 'default':
+      return vscode.l10n.t('default version');
+  }
+}
+
 function readSettings(): Partial<Settings> {
   const config = vscode.workspace.getConfiguration('phpForge');
-  const settings: Partial<Settings> = {};
+  const settings: Partial<Settings> = {
+    phpVersion: config.get<string>('phpVersion') ?? '',
+    inlayHints: {
+      parameterNames: config.get<boolean>('inlayHints.parameterNames', true),
+      variableTypes: config.get<boolean>('inlayHints.variableTypes', false),
+      returnTypes: config.get<boolean>('inlayHints.returnTypes', false),
+    },
+  };
   const exclude = config.get<string[]>('exclude');
   const maxFileSize = config.get<number>('maxFileSize');
+  const stubs = config.get<string[]>('stubs');
   if (exclude) settings.exclude = exclude;
   if (maxFileSize) settings.maxFileSize = maxFileSize;
+  if (stubs) settings.stubs = stubs;
   return settings;
 }
 
