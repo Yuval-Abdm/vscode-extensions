@@ -4,7 +4,6 @@ import path from 'node:path';
 import * as l10n from '@vscode/l10n';
 import {
   createConnection,
-  FileChangeType,
   ProposedFeatures,
   TextDocumentSyncKind,
   type InitializeParams,
@@ -24,6 +23,7 @@ import { indexFolder } from './index/indexer.ts';
 import { Lookup } from './index/lookup.ts';
 import { isIndexable } from './index/scan.ts';
 import { SymbolIndex } from './index/symbolIndex.ts';
+import { applyFileChanges } from './index/updates.ts';
 import { createParser, initParser, type Parser, type WasmPaths } from './parser/parser.ts';
 import { loadStubs } from './stubs/stubs.ts';
 
@@ -141,17 +141,15 @@ connection.onDidCloseTextDocument(
 connection.onDidChangeWatchedFiles(
   safe(undefined, async ({ changes }) => {
     await indexing;
-    for (const change of changes) {
-      if (documents.get(change.uri)) continue;
-      const uri = URI.parse(change.uri);
-      if (change.type === FileChangeType.Deleted || !folderOf(uri.fsPath)) {
-        workspace.delete(change.uri);
-        continue;
-      }
-      const file = indexFileSync(parser, uri.fsPath, settings.maxFileSize);
-      if (file) workspace.set(file);
-      else workspace.delete(change.uri);
-    }
+    await applyFileChanges(workspace, changes, {
+      folders,
+      exclude: settings.exclude,
+      maxFileSize: settings.maxFileSize,
+      parser,
+      wasm,
+      workerScript: path.join(__dirname, 'worker.cjs'),
+      isOpen: (uri) => documents.get(uri) !== undefined,
+    });
   }),
 );
 

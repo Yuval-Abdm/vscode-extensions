@@ -53,9 +53,9 @@ async function open(server: Server, rel: string, text: string): Promise<void> {
   await server.connection.sendNotification('textDocument/didOpen', { textDocument: { uri: uri(rel), languageId: 'php', version: 1, text } });
 }
 
-async function waitFor<T>(check: () => T | undefined, label: string): Promise<T> {
+async function waitFor<T>(check: () => T | undefined | Promise<T | undefined>, label: string): Promise<T> {
   for (let i = 0; i < 100; i++) {
-    const value = check();
+    const value = await check();
     if (value !== undefined) return value;
     await new Promise((r) => setTimeout(r, 50));
   }
@@ -117,6 +117,14 @@ describe('serveur LSP', () => {
     assert.equal(hover, null);
     const symbols = (await server.connection.sendRequest('workspace/symbol', { query: 'format' })) as unknown[];
     assert.ok(symbols.length > 0);
+  });
+
+  it('dossier supprimé puis recréé (événements du système de fichiers)', async () => {
+    const names = async () => ((await server.connection.sendRequest('workspace/symbol', { query: 'helper' })) as { name: string }[]).map((s) => s.name);
+    await server.connection.sendNotification('workspace/didChangeWatchedFiles', { changes: [{ uri: uri('includes'), type: 3 }] });
+    assert.deepEqual(await waitFor(async () => ((await names()).includes('Helper') ? undefined : await names()), 'suppression'), []);
+    await server.connection.sendNotification('workspace/didChangeWatchedFiles', { changes: [{ uri: uri('includes'), type: 1 }] });
+    assert.ok(await waitFor(async () => ((await names()).includes('Helper') ? true : undefined), 'création'));
   });
 
   it('second démarrage : tout vient du cache', async () => {

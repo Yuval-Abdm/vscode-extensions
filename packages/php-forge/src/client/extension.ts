@@ -19,7 +19,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { scheme: 'file', language: 'php' },
       { scheme: 'untitled', language: 'php' },
     ],
-    synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{php,php4,php5,phtml,ctp}') },
+    synchronize: {
+      fileEvents: [
+        vscode.workspace.createFileSystemWatcher('**/*.{php,php4,php5,phtml,ctp}'),
+        // Dossiers créés, renommés ou supprimés : l'éditeur ne signale que le dossier, pas ses fichiers
+        vscode.workspace.createFileSystemWatcher('**/*', false, true, false),
+      ],
+    },
     initializationOptions: (): InitOptions => ({
       storagePath: (context.storageUri ?? context.globalStorageUri).fsPath,
       l10nBundle: vscode.l10n.uri?.fsPath,
