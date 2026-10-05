@@ -97,6 +97,14 @@ export interface PhpSymbol {
   /** Traits utilisés */
   uses?: string[];
   deprecated?: boolean;
+  /** Version de PHP qui déprécie le symbole (stubs : @deprecated 8.4, #[Deprecated(since: '7.4')]) */
+  deprecatedSince?: string;
+  /** Fonction ou classe déclarée dans un bloc (if, fonction) : peut ne pas exister, ou exister deux fois sans erreur */
+  conditional?: true;
+  /** Propriété créée par `$this->x = …` sans déclaration */
+  dynamic?: true;
+  /** Fonction ou méthode qui lit ses arguments avec func_get_args() : nombre d'arguments libre */
+  variadicBody?: true;
   /** Première version de PHP qui fournit le symbole (stubs) */
   since?: string;
   /** Dernière version de PHP qui le fournit (stubs, attribut PhpStormStubsElementAvailable) */

@@ -33,6 +33,21 @@ const CLASS_KINDS: Record<string, SymbolKind> = {
 const NAME_TYPES = new Set(['name', 'qualified_name', 'relative_name']);
 const MEMBER_LISTS = new Set(['declaration_list', 'enum_declaration_list']);
 
+const TOP_LEVEL = new Set(['program']);
+const ARGUMENT_READERS = new Set(['func_get_args', 'func_num_args', 'func_get_arg']);
+
+/** Déclaration dans un bloc (if, corps de fonction) plutôt qu'au niveau du fichier ou d'un namespace. */
+function isConditional(node: Node): boolean {
+  const parent = node.parent;
+  if (!parent || TOP_LEVEL.has(parent.type)) return false;
+  return !(parent.type === 'compound_statement' && parent.parent?.type === 'namespace_definition');
+}
+
+function readsArguments(fn: Node): boolean {
+  const body = fn.childForFieldName('body');
+  return !!body && body.descendantsOfType('function_call_expression').some((call) => ARGUMENT_READERS.has(call.childForFieldName('function')?.text.toLowerCase() ?? ''));
+}
+
 /** Déclaration dont le type sera déduit du code une fois le fichier entièrement lu. */
 interface Pending {
   symbol: PhpSymbol;
@@ -154,6 +169,8 @@ const versionOf = (text: string | undefined) => (text ? /\d+(?:\.\d+)*/.exec(tex
 
 function versionInfo(symbol: PhpSymbol, doc: string | undefined, attributes: string): void {
   if (/^@deprecated\b/m.test(doc ?? '') || /\bDeprecated\b/.test(attributes)) symbol.deprecated = true;
+  const deprecatedSince = /\bDeprecated\s*\(([^)]*)\)/.exec(attributes)?.[1].match(/since:\s*['"]([\d.]+)/)?.[1] ?? versionOf(docTag(doc, 'deprecated'));
+  if (symbol.deprecated && deprecatedSince) symbol.deprecatedSince = deprecatedSince;
   const available = /PhpStormStubsElementAvailable\s*\(([^)]*)\)/.exec(attributes)?.[1];
   const from = available ? (/from:\s*['"]([\d.]+)/.exec(available)?.[1] ?? /^\s*['"]([\d.]+)/.exec(available)?.[1]) : undefined;
   const to = available ? /to:\s*['"]([\d.]+)/.exec(available)?.[1] : undefined;
@@ -169,6 +186,7 @@ function classSymbol(node: Node, scope: NameScope, pending: Pending[]): PhpSymbo
   const nameNode = node.childForFieldName('name')!;
   const symbol = declare(kind, nameNode.text, node, nameNode, classSignature(node, kind));
   symbol.fqn = qualify(scope, nameNode.text);
+  if (isConditional(node)) symbol.conditional = true;
   const templates = docTemplates(symbol.doc);
   if (templates.length) symbol.templates = templates;
   const parents = classNames(childOfType(node, 'base_clause'), scope);
@@ -197,6 +215,7 @@ function classSymbol(node: Node, scope: NameScope, pending: Pending[]): PhpSymbo
     else if (member.type === 'enum_case') children.push(enumCaseSymbol(member));
   }
   children.push(...virtualMembers(symbol, scope, templates));
+  children.push(...dynamicProperties(node, children, pending));
   if (traits.length) symbol.uses = traits;
   if (children.length) symbol.children = children;
   return symbol;
@@ -216,6 +235,7 @@ function methodSymbols(node: Node, scope: NameScope, classTemplates: string[], p
   if (own.length) method.templates = own;
   const templates = [...classTemplates, ...own];
   method.params = parametersOf(node, scope, templates, method.doc);
+  if (readsArguments(node)) method.variadicBody = true;
   const type = returnType(node, method.doc, scope, templates);
   if (type) method.type = type;
   else pending.push({ symbol: method, node });
@@ -267,6 +287,8 @@ function functionSymbol(node: Node, scope: NameScope, pending: Pending[]): PhpSy
   const nameNode = node.childForFieldName('name')!;
   const symbol = declare('function', nameNode.text, node, nameNode, functionSignature(node));
   symbol.fqn = qualify(scope, nameNode.text);
+  if (isConditional(node)) symbol.conditional = true;
+  if (readsArguments(node)) symbol.variadicBody = true;
   const templates = docTemplates(symbol.doc);
   if (templates.length) symbol.templates = templates;
   symbol.params = parametersOf(node, scope, templates, symbol.doc);
@@ -365,6 +387,20 @@ function inferPending(file: FileSymbols, pending: Pending[], inferrer: Inferrer)
     }
     if (type && type.kind !== 'mixed' && JSON.stringify(type).length <= MAX_INFERRED) symbol.inferred = type;
   }
+}
+
+/** Propriétés affectées par `$this->x = …` dans les méthodes sans être déclarées (code historique). */
+function dynamicProperties(classNode: Node, children: PhpSymbol[], pending: Pending[]): PhpSymbol[] {
+  const declared = new Set(children.filter((c) => c.kind === 'property').map((c) => c.name));
+  const out: PhpSymbol[] = [];
+  for (const [name, values] of thisAssignments(classNode)) {
+    if (declared.has(name)) continue;
+    const at = rangeOf(values[0]);
+    const symbol: PhpSymbol = { kind: 'property', name, range: at, selectionRange: at, signature: `public $${name}`, modifiers: ['public'], dynamic: true };
+    pending.push({ symbol, node: classNode, owner: classNode });
+    out.push(symbol);
+  }
+  return out;
 }
 
 /** Affectations `$this->nom = valeur` dans les méthodes d'une classe, par nom de propriété. */
