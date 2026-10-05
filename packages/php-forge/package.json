@@ -309,6 +309,40 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "%phpForge.organizeUsesOnSave.description%"
+        },
+        "phpForge.format.enable": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.format.enable.description%"
+        },
+        "phpForge.format.braces": {
+          "type": "string",
+          "enum": [
+            "psr12",
+            "keep"
+          ],
+          "default": "psr12",
+          "markdownDescription": "%phpForge.format.braces.description%"
+        },
+        "phpForge.format.alignArrows": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%phpForge.format.alignArrows.description%"
+        },
+        "phpForge.format.alignAssignments": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%phpForge.format.alignAssignments.description%"
+        },
+        "phpForge.format.trailingCommas": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%phpForge.format.trailingCommas.description%"
+        },
+        "phpForge.format.lineLength": {
+          "type": "number",
+          "default": 120,
+          "markdownDescription": "%phpForge.format.lineLength.description%"
         }
       }
     },

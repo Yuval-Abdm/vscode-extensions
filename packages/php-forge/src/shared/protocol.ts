@@ -1,5 +1,6 @@
 // Contrat client ↔ serveur : options d'initialisation, réglages, requêtes et notifications propres à PHP Forge.
 import type { Level } from '../server/diagnostics/policy.ts';
+import type { FormatSettings } from '../server/format/format.ts';
 import type { IndexStats } from '../server/index/indexer.ts';
 
 export interface InlayHintSettings {
@@ -36,6 +37,8 @@ export interface Settings {
   /** Trier les use et retirer les inutilisés à l'enregistrement */
   organizeUsesOnSave: boolean;
   completion: { autoImport: boolean };
+  /** Formateur (l'indentation vient de l'éditeur) */
+  format: FormatSettings;
 }
 
 export const DEFAULT_STUBS = [
@@ -61,6 +64,7 @@ export const DEFAULT_SETTINGS: Settings = {
   codeLens: { references: true, implementations: true },
   organizeUsesOnSave: false,
   completion: { autoImport: true },
+  format: { enable: true, braces: 'psr12', alignArrows: false, alignAssignments: false, trailingCommas: false, lineLength: 120 },
 };
 
 /** Réglages complets à partir de valeurs partielles (options d'initialisation, changement de configuration). */
@@ -73,6 +77,7 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
     diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...partial?.diagnostics },
     codeLens: { ...DEFAULT_SETTINGS.codeLens, ...partial?.codeLens },
     completion: { ...DEFAULT_SETTINGS.completion, ...partial?.completion },
+    format: { ...DEFAULT_SETTINGS.format, ...partial?.format },
   };
 }
 

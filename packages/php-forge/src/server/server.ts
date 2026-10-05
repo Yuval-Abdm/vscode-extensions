@@ -4,7 +4,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import * as l10n from '@vscode/l10n';
-import { CodeActionKind, createConnection, type CodeAction, ErrorCodes, ResponseError, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
+import { CodeActionKind, createConnection, type CodeAction, type Range, type TextEdit, ErrorCodes, ResponseError, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
   BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
@@ -26,6 +26,7 @@ import { quickFixes } from './features/codeActions.ts';
 import { findReferences, targetAt, type RefEnv, type SourceFile } from './refactor/references.ts';
 import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { SourceCache } from './refactor/sourceCache.ts';
+import { formatEdits, formatOptions, onTypeRange } from './format/format.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
 import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { organizeUses } from './imports/uses.ts';
@@ -138,6 +139,9 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       referencesProvider: true,
       renameProvider: { prepareProvider: true },
       documentHighlightProvider: true,
+      documentFormattingProvider: true,
+      documentRangeFormattingProvider: true,
+      documentOnTypeFormattingProvider: { firstTriggerCharacter: '}', moreTriggerCharacter: [';'] },
       foldingRangeProvider: true,
       selectionRangeProvider: true,
       inlayHintProvider: true,
@@ -744,5 +748,21 @@ function renameHandler<P extends { textDocument: { uri: string } }, R>(run: (fil
 
 connection.onPrepareRename(renameHandler((file, { position }) => prepareRename(refEnv(), file, position, libraryUri)));
 connection.onRenameRequest(renameHandler((file, { position, newName }) => renameAt(refEnv(), file, position, newName, libraryUri)));
+
+/** Modifications de mise en forme d'un document ouvert (plage : sélection ou lignes touchées par la frappe). */
+function formatDocument(uri: string, editor: { tabSize: number; insertSpaces: boolean }, range?: Range): TextEdit[] {
+  const doc = docAt(uri);
+  if (!doc || !settings.format.enable) return [];
+  return formatEdits(doc.tree, doc.doc.getText(), formatOptions(settings.format, editor), range);
+}
+
+connection.onDocumentFormatting(safe([], ({ textDocument, options }) => formatDocument(textDocument.uri, options)));
+connection.onDocumentRangeFormatting(safe([], ({ textDocument, options, range }) => formatDocument(textDocument.uri, options, range)));
+connection.onDocumentOnTypeFormatting(
+  safe([], ({ textDocument, options, position, ch }) => {
+    const doc = docAt(textDocument.uri);
+    return doc ? formatDocument(textDocument.uri, options, onTypeRange(doc.tree, position, ch)) : [];
+  }),
+);
 
 connection.listen();

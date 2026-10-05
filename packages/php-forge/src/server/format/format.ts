@@ -171,3 +171,27 @@ export function formatText(tree: Tree, text: string, options: FormatOptions): st
   return out + text.slice(last);
 }
 
+/** Réglages `phpForge.format` (sans l'indentation, qui vient de l'éditeur). */
+export interface FormatSettings {
+  enable: boolean;
+  braces: 'psr12' | 'keep';
+  alignArrows: boolean;
+  alignAssignments: boolean;
+  trailingCommas: boolean;
+  lineLength: number;
+}
+
+/** Options du formateur : réglages + indentation de l'éditeur (tabSize, insertSpaces). */
+export function formatOptions(settings: FormatSettings, editor: { tabSize: number; insertSpaces: boolean }): FormatOptions {
+  const { enable: _enable, ...rest } = settings;
+  return { ...rest, unit: editor.insertSpaces ? ' '.repeat(editor.tabSize) : '\t' };
+}
+
+/** Lignes à reformater après la frappe de `;` (la ligne) ou de `}` (le bloc qu'elle ferme). */
+export function onTypeRange(tree: Tree, position: { line: number; character: number }, ch: string): Range {
+  const line: Range = { start: { line: position.line, character: 0 }, end: { line: position.line, character: position.character } };
+  if (ch !== '}' || position.character === 0) return line;
+  const brace = tree.rootNode.descendantForPosition({ row: position.line, column: position.character - 1 });
+  const block = brace?.type === '}' ? brace.parent : null;
+  return block ? { start: { line: block.startPosition.row, character: 0 }, end: line.end } : line;
+}

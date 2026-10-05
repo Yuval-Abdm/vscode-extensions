@@ -296,6 +296,16 @@ describe('serveur LSP', () => {
     }
   });
 
+  it('formatage du document et à la frappe', async () => {
+    await open(server, 'fmt.php', '<?php\nif($a){\nfoo( 1 );\n}\n');
+    const options = { tabSize: 4, insertSpaces: true };
+    const edits = (await server.connection.sendRequest('textDocument/formatting', { textDocument: { uri: uri('fmt.php') }, options })) as { newText: string }[];
+    assert.ok(edits.some((e) => e.newText === '\n    '), JSON.stringify(edits));
+    const typed = (await server.connection.sendRequest('textDocument/onTypeFormatting', { textDocument: { uri: uri('fmt.php') }, position: { line: 2, character: 9 }, ch: ';', options })) as { range: { start: { line: number } } }[];
+    assert.ok(typed.length > 0 && typed.every((e) => e.range.start.line === 2 || e.range.start.line === 1), JSON.stringify(typed));
+    await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('fmt.php') } });
+  });
+
   it('second démarrage : tout vient du cache', async () => {
     const second = await startServer(storage);
     try {

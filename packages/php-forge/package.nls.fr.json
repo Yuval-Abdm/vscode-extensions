@@ -29,5 +29,11 @@
   "phpForge.codeLens.implementations.description": "Afficher le nombre d'implémentations au-dessus des interfaces, des classes abstraites et de leurs méthodes.",
   "phpForge.showReferences.title": "Afficher les références",
   "phpForge.organizeUsesOnSave.description": "Trier les use et retirer les inutilisés à l'enregistrement d'un fichier PHP.",
-  "phpForge.completion.autoImport.description": "Ajouter l'instruction `use` quand une classe, fonction ou constante d'un autre namespace est acceptée dans la complétion."
+  "phpForge.completion.autoImport.description": "Ajouter l'instruction `use` quand une classe, fonction ou constante d'un autre namespace est acceptée dans la complétion.",
+  "phpForge.format.enable.description": "Formater les fichiers PHP (Mettre en forme le document, la sélection, à la frappe et à l'enregistrement).",
+  "phpForge.format.braces.description": "`psr12` : accolade des classes et fonctions à la ligne, des structures de contrôle sur la même ligne. `keep` : les accolades restent à leur place.",
+  "phpForge.format.alignArrows.description": "Aligner les `=>` des éléments consécutifs d'un tableau.",
+  "phpForge.format.alignAssignments.description": "Aligner les `=` d'affectations consécutives.",
+  "phpForge.format.trailingCommas.description": "Ajouter une virgule finale aux tableaux écrits sur plusieurs lignes.",
+  "phpForge.format.lineLength.description": "Longueur de ligne indicative : pas d'alignement s'il rendait une ligne plus longue."
 }

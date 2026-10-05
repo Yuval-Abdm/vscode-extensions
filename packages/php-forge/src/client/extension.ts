@@ -136,6 +136,14 @@ function readSettings(): Partial<Settings> {
     libraryPaths: config.get<string[]>('libraryPaths') ?? ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
     organizeUsesOnSave: config.get<boolean>('organizeUsesOnSave', false),
     completion: { autoImport: config.get<boolean>('completion.autoImport', true) },
+    format: {
+      enable: config.get<boolean>('format.enable', true),
+      braces: config.get<'psr12' | 'keep'>('format.braces', 'psr12'),
+      alignArrows: config.get<boolean>('format.alignArrows', false),
+      alignAssignments: config.get<boolean>('format.alignAssignments', false),
+      trailingCommas: config.get<boolean>('format.trailingCommas', false),
+      lineLength: config.get<number>('format.lineLength', 120),
+    },
     codeLens: { references: config.get<boolean>('codeLens.references', true), implementations: config.get<boolean>('codeLens.implementations', true) },
   };
   const exclude = config.get<string[]>('exclude');
