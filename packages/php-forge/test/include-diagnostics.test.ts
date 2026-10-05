@@ -7,7 +7,7 @@ import { IncludeGraph } from '../src/server/includes/graph.ts';
 import { extract } from './helpers.ts';
 import { project, uriOf } from './project.ts';
 
-const empty: FileReport = { reads: [], symbols: [], unresolved: [], approximate: false, contexts: [] };
+const empty: FileReport = { reads: [], symbols: [], unresolved: [], duplicates: [], approximate: false, contexts: [] };
 const label = (via: string) => (via === '' ? '' : via.replace(/^.*?\/p\/(.+)#(\d+|file)$/, (_, f, l) => (l === 'file' ? f : `${f}:${Number(l) + 1}`)));
 
 describe('diagnostics des inclusions', () => {
@@ -59,5 +59,11 @@ describe('diagnostics des inclusions', () => {
     const graph = new IncludeGraph(await project({ 'lp_3/index.php': '<?php' }), { roots: ['/p'], readFile: () => undefined });
     assert.equal(callerLabel(graph, `${uriOf('lp_3/index.php')}#11`), 'lp_3/index.php:12');
     assert.equal(relativePath(graph, uriOf('lp_3/index.php')), 'lp_3/index.php');
+  });
+  it('déclaration en double', async () => {
+    const file = await extract('<?php function helper() {}');
+    const [d] = includeDiagnostics({ ...empty, duplicates: [{ name: 'helper', other: uriOf('inc/a.php'), range: { start: { line: 0, character: 15 }, end: { line: 0, character: 21 } }, via: [`${uriOf('lp_3/index.php')}#2`], others: 0 }] }, file, label);
+    assert.deepEqual([d.code, d.severity], ['duplicate-declaration', DiagnosticSeverity.Error]);
+    assert.equal(d.message, 'helper is already declared in inc/a.php when included from lp_3/index.php:3');
   });
 });

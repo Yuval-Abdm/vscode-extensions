@@ -4,7 +4,7 @@
 // empreinte de son contexte d'entrée (mémoïsation, au plus `maxContexts`) ; ses résultats sont rattachés à
 // l'appelant (« script#ligne ») pour la règle stricte : une lecture est signalée dès qu'un contexte ne définit pas
 // la variable, avec la liste des appelants fautifs.
-import type { FileSymbols, FlowFunction, FlowOp, Loc, PhpParam, Position, TypeExpr } from '../../shared/types.ts';
+import type { FileSymbols, FlowFunction, FlowOp, Loc, PhpParam, PhpSymbol, Position, Range, TypeExpr } from '../../shared/types.ts';
 import type { Lookup } from '../index/lookup.ts';
 import type { SymbolIndex } from '../index/symbolIndex.ts';
 import { union } from '../types/type.ts';
@@ -64,7 +64,18 @@ export interface SymbolReport {
   others: number;
 }
 
+export interface DuplicateReport {
+  /** Nom déclaré deux fois, ou fichier inclus deux fois */
+  name: string;
+  /** Fichier qui le déclare déjà (ou le fichier inclus lui-même) */
+  other: string;
+  range: Range;
+  via: string[];
+  others: number;
+}
+
 export interface FileReport {
+  duplicates: DuplicateReport[];
   reads: ReadReport[];
   symbols: SymbolReport[];
   unresolved: UnresolvedInclude[];
@@ -87,6 +98,7 @@ interface Delta {
   request?: { from: string; line: number };
   autoload: boolean;
   exit: boolean;
+  declared: Map<string, string>;
 }
 
 /** Ce qu'une exécution a lu du contexte en plus des variables (vérifié avant de la réutiliser). */
@@ -139,6 +151,18 @@ interface Ctx {
 }
 
 const MAX_DEPTH = 40;
+const DECLARED_KINDS = new Set(['function', 'class', 'interface', 'trait', 'enum']);
+const fileName = (uri: string) => uri.slice(uri.lastIndexOf('/') + 1);
+
+/** Fonctions et classes déclarées sans condition par le fichier (clé → symbole). */
+function declarations(file: FileSymbols): Map<string, PhpSymbol> {
+  const out = new Map<string, PhpSymbol>();
+  for (const symbol of file.symbols) {
+    if (!DECLARED_KINDS.has(symbol.kind) || symbol.conditional || !symbol.fqn) continue;
+    out.set(`${symbol.kind === 'function' ? 'function' : 'class'}:${symbol.fqn.toLowerCase()}`, symbol);
+  }
+  return out;
+}
 const shortName = (name: string) => name.slice(name.lastIndexOf('\\') + 1).toLowerCase();
 const before = (a: Loc, b: Loc) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
 
@@ -148,6 +172,8 @@ export class Layer {
   readonly vars = new Map<string, VarInfo | null>();
   readonly constants = new Map<string, string | undefined>();
   readonly loaded = new Set<string>();
+  /** Fonctions et classes déclarées sans condition dans la chaîne (clé → fichier) */
+  readonly declared = new Map<string, string>();
   /** Plus d'alerte de variable non définie (dynamique, extract, include non résolu) */
   stop: boolean;
   request?: { from: string; line: number };
@@ -172,6 +198,14 @@ export class Layer {
   constant(name: string): string | undefined {
     for (let layer: Layer | undefined = this; layer; layer = layer.parent) {
       if (layer.constants.has(name)) return layer.constants.get(name);
+    }
+    return undefined;
+  }
+
+  declaredBy(key: string): string | undefined {
+    for (let layer: Layer | undefined = this; layer; layer = layer.parent) {
+      const uri = layer.declared.get(key);
+      if (uri) return uri;
     }
     return undefined;
   }
@@ -221,6 +255,7 @@ export class Layer {
       request: this.request,
       autoload: this.autoload,
       exit: this.exit === 'exit',
+      declared: new Map(this.declared),
     };
   }
 
@@ -232,6 +267,7 @@ export class Layer {
     this.request ??= delta.request;
     this.autoload ||= delta.autoload;
     if (delta.exit) this.exit = 'exit';
+    for (const [key, uri] of delta.declared) if (!this.declaredBy(key)) this.declared.set(key, uri);
   }
 }
 
@@ -273,6 +309,7 @@ function merge(parent: Layer, alts: Layer[], exhaustive: boolean): void {
   for (const alt of live) {
     for (const [name, value] of alt.constants) if (parent.constant(name) === undefined) parent.constants.set(name, value);
     for (const uri of alt.loaded) parent.loaded.add(uri);
+    for (const [key, uri] of alt.declared) if (!parent.declaredBy(key)) parent.declared.set(key, uri);
     parent.stop ||= alt.stop;
     parent.request ??= alt.request;
     parent.autoload ||= alt.autoload;
@@ -296,6 +333,7 @@ export class IncludeAnalysis {
   #methodRefs?: Map<string, Set<number>>;
   readonly #autoloaders = new Map<string, boolean>();
   readonly #lazy = new Map<string, string[]>();
+  readonly #duplicates = new Map<string, { name: string; other: string; range: Range; via: string }[]>();
   /** Symboles des fonctions des fichiers atteints par le script d'entrée en cours, vérifiés à la fin du script */
   #pending?: { context: { missing: SymbolNeed[] }; needs: SymbolNeed[] }[];
   #probeCache?: { key: string; file: FileSymbols | undefined; layer: Layer | undefined };
@@ -379,7 +417,7 @@ export class IncludeAnalysis {
         symbols.set(key, entry);
       }
     }
-    const out: FileReport = { reads: [], symbols: [], unresolved: [], approximate: state.approximate, contexts: contexts.map(([via]) => via) };
+    const out: FileReport = { duplicates: [], reads: [], symbols: [], unresolved: [], approximate: state.approximate, contexts: contexts.map(([via]) => via) };
     for (const { issue, undefinedVia, maybeVia } of reads.values()) {
       const via = undefinedVia.length ? undefinedVia : maybeVia;
       out.reads.push({ ...issue, kind: undefinedVia.length ? 'undefined' : 'maybe', via, others: contexts.length - via.length });
@@ -390,6 +428,14 @@ export class IncludeAnalysis {
     for (const runs of state.runs.values()) for (const run of runs) for (const u of run.unresolved) unresolved.set(u.index, u);
     for (const u of state.functions?.unresolved ?? []) unresolved.set(u.index, u);
     out.unresolved = [...unresolved.values()].sort((a, b) => a.index - b.index);
+    const byKey = new Map<string, DuplicateReport>();
+    for (const d of this.#duplicates.get(uri) ?? []) {
+      const key = `${d.name}:${d.range.start.line}:${d.range.start.character}`;
+      const entry = byKey.get(key) ?? { name: d.name, other: d.other, range: d.range, via: [], others: 0 };
+      entry.via.push(d.via);
+      byKey.set(key, entry);
+    }
+    out.duplicates = [...byKey.values()].map((d) => ({ ...d, others: Math.max(0, contexts.length - d.via.length) }));
     out.reads.sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1]);
     return out;
   }
@@ -476,6 +522,7 @@ export class IncludeAnalysis {
     if (!run) {
       const child = new Layer(layer);
       child.loaded.add(uri);
+      for (const key of declarations(file).keys()) child.declared.set(key, uri);
       const ctx = this.#ctx(uri, file, { ...call, base: child });
       this.#stack.push(uri);
       try {
@@ -501,6 +548,14 @@ export class IncludeAnalysis {
     if (!call.probe) {
       const context = { run, missing: run.needs.filter((need) => !need.declaredIn.some((d) => layer.isLoaded(d))) };
       state.contexts.set(call.via, context);
+      // Fonctions et classes déjà déclarées par un autre fichier de la chaîne (erreur fatale « Cannot redeclare »)
+      for (const [key, declaredIn] of run.delta.declared) {
+        const before = layer.declaredBy(key);
+        if (!before || before === declaredIn) continue;
+        const declaring = this.#index.get(declaredIn);
+        const symbol = declaring && declarations(declaring).get(key);
+        if (symbol) this.#duplicate(declaredIn, { name: symbol.name, other: before, range: symbol.selectionRange, via: call.via });
+      }
       this.#pending?.push({ context, needs: this.#functions(uri).needs });
     }
     layer.apply(run.delta);
@@ -509,6 +564,12 @@ export class IncludeAnalysis {
     // Fichiers inclus par ses fonctions (chargement à la demande : connectDB(), loadModel()) : considérés chargés
     for (const target of this.#lazyTargets(uri, file)) layer.loaded.add(target);
     return run;
+  }
+
+  #duplicate(uri: string, entry: { name: string; other: string; range: Range; via: string }): void {
+    const list = this.#duplicates.get(uri) ?? [];
+    if (!list.some((d) => d.name === entry.name && d.via === entry.via && d.range.start.line === entry.range.start.line)) list.push(entry);
+    this.#duplicates.set(uri, list);
   }
 
   /** Une exécution mémorisée vaut pour ce contexte si ce qu'elle a lu de l'appelant est identique. */
@@ -706,6 +767,11 @@ export class IncludeAnalysis {
       return;
     }
     const target = this.graph.uriOf(targets[0]);
+    // Fichier inclus une seconde fois sans _once : ses fonctions et classes sont redéclarées (erreur fatale)
+    if (!ref.kind.endsWith('_once') && layer.isLoaded(target) && !ctx.probe) {
+      const included = this.#index.get(target);
+      if (included && declarations(included).size) this.#duplicate(ctx.uri, { name: fileName(target), other: target, range: ref.range, via: ctx.via });
+    }
     if (ref.kind.endsWith('_once') && layer.isLoaded(target)) {
       // Sauté grâce à l'appelant : l'exécution en dépend
       if (!layer.isLoaded(target, ctx.base.parent)) ctx.deps.once.add(target);

@@ -48,6 +48,10 @@ export function includeDiagnostics(report: FileReport, file: FileSymbols, label:
     const message = l10n.t('{0} is declared in {1}, which is not included here', need.name, where) + callers(via, others, label);
     out.push(diagnostic(rangeAt(need.at, need.end), 'symbol-not-included', DiagnosticSeverity.Warning, message));
   }
+  for (const duplicate of report.duplicates) {
+    const message = l10n.t('{0} is already declared in {1}', duplicate.name, label(`${duplicate.other}#file`)) + callers(duplicate.via, duplicate.others, label);
+    out.push(diagnostic(duplicate.range, 'duplicate-declaration', DiagnosticSeverity.Error, message));
+  }
   if (report.approximate) {
     out.push(diagnostic(rangeAt([0, 0], 0), 'include-analysis-approximate', DiagnosticSeverity.Information, l10n.t('Include analysis is approximate: this file is included in too many different contexts')));
   }

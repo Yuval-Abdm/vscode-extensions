@@ -283,4 +283,18 @@ describe('analyse des inclusions', () => {
     });
     assert.deepEqual(analysis.report(uriOf('lib.php'))!.symbols.map((s) => s.need.name), ['CONST_A']);
   });
+  it('déclarations en double dans une chaîne d’inclusion', async () => {
+    const analysis = await analyse({
+      'a.php': '<?php function helper() {}',
+      'b.php': '<?php function helper() {}',
+      'guarded.php': "<?php if (!function_exists('helper')) { function helper() {} }",
+      'twice.php': '<?php function once_only() {}',
+      'page.php': "<?php\ninclude 'a.php';\ninclude 'b.php';\ninclude 'guarded.php';",
+      'page2.php': "<?php\ninclude 'b.php';",
+      'page3.php': "<?php\ninclude 'twice.php';\ninclude 'twice.php';\nrequire_once 'twice.php';",
+    });
+    assert.deepEqual(analysis.report(uriOf('b.php'))!.duplicates.map((d) => [d.name, d.other, d.via, d.others]), [['helper', uriOf('a.php'), [`${uriOf('page.php')}#2`], 1]]);
+    assert.deepEqual(analysis.report(uriOf('guarded.php'))!.duplicates, []);
+    assert.deepEqual(analysis.report(uriOf('page3.php'))!.duplicates.map((d) => [d.name, d.range.start.line]), [['twice.php', 2]]);
+  });
 });

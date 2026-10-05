@@ -32,7 +32,7 @@ describe('projet de référence legacy-includes', async () => {
     const rel = path.relative(ROOT, file);
     it(rel, () => {
       const uri = URI.file(file).toString();
-      const report = analysis.report(uri) ?? { reads: [], symbols: [], unresolved: [], approximate: false, contexts: [] };
+      const report = analysis.report(uri) ?? { reads: [], symbols: [], unresolved: [], duplicates: [], approximate: false, contexts: [] };
       const diagnostics = includeDiagnostics(report, index.get(uri)!, (via) => callerLabel(graph, via));
       const expected = readFileSync(file, 'utf8').split('\n').flatMap((text, line) => {
         const match = /\/\/ expect: ([\w-]+)(?: (.+))?$/.exec(text);
