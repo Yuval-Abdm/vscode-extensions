@@ -115,6 +115,16 @@ describe('serveur LSP', () => {
     assert.equal(diagnostics[0].code, 'syntax-error');
   });
 
+  it('« ; » manquant signalé, avec sa correction rapide', async () => {
+    await open(server, 'semicolon.php', '<?php\n$a = 1\n$b = 2;\n');
+    const diagnostics = await waitFor(() => server.diagnostics.get(uri('semicolon.php')), 'diagnostics');
+    assert.equal(diagnostics[0].code, 'missing-semicolon');
+    const actions = (await server.connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: uri('semicolon.php') }, range: diagnostics[0].range, context: { diagnostics },
+    })) as { edit: { changes: Record<string, { newText: string }[]> } }[];
+    assert.equal(actions[0].edit.changes[uri('semicolon.php')][0].newText, ';');
+  });
+
   it('document non ouvert ou inconnu : réponse vide, le serveur continue', async () => {
     const result = await server.connection.sendRequest('textDocument/definition', { textDocument: { uri: 'file:///inconnu.php' }, position: { line: 0, character: 0 } });
     assert.deepEqual(result, []);

@@ -3,7 +3,7 @@
 // Aucune exception ne doit faire tomber le serveur : chaque gestionnaire est protégé par `safe`.
 import path from 'node:path';
 import * as l10n from '@vscode/l10n';
-import { createConnection, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
+import { CodeActionKind, createConnection, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
   INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
@@ -12,6 +12,7 @@ import {
 import { complete, resolveCompletion } from './completion/complete.ts';
 import { syntaxDiagnostics } from './diagnostics/syntax.ts';
 import { DocumentStore, type OpenDocument } from './documents.ts';
+import { quickFixes } from './features/codeActions.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
 import { foldingRanges } from './features/folding.ts';
@@ -101,6 +102,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       foldingRangeProvider: true,
       selectionRangeProvider: true,
       inlayHintProvider: true,
+      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
       semanticTokensProvider: { legend: { tokenTypes: [...TOKEN_TYPES], tokenModifiers: [...TOKEN_MODIFIERS] }, full: true },
     },
     serverInfo: { name: 'PHP Forge' },
@@ -158,7 +160,7 @@ async function reindex(): Promise<void> {
 
 function refresh(doc: OpenDocument): void {
   workspace.set(doc.symbols);
-  void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics: syntaxDiagnostics(doc.tree) });
+  void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics: syntaxDiagnostics(doc.tree, 100, parser) });
 }
 
 connection.onDidOpenTextDocument(
@@ -274,6 +276,8 @@ connection.onDocumentHighlight(
     return doc ? highlights(doc.tree, doc.doc.getText(), position) : [];
   }),
 );
+
+connection.onCodeAction(safe([], ({ textDocument, context }) => quickFixes(textDocument.uri, context.diagnostics)));
 
 connection.onFoldingRanges(
   safe([], ({ textDocument }) => {

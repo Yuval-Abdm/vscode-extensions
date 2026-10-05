@@ -12,7 +12,7 @@
 - **Go to Definition** (closest override for redefined methods), **Go to Implementation**, **highlight occurrences**, **folding**, **smart selection**, **semantic highlighting**.
 - **Hover**: variable types, signature, namespace, phpdoc, PHP version availability, deprecation, php.net links.
 - **Whole-project index** in the background (worker threads), cached on disk: a 19,000-file project is indexed in about 6 s.
-- **Outline / breadcrumbs**, **workspace symbol search** (Ctrl+T) and **live syntax errors**.
+- **Outline / breadcrumbs**, **workspace symbol search** (Ctrl+T) and **live syntax errors** (a forgotten `;` is pointed out on its own line, with an "Add `;`" quick fix).
 - **Native PHP functions and classes** from JetBrains phpstorm-stubs, for the PHP version of your project (shown in the status bar).
 - **Legacy-friendly**: Latin-1 / Windows-1252 files, PHP mixed with HTML, untyped code, functions declared inside `if (!function_exists(…))`.
 

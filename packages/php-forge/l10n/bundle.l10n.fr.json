@@ -5,6 +5,8 @@
   "Indexing {0}…": "Indexation de {0}…",
   "Syntax error: missing \"{0}\"": "Erreur de syntaxe : « {0} » manquant",
   "Syntax error: unexpected \"{0}\"": "Erreur de syntaxe : « {0} » inattendu",
+  "Missing \";\" at end of line": "« ; » manquant en fin de ligne",
+  "Add \";\"": "Ajouter « ; »",
   "**Deprecated**": "**Obsolète**",
   "Available since PHP {0}": "Disponible depuis PHP {0}",
   "Available up to PHP {0}": "Disponible jusqu'à PHP {0}",
