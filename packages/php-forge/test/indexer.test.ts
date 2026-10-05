@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { cacheFileFor } from '../src/server/index/cache.ts';
+import { CACHE_VERSION, cacheFileFor } from '../src/server/index/cache.ts';
 import { indexFolder, type IndexerOptions } from '../src/server/index/indexer.ts';
 import { indexInWorkers } from '../src/server/index/pool.ts';
 import { isIndexable, listPhpFiles } from '../src/server/index/scan.ts';
@@ -95,6 +96,38 @@ describe('indexFolder', () => {
     assert.equal(third.parsed, 1);
     assert.equal(third.fromCache, 2);
     assert.equal(index.findClass('A2').length, 1);
+  });
+
+  it('cache inchangé : jamais réécrit ; fichier supprimé : réécrit', async () => {
+    const root = project();
+    const cacheFile = cacheFileFor(mkdtempSync(path.join(tmpdir(), 'php-forge-cache-')), root);
+    await indexFolder(new SymbolIndex(), options(root, { cacheFile }));
+    const written = statSync(cacheFile).mtimeMs;
+    await new Promise((r) => setTimeout(r, 30));
+    await indexFolder(new SymbolIndex(), options(root, { cacheFile }));
+    assert.equal(statSync(cacheFile).mtimeMs, written);
+    rmSync(path.join(root, 'sub/b.php'));
+    const after = await indexFolder(new SymbolIndex(), options(root, { cacheFile }));
+    assert.equal(after.files, 4);
+    assert.notEqual(statSync(cacheFile).mtimeMs, written);
+    assert.equal((await indexFolder(new SymbolIndex(), options(root, { cacheFile }))).fromCache, 2);
+  });
+
+  it('cache en lignes : version, puis un fichier par ligne (lu et écrit en flux, sans document géant)', async () => {
+    const root = project();
+    const cacheFile = cacheFileFor(mkdtempSync(path.join(tmpdir(), 'php-forge-cache-')), root);
+    await indexFolder(new SymbolIndex(), options(root, { cacheFile }));
+    const lines = gunzipSync(readFileSync(cacheFile)).toString('utf8').trimEnd().split('\n');
+    assert.deepEqual(JSON.parse(lines[0]), { version: CACHE_VERSION });
+    assert.deepEqual(lines.slice(1).map((l) => path.relative(root, JSON.parse(l)[0])).sort(), ['a.php', 'latin1.php', 'sub/b.php']);
+  });
+
+  it('cache de l’ancien format (un seul document JSON) : reconstruit', async () => {
+    const root = project();
+    const cacheFile = path.join(mkdtempSync(path.join(tmpdir(), 'php-forge-cache-')), 'index.json.gz');
+    writeFileSync(cacheFile, gzipSync(JSON.stringify({ version: 9, entries: [] })));
+    assert.equal((await indexFolder(new SymbolIndex(), options(root, { cacheFile }))).parsed, 3);
+    assert.equal((await indexFolder(new SymbolIndex(), options(root, { cacheFile }))).fromCache, 3);
   });
 
   it('cache corrompu : reconstruit sans erreur', async () => {

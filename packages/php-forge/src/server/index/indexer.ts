@@ -35,8 +35,8 @@ export interface IndexStats {
 
 export async function indexFolder(index: SymbolIndex, opts: IndexerOptions): Promise<IndexStats> {
   const started = performance.now();
-  const paths = await listPhpFiles(opts.root, opts.exclude);
-  const cache = opts.cacheFile ? await loadCache(opts.cacheFile) : new Map<string, CacheEntry>();
+  // Listage du dossier et lecture du cache en même temps (décompression dans le pool de libuv)
+  const [paths, cache] = await Promise.all([listPhpFiles(opts.root, opts.exclude), opts.cacheFile ? loadCache(opts.cacheFile) : new Map<string, CacheEntry>()]);
   const entries = new Map<string, CacheEntry>();
   const stale: { path: string; size: number; mtimeMs: number }[] = [];
   await Promise.all(
@@ -79,6 +79,9 @@ export async function indexFolder(index: SymbolIndex, opts: IndexerOptions): Pro
     if (file.syntaxError) syntaxErrors++;
   }
   progress(stale.length);
-  if (opts.cacheFile) await saveCache(opts.cacheFile, entries);
+  // Cache réécrit seulement s'il a changé (fichier analysé, ajouté ou supprimé) : JSON de centaines de Mo, ≈ 3 s
+  // (les fichiers ignorés — trop gros, binaires — restent « à analyser » à chaque fois sans changer le cache)
+  const changed = entries.size - fromCache > 0 || [...cache.keys()].some((key) => !entries.has(key));
+  if (opts.cacheFile && changed) await saveCache(opts.cacheFile, entries);
   return { files: paths.length, parsed: stale.length - skipped, fromCache, skipped, syntaxErrors, ms: Math.round(performance.now() - started) };
 }
