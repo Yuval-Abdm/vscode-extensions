@@ -141,6 +141,8 @@ class FlowBuilder {
   readonly #inferrer?: Inferrer;
   #locals = new Map<string, (Node | null)[]>();
   #typed = false;
+  /** Symboles déjà utilisés dans la portée : seule la première utilisation est gardée */
+  #used = new Set<string>();
 
   constructor(scopes: NameScope[], inferrer?: Inferrer) {
     this.#scopes = scopes;
@@ -149,13 +151,15 @@ class FlowBuilder {
 
   /** Programme d'une portée : corps du fichier (`typed` : types des affectations) ou d'une fonction. */
   scope(body: Node, typed: boolean): FlowOp[] {
-    const saved = { locals: this.#locals, typed: this.#typed };
+    const saved = { locals: this.#locals, typed: this.#typed, used: this.#used };
     this.#locals = collectAssignments(body);
+    this.#used = new Set();
     this.#typed = typed && !!this.#inferrer;
     const ops: FlowOp[] = [];
     this.#statements(body.namedChildren, ops);
     this.#locals = saved.locals;
     this.#typed = saved.typed;
+    this.#used = saved.used;
     return ops;
   }
 
@@ -228,7 +232,7 @@ class FlowBuilder {
         out.push({ op: 'loop', body: this.#block(node.childForFieldName('body')) });
         return;
       case 'do_statement':
-        this.#statement(node.childForFieldName('body')!, out);
+        out.push(...this.#block(node.childForFieldName('body')));
         this.#expr(node.childForFieldName('condition'), out);
         return;
       case 'for_statement':
@@ -307,7 +311,7 @@ class FlowBuilder {
         alts.push(this.#ops((ops) => {
           this.#expr(elseCondition, ops);
           ops.push(...this.#guards(guardsOf(elseCondition, true)));
-          this.#statement(clause.childForFieldName('body')!, ops);
+          ops.push(...this.#block(clause.childForFieldName('body')));
         }));
       }
     }
@@ -349,7 +353,12 @@ class FlowBuilder {
       if (field === 'initialize' || field === 'condition') this.#expr(child, out);
       else if (field === 'update') update.push(child);
     }
-    this.#statement(node.childForFieldName('body') ?? node, body);
+    const statements = node.childForFieldName('body');
+    if (statements) this.#statement(statements, body);
+    else {
+      // Syntaxe alternative (`for (…): … endfor`) : instructions sans champ
+      for (let i = 0; i < node.childCount; i++) if (!node.fieldNameForChild(i) && node.child(i)!.isNamed) this.#statement(node.child(i)!, body);
+    }
     this.#exprs(update, body);
     out.push({ op: 'loop', body });
   }
@@ -652,7 +661,7 @@ class FlowBuilder {
         return;
     }
     const names = resolveFunctionOrConstant(fn.text, 'function', this.#scopeOf(fn));
-    out.push({ op: 'use', kind: 'function', names, at: loc(fn), end: fn.endPosition.column });
+    this.#use('function', names, fn, out);
     this.#arguments(node, out, quiet, names);
   }
 
@@ -731,10 +740,18 @@ class FlowBuilder {
     this.includes.push(ref);
   }
 
+  /** Utilisation d'un symbole, gardée seulement la première fois dans la portée. */
+  #use(kind: 'function' | 'class' | 'constant', names: string[], name: Node, out: FlowOp[]): void {
+    const key = `${kind}:${names[0]?.toLowerCase()}`;
+    if (this.#used.has(key)) return;
+    this.#used.add(key);
+    out.push({ op: 'use', kind, names, at: loc(name), end: name.endPosition.column });
+  }
+
   #useClass(name: Node, out: FlowOp[]): void {
     if (SELF.has(name.text.toLowerCase())) return;
     const fqn = resolveClassName(name.text, this.#scopeOf(name));
-    if (fqn) out.push({ op: 'use', kind: 'class', names: [fqn], at: loc(name), end: name.endPosition.column });
+    if (fqn) this.#use('class', [fqn], name, out);
   }
 
   /** Portée d'un accès statique : nom de classe, ou expression (`$obj::m()`). */
@@ -747,6 +764,6 @@ class FlowBuilder {
   #useConstant(name: Node, out: FlowOp[]): void {
     if (NOT_CONSTANTS.has(name.text.toLowerCase())) return;
     const names = resolveFunctionOrConstant(name.text, 'constant', this.#scopeOf(name));
-    out.push({ op: 'use', kind: 'constant', names, at: loc(name), end: name.endPosition.column });
+    this.#use('constant', names, name, out);
   }
 }

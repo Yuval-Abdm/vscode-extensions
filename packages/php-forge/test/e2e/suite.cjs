@@ -151,6 +151,21 @@ test('survol d’une ligne en erreur : correction appliquée d’un clic', async
   assert.strictEqual(doc.getText(), '<?php\n$a = 1;\n$b = 2;\n');
 });
 
+test('inclusions : variable non définie selon l’appelant, CodeLens', async () => {
+  const doc = await vscode.workspace.openTextDocument(ws('includes/footer.php'));
+  await vscode.window.showTextDocument(doc);
+  const diagnostic = await waitFor(
+    () => vscode.languages.getDiagnostics(doc.uri).find((d) => d.code === 'undefined-variable'),
+    'undefined-variable',
+  );
+  assert.match(diagnostic.message, /pages\/about\.php:2/);
+  const lenses = await waitFor(async () => {
+    const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', doc.uri);
+    return result && result.length ? result : false;
+  }, 'codeLens');
+  assert.strictEqual(lenses[0].command.title, 'Included by 2 files');
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {

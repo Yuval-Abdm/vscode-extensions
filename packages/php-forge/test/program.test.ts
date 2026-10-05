@@ -81,6 +81,12 @@ describe('programme des variables', () => {
     assert.equal(await main('foreach ($t as [$a, $b]) {}'), 'r:t loop{a:a a:b}');
   });
 
+  it('for sans accolades ou en syntaxe alternative (endfor) : pas de boucle infinie', async () => {
+    assert.equal(await main('for ($i = 0; $i < 3; $i++): echo $i; endfor;'), 'a:i r:i loop{r:i r:i a:i}');
+    assert.equal(await main('for ($i = 0; $i < 3; $i++) echo $i;'), 'a:i r:i loop{r:i r:i a:i}');
+    assert.equal(await main('for ($i = 0; $i < $n; $i++): ?><i></i><?php endfor ?>'), 'a:i r:i r:n loop{r:i a:i}');
+  });
+
   it('try / catch / finally', async () => {
     assert.equal(await main('try { $a = 1; } catch (Exception $e) { $a = 0; } finally { echo $a; }'), '[a:a | a:e a:a]! r:a');
   });
@@ -135,6 +141,12 @@ describe('programme des variables', () => {
   it('symboles utilisés : new, appels statiques, constantes de classe, constantes', async () => {
     assert.equal(await main('new Foo($a); Bar::baz(); echo Qux::C, FOO, true; spl_autoload_register("f");'), 'use:class:Foo r:a use:class:Bar use:class:Qux use:constant:FOO autoload');
     assert.equal(await main('self::x(); static::$y; new static();'), '');
+  });
+
+  it('un seul « use » par symbole et par portée (première utilisation)', async () => {
+    const { flow } = await flowOf('helper(); helper(); new A(); new A(); function f() { helper(); helper(); }');
+    assert.equal(render(flow.main), 'use:function:helper use:class:A');
+    assert.equal(render(flow.functions[0].body), 'use:function:helper');
   });
 
   it('@var en tête de fichier : variable externe typée', async () => {

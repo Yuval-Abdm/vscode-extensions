@@ -8,7 +8,7 @@ import type { FileSymbols, FlowFunction, FlowOp, Loc, PhpParam, Position, TypeEx
 import type { Lookup } from '../index/lookup.ts';
 import type { SymbolIndex } from '../index/symbolIndex.ts';
 import { union } from '../types/type.ts';
-import type { IncludeGraph } from './graph.ts';
+import { walkOps, type IncludeGraph } from './graph.ts';
 import { evaluatePath, resolveInclude, type ResolveEnv } from './resolve.ts';
 
 export interface VarInfo {
@@ -266,6 +266,9 @@ export class IncludeAnalysis {
   readonly #stack: string[] = [];
   readonly #declared = new Map<string, string[]>();
   #methodRefs?: Map<string, Set<number>>;
+  readonly #autoloaders = new Map<string, boolean>();
+  /** Symboles des fonctions des fichiers atteints par le script d'entrée en cours, vérifiés à la fin du script */
+  #pending?: { context: { fp: string; missing: SymbolNeed[] }; needs: SymbolNeed[] }[];
   #probeCache?: { key: string; file: FileSymbols | undefined; layer: Layer | undefined };
 
   constructor(index: SymbolIndex, lookup: Lookup, graph: IncludeGraph, options: AnalysisOptions) {
@@ -285,7 +288,13 @@ export class IncludeAnalysis {
       if (this.#files.has(uri)) continue;
       const base = this.#base();
       if (this.graph.isDynamicTarget(uri)) base.stop = true;
+      this.#pending = [];
       this.#runFile(uri, base, { entry: this.graph.fsPath(uri), via: '', probe: false, top: true });
+      // Le code des fonctions s'exécute quand elles sont appelées : ce que le script a chargé à la fin compte
+      if (!base.stop) {
+        for (const { context, needs } of this.#pending) context.missing.push(...needs.filter((need) => !need.declaredIn.some((d) => base.isLoaded(d))));
+      }
+      this.#pending = undefined;
     }
   }
 
@@ -418,17 +427,27 @@ export class IncludeAnalysis {
       else state.approximate = true;
     }
     if (!call.probe) {
-      const functions = this.#functions(uri);
-      const loadedHere = (d: string) => layer.isLoaded(d) || run.delta.loaded.has(d);
-      state.contexts.set(call.via, {
-        fp,
-        missing: [
-          ...run.needs.filter((need) => !need.declaredIn.some((d) => layer.isLoaded(d))),
-          ...functions.needs.filter((need) => !need.declaredIn.some(loadedHere)),
-        ],
-      });
+      const context = { fp, missing: run.needs.filter((need) => !need.declaredIn.some((d) => layer.isLoaded(d))) };
+      state.contexts.set(call.via, context);
+      this.#pending?.push({ context, needs: this.#functions(uri).needs });
     }
     layer.apply(run.delta);
+    // Autoloader enregistré par le fichier, même dans une fonction ou une méthode (PHPExcel_Autoloader::Register)
+    if (this.#registersAutoload(uri, file)) layer.autoload = true;
+  }
+
+  #registersAutoload(uri: string, file: FileSymbols): boolean {
+    let found = this.#autoloaders.get(uri);
+    if (found === undefined) {
+      found = false;
+      for (const ops of [file.flow?.main ?? [], ...(file.flow?.functions ?? []).map((f) => f.body)]) {
+        walkOps(ops, (op) => {
+          if (op.op === 'autoload') found = true;
+        });
+      }
+      this.#autoloaders.set(uri, found);
+    }
+    return found;
   }
 
   /** Fonctions du fichier, analysées une fois (portée propre : paramètres, `global`, `static`). */
@@ -571,7 +590,8 @@ export class IncludeAnalysis {
   }
 
   #use(op: Extract<FlowOp, { op: 'use' }>, layer: Layer, ctx: Ctx): void {
-    if (op.kind === 'class' && layer.autoload) return;
+    // Contexte inconnu (include non résolu, gabarit dynamique, code dynamique) : le symbole a pu être chargé
+    if (layer.stop || (op.kind === 'class' && layer.autoload)) return;
     const declared = this.#declaredIn(op.kind, op.names);
     if (!declared.length || declared.includes(ctx.uri)) return;
     // Chargé par le fichier lui-même (au-dessus de sa couche de départ) : satisfait dans tous les contextes

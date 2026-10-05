@@ -123,6 +123,36 @@ describe('analyse des inclusions', () => {
     assert.deepEqual(analysis.report(uriOf('c.php'))!.symbols.map((s) => [s.need.name, s.need.declaredIn]), [['helper_fn', [uriOf('helpers.php')]]]);
   });
 
+  it('contexte inconnu (gabarit dynamique, après un include non résolu) : pas de vérification des symboles', async () => {
+    const analysis = await analyse({
+      'helpers.php': '<?php function helper_fn() {}',
+      'page.php': "<?php\ninclude __DIR__.'/parts/'.$tab.'.php';\nhelper_fn();",
+      'parts/client.php': '<?php helper_fn();',
+    });
+    assert.deepEqual(analysis.report(uriOf('page.php'))!.symbols, []);
+    assert.deepEqual(analysis.report(uriOf('parts/client.php'))!.symbols, []);
+  });
+
+  it('autoloader enregistré dans une méthode : classes chargées automatiquement', async () => {
+    const analysis = await analyse({
+      'Autoloader.php': '<?php class Autoloader { static function register() { spl_autoload_register(function ($c) {}); } }',
+      'lib/Thing.php': '<?php class Thing {}',
+      'page.php': "<?php include 'Autoloader.php'; Autoloader::register(); new Thing();",
+    });
+    assert.deepEqual(analysis.report(uriOf('page.php'))!.symbols, []);
+  });
+
+  it('symboles dans une fonction : vérifiés avec ce que la page a chargé à la fin', async () => {
+    const analysis = await analyse({
+      'lib.php': '<?php function f() { return new Data(); }',
+      'Data.php': '<?php class Data {}',
+      'page.php': "<?php include 'lib.php'; include 'Data.php'; f();",
+      'page2.php': "<?php include 'lib.php'; f();",
+      'page3.php': "<?php include 'lib.php'; include 'missing.php'; f();",
+    });
+    assert.deepEqual(analysis.report(uriOf('lib.php'))!.symbols.map((s) => [s.need.name, s.via, s.others]), [['Data', [`${uriOf('page2.php')}#0`], 2]]);
+  });
+
   it('classes : autoload désactive la vérification', async () => {
     const analysis = await analyse({
       'A.php': '<?php class A {}',

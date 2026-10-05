@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — preview
+
+- Include engine for projects without autoload: include paths are evaluated (`ROOT_PATH.'/…'`, `$_SERVER['DOCUMENT_ROOT']`, `__DIR__`, `dirname(__FILE__)`, constants, server paths from `phpForge.serverRoot` or `.vscode/deploy.json`), and every file is analyzed in the context of each file that includes it.
+- Undefined variables with the strict rule: a variable is reported as soon as one caller does not define it, with the list of faulty callers (`$title is not defined when included from lp_3/index.php:3 (defined in 2 other callers)`); variables defined in only one branch are reported as information.
+- `extract($_POST)`, by-reference parameters (`preg_match`, `bind_result`), `isset` / `empty` / `??` guards, `global`, `static`, closures are understood; dynamic code stops the warnings instead of guessing.
+- Unresolved includes (with a `/** @include path */` hint), functions, classes and constants declared in a file that is not included.
+- Variables coming from included files and callers: type (a `$pdo` created in `connexion_DB.php` is a `PDO` in the pages), origin on hover, go to definition, completion.
+- "Included by N files" CodeLens, Include Tree view in the Explorer, go to definition from an include.
+- Settings: `phpForge.documentRoot`, `phpForge.serverRoot`, `phpForge.includes.maxContexts`, `phpForge.externalGlobals`.
+
 ## 0.2.0 — preview
 
 - Type inference: declared types and phpdoc (generics, array shapes, templates, `@property`, `@method`, `@mixin`), types inferred from code (return values, properties assigned in constructors, constants), variable flow with narrowing (`instanceof`, `is_*`, null checks, `assert`).

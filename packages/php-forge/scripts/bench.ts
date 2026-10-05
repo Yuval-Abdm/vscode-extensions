@@ -7,6 +7,9 @@ import path from 'node:path';
 import { URI } from 'vscode-uri';
 import { complete } from '../src/server/completion/complete.ts';
 import { DocumentStore } from '../src/server/documents.ts';
+import { IncludeAnalysis } from '../src/server/includes/analysis.ts';
+import { callerLabel, includeDiagnostics } from '../src/server/includes/diagnostics.ts';
+import { IncludeGraph } from '../src/server/includes/graph.ts';
 import { indexFolder } from '../src/server/index/indexer.ts';
 import { Lookup } from '../src/server/index/lookup.ts';
 import { decode } from '../src/server/parser/encoding.ts';
@@ -27,6 +30,10 @@ interface Result {
   heapMB: number;
   completionP50: number;
   completionP95: number;
+  /** Analyse des inclusions (graphe + exécution), en ms */
+  analysisMs: number;
+  entries: number;
+  byCode: Record<string, number>;
 }
 
 const corpus = (process.env.PHP_FORGE_CORPUS ?? '').split(':').filter(Boolean);
@@ -84,13 +91,26 @@ for (const root of corpus) {
   });
   const symbols = [...index.files()].reduce((n, f) => n + f.symbols.length, 0);
   const timings = completionTimings(index, root);
+  const analysisStart = performance.now();
+  const graph = new IncludeGraph(index, { roots: [root] });
+  const analysis = new IncludeAnalysis(index, new Lookup(index, stubs), graph, { maxContexts: 64, externalGlobals: [] });
+  analysis.run();
+  const analysisMs = Math.round(performance.now() - analysisStart);
+  const byCode: Record<string, number> = {};
+  for (const file of index.files()) {
+    const report = analysis.report(file.uri);
+    if (!report) continue;
+    for (const d of includeDiagnostics(report, file, (via) => callerLabel(graph, via))) byCode[String(d.code)] = (byCode[String(d.code)] ?? 0) + 1;
+  }
   results.push({
     project: path.basename(root), files: stats.files, parsed: stats.parsed, skipped: stats.skipped, syntaxErrors: stats.syntaxErrors,
     symbols, ms: stats.ms, heapMB: Math.round(process.memoryUsage().heapUsed / 1e6),
     completionP50: percentile(timings, 50), completionP95: percentile(timings, 95),
+    analysisMs, entries: graph.entries().length, byCode,
   });
 }
-console.table(results);
+console.table(results.map(({ byCode, ...r }) => r));
+for (const r of results) console.log(r.project, JSON.stringify(r.byCode));
 
 const dir = path.join(import.meta.dirname, '..', 'bench-results');
 mkdirSync(dir, { recursive: true });

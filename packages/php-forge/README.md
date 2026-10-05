@@ -18,12 +18,20 @@
 - **Native PHP functions and classes** from JetBrains phpstorm-stubs, for the PHP version of your project (shown in the status bar).
 - **Legacy-friendly**: Latin-1 / Windows-1252 files, PHP mixed with HTML, untyped code, functions declared inside `if (!function_exists(…))`.
 
+### Includes (projects without autoload)
+
+PHP Forge follows `include` / `require` like PHP does, from every page that nobody includes. In a file included by several pages, a variable is reported as soon as **one** of them does not define it, with the faulty pages:
+
+> `$title is not defined when included from lp_3/index.php:3 (defined in 2 other callers)`
+
+Variables created in included files keep their type and origin (hover, completion, go to definition). The **Include Tree** view (Explorer) and the "Included by N files" CodeLens show who includes what. Include paths written with server paths are mapped with `phpForge.serverRoot` or the `remotePath` of `.vscode/deploy.json`; a dynamic include can be documented with `/** @include path/to/file.php */` on the line above.
+
 ## Roadmap to 1.0
 
 | Version | Content |
 |---|---|
 | 0.2 ✓ | Type inference, completion, signature help, inlay hints, go to implementation |
-| 0.3 | Include engine: variables, functions and classes followed across `include` / `require` |
+| 0.3 ✓ | Include engine: variables, functions and classes followed across `include` / `require` |
 | 0.4 | Diagnostics (undefined variables per caller, unknown symbols, PHP version), baseline |
 | 0.5 | Rename, references, auto-import and suggested imports (`use` and `include`), code generation |
 | 0.6 | Formatter (PSR-12, mixed HTML/PHP) |
@@ -42,6 +50,10 @@
 | `phpForge.inlayHints.parameterNames` | `true` | Parameter names before literal arguments |
 | `phpForge.inlayHints.variableTypes` | `false` | Inferred type of assigned variables |
 | `phpForge.inlayHints.returnTypes` | `false` | Inferred return type of untyped functions |
+| `phpForge.documentRoot` | `""` | Web root for `$_SERVER['DOCUMENT_ROOT']` in include paths (absolute or relative to the workspace) |
+| `phpForge.serverRoot` | `""` | Path of the site on the server, to map includes written with server paths (default: `remotePath` of `.vscode/deploy.json`) |
+| `phpForge.includes.maxContexts` | `64` | Include contexts analyzed per file before the analysis becomes approximate |
+| `phpForge.externalGlobals` | `[]` | Variables defined outside the analyzed code (e.g. `auto_prepend_file`) |
 | `phpForge.trace.server` | `off` | Language server trace |
 
 ## Commands
@@ -49,6 +61,7 @@
 - **PHP Forge: Restart Language Server**
 - **PHP Forge: Reindex Workspace**
 - **PHP Forge: Show Output**
+- **PHP Forge: Show Include Tree**
 
 ## Using it with Intelephense or PHP Tools
 
