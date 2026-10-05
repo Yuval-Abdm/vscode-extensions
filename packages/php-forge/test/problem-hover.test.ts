@@ -41,6 +41,17 @@ describe('survol des problèmes de la ligne', () => {
     assert.equal(markdown.match(/⚠️/g)?.length, 1);
   });
 
+  it('correction contenant des parenthèses : le lien reste entier', async () => {
+    const code = `<?php $s = "SELECT a FROM t WHERE b IN (1" . ') AND c = (2)';`;
+    const markdown = problemsMarkdown(URI, 1, sqlQuoteDiagnostics(await parse(code)), 0)!;
+    const line = markdown.split('\n').find((l) => l.includes('command:'))!;
+    // Rien après le lien, et sa cible n'a pas de parenthèse qui le couperait
+    const target = /\]\((command:[^()\s]+)\)$/.exec(line)?.[1];
+    assert.ok(target, line);
+    const [args] = JSON.parse(decodeURIComponent(target.slice(target.indexOf('?') + 1)));
+    assert.equal(args.edits[0].newText, '") AND c = (2)"');
+  });
+
   it('problème sans correction : message seul', () => {
     const d: Diagnostic = { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, message: 'boom', severity: DiagnosticSeverity.Error, code: 'syntax-error' };
     const markdown = problemsMarkdown(URI, 1, [d], 0)!;

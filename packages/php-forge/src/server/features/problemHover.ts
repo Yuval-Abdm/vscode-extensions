@@ -32,7 +32,7 @@ export function problemsMarkdown(uri: string, version: number, diagnostics: Diag
       const lines = [`${icon} ${escape(message)}`];
       for (const fix of quickFixes(uri, [d])) {
         const args: ApplyFixArgs[] = [{ uri, version, edits: fix.edit?.changes?.[uri] ?? [] }];
-        const link = `command:${APPLY_FIX_COMMAND}?${encodeURIComponent(JSON.stringify(args))}`;
+        const link = `command:${APPLY_FIX_COMMAND}?${encodeLinkArgs(args)}`;
         lines.push(`💡 ${escape(fix.title)} — [${l10n.t('Apply')}](${link})`);
       }
       return lines.join('  \n');
@@ -46,6 +46,11 @@ export function withProblems(hover: Hover | null, problems: string | undefined):
   if (!hover) return { contents: { kind: 'markdown', value: problems } };
   const contents = hover.contents as { kind: string; value: string };
   return { ...hover, contents: { kind: 'markdown', value: `${contents.value}\n\n---\n\n${problems}` } };
+}
+
+/** Arguments du lien, encodés sans parenthèses ni apostrophes, qui couperaient le lien Markdown. */
+function encodeLinkArgs(args: ApplyFixArgs[]): string {
+  return encodeURIComponent(JSON.stringify(args)).replace(/[()'!*~]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 function escape(text: string): string {
