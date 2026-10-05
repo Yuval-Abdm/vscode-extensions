@@ -13,6 +13,7 @@ import { complete, resolveCompletion } from './completion/complete.ts';
 import { syntaxDiagnostics } from './diagnostics/syntax.ts';
 import { tagDiagnostics } from './diagnostics/tags.ts';
 import { sqlQuoteDiagnostics } from './sql/quotes.ts';
+import { shiftDiagnostics } from './diagnostics/shift.ts';
 import { DocumentStore, type OpenDocument } from './documents.ts';
 import { IncludeAnalysis } from './includes/analysis.ts';
 import { callerLabel, includeDiagnostics, relativePath } from './includes/diagnostics.ts';
@@ -64,6 +65,8 @@ const INFERENCE_DELAY = 300;
 let analysis: IncludeAnalysis | undefined;
 let analysisTimer: ReturnType<typeof setTimeout> | undefined;
 const ANALYSIS_DELAY = 500;
+/** Incrémentée à chaque modification : une analyse en cours devenue obsolète s'interrompt */
+let analysisGeneration = 0;
 
 /** Gestionnaire protégé : une exception est journalisée et le résultat par défaut renvoyé. */
 function safe<A extends unknown[], R>(fallback: R, handler: (...args: A) => R | Promise<R>): (...args: A) => Promise<R> {
@@ -176,13 +179,24 @@ async function reindex(): Promise<void> {
   for (const doc of documents.all()) workspace.set(doc.symbols);
 }
 
+/**
+ * Diagnostics d'inclusion des documents ouverts : calculés à chaque analyse, puis déplacés au fil des
+ * modifications jusqu'à la suivante (sinon ils resteraient à leur ancienne position pendant la frappe).
+ */
+const includeCache = new Map<string, Diagnostic[]>();
+
+function includeDiagnosticsOf(doc: OpenDocument): Diagnostic[] {
+  const report = analysis?.report(doc.uri);
+  if (!analysis || !report) return [];
+  const graph = analysis.graph;
+  return includeDiagnostics(report, doc.symbols, (via) => callerLabel(graph, via));
+}
+
 function diagnosticsOf(doc: OpenDocument): Diagnostic[] {
   const text = doc.doc.getText();
   const local = [...syntaxDiagnostics(doc.tree, 100, { parser, text }), ...tagDiagnostics(doc.tree, text), ...sqlQuoteDiagnostics(doc.tree)];
-  const report = analysis?.report(doc.uri);
-  if (!analysis || !report) return local;
-  const graph = analysis.graph;
-  return [...local, ...includeDiagnostics(report, doc.symbols, (via) => callerLabel(graph, via))];
+  if (!includeCache.has(doc.uri)) includeCache.set(doc.uri, includeDiagnosticsOf(doc));
+  return [...local, ...(includeCache.get(doc.uri) ?? [])];
 }
 
 /** Derniers diagnostics publiés par document ouvert (survol des problèmes de la ligne). */
@@ -216,17 +230,21 @@ function refresh(doc: OpenDocument): void {
 /** Relance l'analyse des inclusions après un délai (modifications groupées), jamais pendant l'indexation. */
 function scheduleAnalysis(delay = ANALYSIS_DELAY): void {
   clearTimeout(analysisTimer);
+  analysisGeneration++;
   analysisTimer = setTimeout(() => {
     void indexing.then(safe(undefined, () => runAnalysis()));
   }, delay);
 }
 
-function runAnalysis(): void {
+/** Analyse coopérative : rend la main entre les scripts d'entrée, abandonnée si une modification arrive entre-temps. */
+async function runAnalysis(): Promise<void> {
+  const generation = analysisGeneration;
   const started = Date.now();
   const graph = new IncludeGraph(workspace, { roots: folders, documentRoot: settings.documentRoot, serverRoot: settings.serverRoot });
   const next = new IncludeAnalysis(workspace, lookup, graph, { maxContexts: settings.includes.maxContexts, externalGlobals: settings.externalGlobals });
-  next.run();
+  if (!(await next.runAsync(() => generation !== analysisGeneration))) return;
   analysis = next;
+  includeCache.clear();
   connection.console.info(`Include analysis: ${graph.size} files in ${Date.now() - started} ms`);
   for (const doc of documents.all()) publish(doc);
   void connection.sendRequest('workspace/codeLens/refresh').catch(() => undefined);
@@ -240,6 +258,8 @@ connection.onDidChangeTextDocument(
   safe(undefined, ({ textDocument, contentChanges }) => {
     const doc = documents.change(textDocument.uri, textDocument.version, contentChanges);
     if (!doc) return;
+    const cached = includeCache.get(doc.uri);
+    if (cached) includeCache.set(doc.uri, shiftDiagnostics(cached, contentChanges));
     refresh(doc);
     scheduleAnalysis();
     clearTimeout(inference.get(doc.uri));
@@ -264,6 +284,7 @@ connection.onDidCloseTextDocument(
     clearTimeout(inference.get(textDocument.uri));
     inference.delete(textDocument.uri);
     documents.close(textDocument.uri);
+    includeCache.delete(textDocument.uri);
     published.delete(textDocument.uri);
     void connection.sendDiagnostics({ uri: textDocument.uri, diagnostics: [] });
     const uri = URI.parse(textDocument.uri);

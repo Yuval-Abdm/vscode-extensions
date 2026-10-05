@@ -80,8 +80,10 @@ export class DocumentStore {
     const old = entry.tree;
     entry.tree = parsePhp(this.#parser, entry.doc.getText(), full ? undefined : old);
     old.delete();
-    // Les types déduits coûtent cher sur les gros fichiers sans types : calculés plus tard (inferTypes)
-    entry.symbols = extractFile(entry.tree, uri, { infer: false });
+    // Types déduits et programme des variables coûtent cher sur les gros fichiers : calculés à la pause de frappe
+    // (inferTypes) ; d'ici là, le programme et les includes précédents restent valables à peu près
+    const previous = entry.symbols;
+    entry.symbols = { ...extractFile(entry.tree, uri, { infer: false, flow: false }), flow: previous.flow, includes: previous.includes };
     entry.pendingInference = true;
     return entry;
   }

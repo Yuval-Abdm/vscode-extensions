@@ -257,4 +257,21 @@ describe('analyse des inclusions', () => {
     const analysis = await analyse({ 'page.php': "<?php\nif (!isset($page)) { $page = 1; } elseif ($page < 1) { $page = 1; }\n@preg_match('/x/', 's', $m); echo $m;" });
     assert.deepEqual(reads(analysis, 'page.php'), []);
   });
+
+  it('analyse coopérative : mêmes résultats, interruption possible', async () => {
+    const files = {
+      'lp_1/index.php': "<?php\n$title = 'A';\ninclude __DIR__.'/../header.php';",
+      'lp_3/index.php': "<?php\ninclude __DIR__.'/../header.php';",
+      'header.php': '<?php echo $title;',
+    };
+    const index = await project(files);
+    const graph = new IncludeGraph(index, { roots: ['/p'], readFile: () => undefined });
+    const lookup = new Lookup(index, new SymbolIndex());
+    const cooperative = new IncludeAnalysis(index, lookup, graph, { maxContexts: 64, externalGlobals: [] });
+    assert.equal(await cooperative.runAsync(() => false, 1), true);
+    assert.deepEqual(reads(cooperative, 'header.php'), reads(await analyse(files), 'header.php'));
+    let calls = 0;
+    const stopped = new IncludeAnalysis(index, lookup, graph, { maxContexts: 64, externalGlobals: [] });
+    assert.equal(await stopped.runAsync(() => ++calls > 1, 1), false);
+  });
 });

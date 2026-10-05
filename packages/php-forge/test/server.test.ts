@@ -20,16 +20,20 @@ interface Server {
   indexed: IndexedParams;
   diagnostics: Map<string, { code: string; range: { start: { line: number } } }[]>;
   statuses: StatusParams[];
+  /** Toutes les publications, avec la version du document */
+  history: { uri: string; version?: number; diagnostics: { code: string; range: { start: { line: number } } }[] }[];
 }
 
 async function startServer(storagePath: string): Promise<Server> {
   const child = spawn(process.execPath, [path.join(pkg, 'dist/server.cjs'), '--stdio'], { stdio: ['pipe', 'pipe', 'inherit'] });
   const connection = createMessageConnection(new StreamMessageReader(child.stdout!), new StreamMessageWriter(child.stdin!));
   const diagnostics: Server['diagnostics'] = new Map();
+  const history: Server['history'] = [];
   const indexed = new Promise<IndexedParams>((resolve) => connection.onNotification('phpForge/indexed', resolve));
   connection.onNotification('textDocument/publishDiagnostics', (params) => {
     const p = params as { uri: string; diagnostics: Server['diagnostics'] extends Map<string, infer D> ? D : never };
     diagnostics.set(p.uri, p.diagnostics);
+    history.push(params as Server['history'][number]);
   });
   const statuses: StatusParams[] = [];
   connection.onNotification('phpForge/status', (params) => {
@@ -45,7 +49,7 @@ async function startServer(storagePath: string): Promise<Server> {
     initializationOptions: { storagePath },
   });
   await connection.sendNotification('initialized', {});
-  return { child, connection, indexed: await indexed, diagnostics, statuses };
+  return { child, connection, indexed: await indexed, diagnostics, statuses, history };
 }
 
 async function stopServer(server: Server): Promise<void> {
@@ -120,6 +124,23 @@ describe('serveur LSP', () => {
     await open(server, 'includes/footer.php', readFileSync(footer, 'utf8'));
     const found = await waitFor(() => server.diagnostics.get(uri('includes/footer.php'))?.find((d) => d.code === 'undefined-variable'), 'undefined-variable');
     assert.equal((found as unknown as { message: string }).message, '$footer_text is not defined when included from pages/about.php:2 (defined in 1 other caller)');
+  });
+
+  it('frappe : les alertes d’inclusion suivent le texte jusqu’à la prochaine analyse', async () => {
+    const footer = uri('includes/footer.php');
+    await waitFor(() => server.diagnostics.get(footer)?.find((d) => d.code === 'undefined-variable'), 'undefined-variable');
+    await server.connection.sendNotification('textDocument/didChange', {
+      textDocument: { uri: footer, version: 2 },
+      contentChanges: [{ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } }, text: '// note\n' }],
+    });
+    // Première publication après la frappe (avant la nouvelle analyse) : déjà au bon endroit
+    const first = await waitFor(() => server.history.find((h) => h.uri === footer && h.version === 2), 'publication');
+    assert.deepEqual(first.diagnostics.filter((d) => d.code === 'undefined-variable').map((d) => d.range.start.line), [2]);
+    await server.connection.sendNotification('textDocument/didChange', {
+      textDocument: { uri: footer, version: 3 },
+      contentChanges: [{ range: { start: { line: 1, character: 0 }, end: { line: 2, character: 0 } }, text: '' }],
+    });
+    await waitFor(() => server.diagnostics.get(footer)?.find((d) => d.code === 'undefined-variable' && d.range.start.line === 1), 'revenue');
   });
 
   it('CodeLens « Included by » et appelants', async () => {

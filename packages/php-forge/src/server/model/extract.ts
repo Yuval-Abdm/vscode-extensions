@@ -47,8 +47,11 @@ const MAX_INFERRED = 2000;
 
 let query: Query | undefined;
 
-/** `infer: false` : sans les types déduits du code (plus rapide, pour la frappe dans un document ouvert). */
-export function extractFile(tree: Tree, uri: string, options: { infer?: boolean } = {}): FileSymbols {
+/**
+ * `infer: false` : sans les types déduits du code ; `flow: false` : sans les programmes des variables ni les
+ * includes (plus rapide, pour la frappe dans un document ouvert).
+ */
+export function extractFile(tree: Tree, uri: string, options: { infer?: boolean; flow?: boolean } = {}): FileSymbols {
   const root = tree.rootNode;
   const fileEnd = rangeOf(root).end;
   const fileScope = newScope('', rangeOf(root));
@@ -92,9 +95,11 @@ export function extractFile(tree: Tree, uri: string, options: { infer?: boolean 
     }
   }
   const inferrer = options.infer !== false ? new Inferrer(out.scopes) : undefined;
-  const { flow, includes } = extractFlow(root, out.scopes, inferrer);
-  out.flow = flow;
-  out.includes = includes;
+  if (options.flow !== false) {
+    const { flow, includes } = extractFlow(root, out.scopes, inferrer);
+    out.flow = flow;
+    out.includes = includes;
+  }
   if (inferrer) inferPending(out, pending, inferrer);
   return out;
 }

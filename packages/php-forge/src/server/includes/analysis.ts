@@ -306,20 +306,45 @@ export class IncludeAnalysis {
    * point d'entrée) ; les gabarits inclus dynamiquement sont analysés sans alerte.
    */
   run(): void {
-    const entries = this.graph.entries();
-    for (const uri of [...entries, ...this.graph.files().filter((f) => !entries.includes(f))]) {
-      if (this.#files.has(uri)) continue;
-      const base = this.#base();
-      if (this.graph.isDynamicTarget(uri)) base.stop = true;
-      this.#pending = [];
-      this.#runFile(uri, base, { entry: this.graph.fsPath(uri), via: '', probe: false, top: true });
-      // Le code des fonctions s'exécute quand elles sont appelées : ce que le script a chargé à la fin compte
-      if (!base.stop) {
-        for (const { context, needs } of this.#pending) context.missing.push(...needs.filter((need) => !need.declaredIn.some((d) => base.isLoaded(d))));
-      }
-      this.#pending = undefined;
-    }
+    for (const uri of this.#order()) this.#runEntry(uri);
   }
+
+  /**
+   * Même analyse, en rendant la main toutes les `every` entrées (le serveur reste réactif) ; `stop()` vrai :
+   * interrompue (une modification plus récente relance l'analyse). Renvoie true si elle est allée au bout.
+   */
+  async runAsync(stop: () => boolean, every = 25): Promise<boolean> {
+    let count = 0;
+    for (const uri of this.#order()) {
+      if (count++ % every === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+        if (stop()) return false;
+      }
+      this.#runEntry(uri);
+    }
+    return true;
+  }
+
+  /** Scripts d'entrée, puis les fichiers jamais atteints (inclusions circulaires sans point d'entrée). */
+  #order(): string[] {
+    const entries = this.graph.entries();
+    const set = new Set(entries);
+    return [...entries, ...this.graph.files().filter((f) => !set.has(f))];
+  }
+
+  #runEntry(uri: string): void {
+    if (this.#files.has(uri)) return;
+    const base = this.#base();
+    if (this.graph.isDynamicTarget(uri)) base.stop = true;
+    this.#pending = [];
+    this.#runFile(uri, base, { entry: this.graph.fsPath(uri), via: '', probe: false, top: true });
+    // Le code des fonctions s'exécute quand elles sont appelées : ce que le script a chargé à la fin compte
+    if (!base.stop) {
+      for (const { context, needs } of this.#pending) context.missing.push(...needs.filter((need) => !need.declaredIn.some((d) => base.isLoaded(d))));
+    }
+    this.#pending = undefined;
+  }
+
 
   report(uri: string): FileReport | undefined {
     const state = this.#files.get(uri);

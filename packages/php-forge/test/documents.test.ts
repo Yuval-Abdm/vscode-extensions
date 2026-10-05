@@ -85,3 +85,17 @@ describe('syntaxDiagnostics', () => {
     assert.equal(syntaxDiagnostics(await parse(`<?php\n${'$a = ;\n'.repeat(20)}`), 5).length, 5);
   });
 });
+
+describe('programme des variables pendant la frappe', () => {
+  it('gardé jusqu’à la pause de frappe (coût sur les gros fichiers), recalculé ensuite', async () => {
+    const store = new DocumentStore(await parser());
+    const doc = store.open('file:///t.php', 'php', 1, "<?php\ninclude 'a.php';\n");
+    const before = doc.symbols.flow;
+    const changed = store.change('file:///t.php', 2, [{ range: { start: { line: 2, character: 0 }, end: { line: 2, character: 0 } }, text: "include 'b.php';\n" }])!;
+    assert.equal(changed.symbols.flow, before);
+    assert.equal(changed.symbols.includes.length, 1);
+    const inferred = store.inferTypes('file:///t.php')!;
+    assert.equal(inferred.symbols.includes.length, 2);
+    assert.notEqual(inferred.symbols.flow, before);
+  });
+});
