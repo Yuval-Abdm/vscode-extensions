@@ -51,5 +51,7 @@
   "Method {0}::{1}() does not exist": "La méthode {0}::{1}() n'existe pas",
   "Property {0}::${1} does not exist": "La propriété {0}::${1} n'existe pas",
   "Too few arguments to {0}: {1} given, at least {2} expected": "Pas assez d'arguments pour {0} : {1} donnés, au moins {2} attendus",
-  "Too many arguments to {0}: {1} given, at most {2} expected": "Trop d'arguments pour {0} : {1} donnés, au plus {2} attendus"
+  "Too many arguments to {0}: {1} given, at most {2} expected": "Trop d'arguments pour {0} : {1} donnés, au plus {2} attendus",
+  "Unused use statement: {0}": "Use inutilisé : {0}",
+  "Unreachable code": "Code inatteignable"
 }
