@@ -28,6 +28,7 @@ import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
 import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { organizeUses } from './imports/uses.ts';
+import { importAllMissing, importFixes } from './imports/fixes.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
@@ -138,7 +139,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       selectionRangeProvider: true,
       inlayHintProvider: true,
       codeLensProvider: { resolveProvider: true },
-      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.SourceOrganizeImports] },
+      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.Source, CodeActionKind.SourceOrganizeImports] },
       semanticTokensProvider: { legend: { tokenTypes: [...TOKEN_TYPES], tokenModifiers: [...TOKEN_MODIFIERS] }, full: true },
     },
     serverInfo: { name: 'PHP Forge' },
@@ -555,6 +556,13 @@ connection.onCodeAction(
     const actions: CodeAction[] = quickFixes(uri, context.diagnostics, doc?.doc.getText());
     if (!doc) return actions;
     const text = doc.doc.getText();
+    const input = { uri, fsPath: URI.parse(uri).fsPath, text, tree: doc.tree, symbols: doc.symbols };
+    const fixEnv = { lookup, graph: analysis?.graph };
+    if (wanted(context.only, CodeActionKind.QuickFix)) actions.push(...importFixes(input, context.diagnostics, fixEnv));
+    if (wanted(context.only, 'source.addMissingImports')) {
+      const all = importAllMissing(input, published.get(uri) ?? [], fixEnv);
+      if (all) actions.push(all);
+    }
     if (wanted(context.only, CodeActionKind.SourceOrganizeImports)) {
       const edits = organizeUses(doc.tree, text);
       if (edits.length) actions.push({ title: l10n.t('Organize use statements'), kind: CodeActionKind.SourceOrganizeImports, edit: { changes: { [uri]: edits } } });

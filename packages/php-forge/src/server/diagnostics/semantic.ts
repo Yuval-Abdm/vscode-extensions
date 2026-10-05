@@ -43,6 +43,12 @@ function diagnostic(range: Range, code: string, severity: DiagnosticSeverity, me
   return { range, code, severity, message, source: 'PHP Forge' };
 }
 
+/** Nom inconnu porté par le diagnostic : imports proposés (« Import Lib\User », « Add include »). */
+function withSymbol(d: Diagnostic, kind: 'class' | 'function' | 'constant', name: string): Diagnostic {
+  d.data = { ...(d.data as object | undefined), symbol: { kind, name } };
+  return d;
+}
+
 /** Noms garantis par une condition (function_exists('x'), class_exists('X'), defined('X'), combinés par &&). */
 function guardNames(condition: Node | null | undefined): string[] {
   if (!condition) return [];
@@ -196,7 +202,7 @@ class Checker {
     const short = text.replace(/^\\/, '');
     if (!hits.length) {
       if (guards.has(`function:${short.toLowerCase()}`) || candidates.some((c) => guards.has(`function:${c.toLowerCase()}`))) return;
-      this.out.push(diagnostic(rangeOf(fn), 'undefined-function', DiagnosticSeverity.Error, l10n.t('Call to undefined function {0}()', short)));
+      this.out.push(withSymbol(diagnostic(rangeOf(fn), 'undefined-function', DiagnosticSeverity.Error, l10n.t('Call to undefined function {0}()', short)), 'function', short));
       return;
     }
     const symbol = this.#api(hits, rangeOf(fn), `${short}()`);
@@ -212,7 +218,7 @@ class Checker {
     const hits = this.#first(candidates, (n) => this.#resolver.lookup.findConstant(n));
     if (!hits.length) {
       if (candidates.some((c) => guards.has(`constant:${c.toLowerCase()}`)) || guards.has(`constant:${text.toLowerCase()}`)) return;
-      this.out.push(diagnostic(rangeOf(name), 'undefined-constant', DiagnosticSeverity.Error, l10n.t('Undefined constant {0}', text.replace(/^\\/, ''))));
+      this.out.push(withSymbol(diagnostic(rangeOf(name), 'undefined-constant', DiagnosticSeverity.Error, l10n.t('Undefined constant {0}', text.replace(/^\\/, ''))), 'constant', text.replace(/^\\/, '')));
       return;
     }
     this.#api(hits, rangeOf(name), text.replace(/^\\/, ''));
@@ -228,7 +234,7 @@ class Checker {
     const hits = this.#resolver.lookup.findClass(fqn);
     if (!hits.length) {
       if (!guards.has(`class:${fqn.toLowerCase()}`) && !guards.has(`class:${lower.replace(/^\\/, '')}`)) {
-        this.out.push(diagnostic(rangeOf(name), 'undefined-class', DiagnosticSeverity.Error, l10n.t('Class {0} does not exist', fqn)));
+        this.out.push(withSymbol(diagnostic(rangeOf(name), 'undefined-class', DiagnosticSeverity.Error, l10n.t('Class {0} does not exist', fqn)), 'class', name.text.slice(name.text.lastIndexOf('\\') + 1)));
       }
       return undefined;
     }

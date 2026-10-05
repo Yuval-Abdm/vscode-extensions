@@ -46,7 +46,7 @@ export function includeDiagnostics(report: FileReport, file: FileSymbols, label:
   for (const { need, via, others } of report.symbols) {
     const where = need.declaredIn.map((uri) => label(`${uri}#file`)).join(', ');
     const message = l10n.t('{0} is declared in {1}, which is not included here', need.name, where) + callers(via, others, label);
-    out.push(diagnostic(rangeAt(need.at, need.end), 'symbol-not-included', DiagnosticSeverity.Warning, message));
+    out.push({ ...diagnostic(rangeAt(need.at, need.end), 'symbol-not-included', DiagnosticSeverity.Warning, message), data: { declaredIn: need.declaredIn } });
   }
   for (const duplicate of report.duplicates) {
     const message = l10n.t('{0} is already declared in {1}', duplicate.name, label(`${duplicate.other}#file`)) + callers(duplicate.via, duplicate.others, label);

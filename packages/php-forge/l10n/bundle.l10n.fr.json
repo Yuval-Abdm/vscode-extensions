@@ -82,5 +82,8 @@
   "{0} references": "{0} références",
   "1 implementation": "1 implémentation",
   "{0} implementations": "{0} implémentations",
-  "Organize use statements": "Organiser les use"
+  "Organize use statements": "Organiser les use",
+  "Add include '{0}'": "Ajouter l'include '{0}'",
+  "Import {0}": "Importer {0}",
+  "Import all missing classes": "Importer toutes les classes manquantes"
 }
