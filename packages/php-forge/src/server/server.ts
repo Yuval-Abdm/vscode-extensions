@@ -23,6 +23,7 @@ import { callerLabel, includeDiagnostics, relativePath } from './includes/diagno
 import { IncludeGraph } from './includes/graph.ts';
 import { includeDefinition, includeLinks, includerLinks, includersLens } from './includes/navigation.ts';
 import { quickFixes } from './features/codeActions.ts';
+import { findReferences, targetAt, type RefEnv, type SourceFile } from './refactor/references.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
@@ -126,6 +127,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       completionProvider: { triggerCharacters: ['$', '>', ':', '\\', '/', "'", '"', '@'], resolveProvider: true },
       signatureHelpProvider: { triggerCharacters: ['(', ','], retriggerCharacters: [','] },
       implementationProvider: true,
+      referencesProvider: true,
       documentHighlightProvider: true,
       foldingRangeProvider: true,
       selectionRangeProvider: true,
@@ -234,6 +236,29 @@ function collectEnv(): CollectEnv {
       return includeCache.get(doc.uri);
     },
   };
+}
+
+/** Fichier pour une recherche : document ouvert, ou fichier du disque analysé puis libéré. */
+function sourceOf(uri: string): { file: SourceFile; release(): void } | undefined {
+  const doc = documents.get(uri);
+  if (doc) return { file: { uri, text: doc.doc.getText(), tree: doc.tree, symbols: doc.symbols }, release: () => undefined };
+  const symbols = workspace.get(uri);
+  if (!symbols) return undefined;
+  const fsPath = URI.parse(uri).fsPath;
+  let bytes: Buffer;
+  try {
+    if (statSync(fsPath).size > settings.maxFileSize) return undefined;
+    bytes = readFileSync(fsPath);
+  } catch {
+    return undefined;
+  }
+  const text = decode(bytes);
+  const tree = parsePhp(parser, text);
+  return { file: { uri, text, tree, symbols }, release: () => tree.delete() };
+}
+
+function refEnv(): RefEnv {
+  return { lookup, resolver, files: () => [...workspace.files()], source: sourceOf };
 }
 
 function inputOf(doc: OpenDocument): CollectInput {
@@ -614,6 +639,19 @@ connection.onRequest(
     let entries = 0;
     for (const baseline of baselines.values()) entries += baseline.size;
     return { files: baselines.size, entries };
+  }),
+);
+
+connection.onReferences(
+  safe([], ({ textDocument, position, context }) => {
+    const source = sourceOf(textDocument.uri);
+    if (!source) return [];
+    try {
+      const target = targetAt(refEnv(), source.file, position);
+      return target ? findReferences(refEnv(), target, context.includeDeclaration) : [];
+    } finally {
+      source.release();
+    }
   }),
 );
 
