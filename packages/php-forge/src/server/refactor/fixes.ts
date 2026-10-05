@@ -60,7 +60,7 @@ export function diagnosticFixes(uri: string, text: string, tree: Tree, diagnosti
   return diagnostics.flatMap((d) => {
     const data = (d.data ?? {}) as { variable?: string; replacement?: string };
     if ((d.code === 'undefined-variable' || d.code === 'maybe-undefined-variable') && data.variable) return declare(uri, text, tree, d, data.variable);
-    if ((d.code === 'deprecated-api' || d.code === 'removed-api') && data.replacement) return replace(uri, tree, d, data.replacement);
+    if ((d.code === 'deprecated-api' || d.code === 'removed-api' || d.code === 'migration-deprecated-api' || d.code === 'migration-removed-api') && data.replacement) return replace(uri, tree, d, data.replacement);
     return [];
   });
 }
