@@ -352,6 +352,22 @@ describe('serveur LSP', () => {
     await server.connection.sendNotification('workspace/didChangeConfiguration', { settings: { phpForge: {} } });
   });
 
+  it('sécurité : la fonction d’un autre fichier apparue après l’ouverture est suivie sans frappe', async () => {
+    await open(server, 'appel.php', '<?php\nafficher($_GET["v"]);\n');
+    await waitFor(() => server.diagnostics.get(uri('appel.php')), 'premiers diagnostics');
+    const lib = path.join(fixture, 'includes/afficher.php');
+    writeFileSync(lib, '<?php\nfunction afficher($v)\n{\n    echo $v;\n}\n');
+    try {
+      await server.connection.sendNotification('workspace/didChangeWatchedFiles', { changes: [{ uri: uri('includes/afficher.php'), type: 1 }] });
+      const found = await waitFor(() => server.diagnostics.get(uri('appel.php'))?.find((d) => d.code === 'security-xss'), 'security-xss après indexation');
+      assert.equal(found.range.start.line, 1);
+    } finally {
+      rmSync(lib, { force: true });
+      await server.connection.sendNotification('workspace/didChangeWatchedFiles', { changes: [{ uri: uri('includes/afficher.php'), type: 3 }] });
+      await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('appel.php') } });
+    }
+  });
+
   it('second démarrage : tout vient du cache', async () => {
     const second = await startServer(storage);
     try {

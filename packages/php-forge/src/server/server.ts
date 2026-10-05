@@ -487,7 +487,12 @@ async function runAnalysis(workspacePass = true): Promise<void> {
   analysisPending = false;
   includeCache.clear();
   connection.console.info(`Include analysis: ${graph.size} files in ${Date.now() - started} ms`);
-  for (const doc of documents.all()) publish(doc);
+  // La partie sémantique (sécurité : variables venues des inclusions, fonctions des autres fichiers) dépend de
+  // l'analyse et de l'index : recalculée pour les documents ouverts
+  for (const doc of documents.all()) {
+    updateSemantic(doc);
+    publish(doc);
+  }
   if (workspacePass) startWorkspaceDiagnostics();
   void connection.sendRequest('workspace/codeLens/refresh').catch(() => undefined);
 }
