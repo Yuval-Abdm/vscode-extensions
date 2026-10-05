@@ -41,6 +41,7 @@ for (const file of await listPhpFiles(source, ['*.php', 'tests/**', 'meta/**', '
   if (!symbols?.symbols.length) continue;
   symbols.uri = `phpstub:/${path.relative(source, file).split(path.sep).join('/')}`;
   symbols.includes = [];
+  delete symbols.flow;
   files.push(symbols);
 }
 mkdirSync(dist, { recursive: true });

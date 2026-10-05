@@ -1,7 +1,8 @@
 // Arbre tree-sitter → résumé sérialisable d'un fichier : portées de noms, déclarations typées, inclusions.
 // Une requête tree-sitter (exécutée en WASM) repère les nœuds utiles, traités dans l'ordre du fichier.
 import { Query } from 'web-tree-sitter';
-import type { FileSymbols, IncludeKind, NameScope, PhpParam, PhpSymbol, SymbolKind, TypeExpr } from '../../shared/types.ts';
+import type { FileSymbols, NameScope, PhpParam, PhpSymbol, SymbolKind, TypeExpr } from '../../shared/types.ts';
+import { extractFlow } from '../includes/program.ts';
 import { getLanguage, type Node, type Tree } from '../parser/parser.ts';
 import { typeFromNode } from '../types/declType.ts';
 import { parseDocType } from '../types/docType.ts';
@@ -19,7 +20,6 @@ const PATTERNS = `
 [(class_declaration) (interface_declaration) (trait_declaration) (enum_declaration)] @class
 (function_definition) @function
 (const_declaration) @const
-[(include_expression) (include_once_expression) (require_expression) (require_once_expression)] @include
 (function_call_expression function: (name) @fn (#match? @fn "^[dD][eE][fF][iI][nN][eE]$")) @define
 `;
 
@@ -28,13 +28,6 @@ const CLASS_KINDS: Record<string, SymbolKind> = {
   interface_declaration: 'interface',
   trait_declaration: 'trait',
   enum_declaration: 'enum',
-};
-
-const INCLUDE_KINDS: Record<string, IncludeKind> = {
-  include_expression: 'include',
-  include_once_expression: 'include_once',
-  require_expression: 'require',
-  require_once_expression: 'require_once',
 };
 
 const NAME_TYPES = new Set(['name', 'qualified_name', 'relative_name']);
@@ -91,12 +84,6 @@ export function extractFile(tree: Tree, uri: string, options: { infer?: boolean 
       case 'const':
         if (!MEMBER_LISTS.has(node.parent?.type ?? '')) out.symbols.push(...constSymbols(node, scope, true, pending));
         break;
-      case 'include': {
-        let path = node.namedChildren[0];
-        if (path?.type === 'parenthesized_expression') path = path.namedChildren[0];
-        out.includes.push({ kind: INCLUDE_KINDS[node.type], range: rangeOf(node), expression: path ? squash(path.text) : '' });
-        break;
-      }
       case 'define': {
         const symbol = defineSymbol(node, pending);
         if (symbol) out.symbols.push(symbol);
@@ -104,7 +91,11 @@ export function extractFile(tree: Tree, uri: string, options: { infer?: boolean 
       }
     }
   }
-  if (options.infer !== false) inferPending(out, pending);
+  const inferrer = options.infer !== false ? new Inferrer(out.scopes) : undefined;
+  const { flow, includes } = extractFlow(root, out.scopes, inferrer);
+  out.flow = flow;
+  out.includes = includes;
+  if (inferrer) inferPending(out, pending, inferrer);
   return out;
 }
 
@@ -344,9 +335,8 @@ function defineSymbol(call: Node, pending: Pending[]): PhpSymbol | undefined {
 }
 
 /** Types déduits du code pour les déclarations sans type : retours, valeurs, affectations $this->x. */
-function inferPending(file: FileSymbols, pending: Pending[]): void {
+function inferPending(file: FileSymbols, pending: Pending[], inferrer: Inferrer): void {
   if (!pending.length) return;
-  const inferrer = new Inferrer(file.scopes);
   const assignments = new Map<number, Map<string, Node[]>>();
   for (const { symbol, node, owner } of pending) {
     let type: TypeExpr | undefined;
