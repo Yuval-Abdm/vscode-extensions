@@ -3,7 +3,7 @@
 // installée), après un avertissement si certains ont des erreurs.
 import * as vscode from 'vscode';
 import type { ImpactEntry } from '../shared/protocol.ts';
-import { changedFiles, errorSummary, isPhp, type GitState } from './changes.ts';
+import { changedFiles, errorSummary, gitApiOf, isPhp, type GitExtension, type GitState } from './changes.ts';
 
 const DEPLOY_EXTENSION_ID = 'yuval-abdm.ftp-sftp-deploy';
 
@@ -27,9 +27,7 @@ export async function deployApi(): Promise<DeployApi | undefined> {
 }
 
 async function gitApi(): Promise<GitApi | undefined> {
-  const ext = vscode.extensions.getExtension<{ getAPI(version: 1): GitApi }>('vscode.git');
-  if (!ext) return undefined;
-  return (ext.isActive ? ext.exports : await ext.activate()).getAPI(1);
+  return gitApiOf(vscode.extensions.getExtension('vscode.git') as GitExtension<GitApi> | undefined);
 }
 
 export class ImpactProvider implements vscode.TreeDataProvider<Node> {

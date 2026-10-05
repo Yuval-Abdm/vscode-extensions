@@ -39,3 +39,24 @@ export function errorSummary(files: { label: string; errors: number }[]): { coun
   const names = withErrors.slice(0, 5).map((f) => f.label).join(', ') + (withErrors.length > 5 ? ', …' : '');
   return { count: withErrors.length, names };
 }
+
+/** Extension git intégrée : ce qui est lu pour obtenir son API. */
+export interface GitExtension<T> {
+  isActive: boolean;
+  exports: { enabled?: boolean; getAPI(version: 1): T } | undefined;
+  activate(): Promise<{ enabled?: boolean; getAPI(version: 1): T } | undefined>;
+}
+
+/**
+ * API git, ou undefined si l'extension est absente, désactivée (`git.enabled: false`) ou sans exécutable git :
+ * `getAPI` lève alors « Git model not found ». Jamais d'exception (l'activation de PHP Forge continue).
+ */
+export async function gitApiOf<T>(ext: GitExtension<T> | undefined): Promise<T | undefined> {
+  try {
+    const exports = ext && (ext.isActive ? ext.exports : await ext.activate());
+    if (!exports || exports.enabled === false) return undefined;
+    return exports.getAPI(1);
+  } catch {
+    return undefined;
+  }
+}

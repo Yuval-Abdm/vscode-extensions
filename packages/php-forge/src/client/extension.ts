@@ -120,7 +120,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
   await client.start();
-  context.subscriptions.push(...(await impact.start()));
+  // Vue « Impact » : un échec (git indisponible…) ne doit pas faire échouer l'activation
+  try {
+    context.subscriptions.push(...(await impact.start()));
+  } catch (err) {
+    client.outputChannel.appendLine(`Impact view: ${String((err as Error)?.stack ?? err)}`);
+  }
   void warnAboutCompetitors(context);
 }
 
