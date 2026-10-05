@@ -2,7 +2,7 @@
 
 **Free PHP language server for VS Code — built for real-world projects, from modern Composer apps to legacy code held together by `include`.**
 
-> Preview (0.5). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
+> Preview (0.6). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
 
 ## Features
 
@@ -55,6 +55,12 @@ Variables created in included files keep their type and origin (hover, completio
 - **Code generation**: getters and setters, constructor (property promotion from PHP 8.0), missing methods of interfaces and abstract classes, PHPDoc skeleton, `@var` for a variable.
 - **Quick fixes**: declare an undefined variable, replace a deprecated or removed function by its documented replacement.
 
+### Formatting
+
+- **Format Document**, **Format Selection**, **format on type** (`;`, `}`) and **on save** (`editor.formatOnSave`): PSR-12 indentation, spacing and braces. Only the whitespace between tokens is rewritten — strings, heredocs, comments and HTML are never changed, and formatting twice gives the same result.
+- **Mixed HTML / PHP**: only `<?php … ?>` blocks are formatted, indented from the line of their `<?php` tag; `<?= … ?>` is only normalized to `<?= $x ?>`. The line break after `?>` is never touched.
+- Options: braces (`psr12` or `keep`), alignment of `=>` and `=`, trailing commas in multi-line arrays, indicative line length. A file with a syntax error is left as is.
+
 ## Roadmap to 1.0
 
 | Version | Content |
@@ -63,7 +69,7 @@ Variables created in included files keep their type and origin (hover, completio
 | 0.3 ✓ | Include engine: variables, functions and classes followed across `include` / `require` |
 | 0.4 ✓ | Diagnostics (undefined variables per caller, unknown symbols, PHP version), baseline |
 | 0.5 ✓ | Rename, references, auto-import and suggested imports (`use` and `include`), code generation |
-| 0.6 | Formatter (PSR-12, mixed HTML/PHP) |
+| 0.6 ✓ | Formatter (PSR-12, mixed HTML/PHP) |
 | 0.7 | SQL in PHP strings: highlighting, schema-aware completion and checks |
 | 0.8 | Security (taint analysis) and PHP version migration |
 | 0.9 | FTP SFTP Deploy integration: impacted pages, deploy in one click |
@@ -90,6 +96,12 @@ Variables created in included files keep their type and origin (hover, completio
 | `phpForge.codeLens.implementations` | `true` | "N implementations" above interfaces, abstract classes and their methods |
 | `phpForge.completion.autoImport` | `true` | Add the `use` statement when a name from another namespace is accepted in completion |
 | `phpForge.organizeUsesOnSave` | `false` | Sort `use` statements and remove unused ones on save |
+| `phpForge.format.enable` | `true` | Format PHP files (document, selection, on type, on save) |
+| `phpForge.format.braces` | `"psr12"` | `psr12`: class and function braces on their own line, control structures on the same line; `keep`: unchanged |
+| `phpForge.format.alignArrows` | `false` | Align the `=>` of consecutive array elements |
+| `phpForge.format.alignAssignments` | `false` | Align the `=` of consecutive assignments |
+| `phpForge.format.trailingCommas` | `false` | Trailing comma in multi-line arrays |
+| `phpForge.format.lineLength` | `120` | Indicative line length (alignment is skipped beyond it) |
 | `phpForge.trace.server` | `off` | Language server trace |
 
 ## Commands

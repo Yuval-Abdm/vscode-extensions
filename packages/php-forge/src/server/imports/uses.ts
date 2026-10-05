@@ -28,7 +28,16 @@ function declarations(tree: Tree): Node[] {
   return (namespace?.childForFieldName('body')?.namedChildren ?? []).filter((c) => c.type === 'namespace_use_declaration');
 }
 
+const entryCache = new WeakMap<Tree, UseEntry[]>();
+
+/** Imports du fichier, calculés une fois par arbre (la complétion interroge chaque élément proposé). */
 function entries(tree: Tree): UseEntry[] {
+  let cached = entryCache.get(tree);
+  if (!cached) entryCache.set(tree, (cached = readEntries(tree)));
+  return cached;
+}
+
+function readEntries(tree: Tree): UseEntry[] {
   const out: UseEntry[] = [];
   for (const declaration of declarations(tree)) {
     const declared = declaration.children.find((c) => !c.isNamed && (c.type === 'function' || c.type === 'const'))?.type as UseKind | undefined;
@@ -57,10 +66,25 @@ const DECLARATIONS: Record<UseKind, string[]> = {
 export function useConflict(tree: Tree, fqn: string, kind: UseKind): boolean {
   const short = shortOf({ fqn });
   if (entries(tree).some((e) => e.kind === kind && shortOf(e) === short && e.fqn.toLowerCase() !== fqn.toLowerCase())) return true;
-  return tree.rootNode.descendantsOfType(DECLARATIONS[kind]).some((d) => {
-    const name = d.childForFieldName('name') ?? d.namedChildren.find((c) => c.type === 'name');
-    return name?.text.toLowerCase() === short;
-  });
+  return declaredNames(tree, kind).has(short);
+}
+
+const declaredCache = new WeakMap<Tree, Map<UseKind, Set<string>>>();
+
+/** Noms courts (minuscules) déclarés dans le fichier, par sorte, calculés une fois par arbre. */
+function declaredNames(tree: Tree, kind: UseKind): Set<string> {
+  let byKind = declaredCache.get(tree);
+  if (!byKind) declaredCache.set(tree, (byKind = new Map()));
+  let names = byKind.get(kind);
+  if (!names) {
+    names = new Set();
+    for (const d of tree.rootNode.descendantsOfType(DECLARATIONS[kind])) {
+      const name = d.childForFieldName('name') ?? d.namedChildren.find((c) => c.type === 'name');
+      if (name) names.add(name.text.toLowerCase());
+    }
+    byKind.set(kind, names);
+  }
+  return names;
 }
 
 export function addUse(tree: Tree, text: string, fqn: string, kind: UseKind): TextEdit | undefined {

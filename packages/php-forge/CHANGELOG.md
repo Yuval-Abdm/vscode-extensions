@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 — preview
+
+- Formatter: Format Document, Format Selection, format on type (`;`, `}`) and on save (`editor.formatOnSave`). PSR-12 indentation, spacing and braces; only whitespace between tokens is rewritten, so strings, heredocs, comments and HTML are never changed.
+- Mixed HTML / PHP files: only `<?php … ?>` blocks are formatted, indented from the line of their `<?php` tag; `<?= … ?>` is only normalized to `<?= $x ?>`.
+- Settings: `phpForge.format.enable`, `phpForge.format.braces` (`psr12` / `keep`), `phpForge.format.alignArrows`, `phpForge.format.alignAssignments`, `phpForge.format.trailingCommas`, `phpForge.format.lineLength`; indentation size comes from the editor.
+- A file with a syntax error is left as is.
+
 ## 0.5.0 — preview
 
 - Rename and Find All References across the project: variables (also across includes and `global`), parameters (with named arguments), functions, classes, methods, properties, constants and namespaces; `'Class::method'` strings and callables (`[$obj, 'm']`, `[Foo::class, 'm']`) when certain. Native and library symbols cannot be renamed.

@@ -14,6 +14,7 @@ import { IncludeGraph } from '../src/server/includes/graph.ts';
 import { indexFolder } from '../src/server/index/indexer.ts';
 import { Lookup } from '../src/server/index/lookup.ts';
 import { decode } from '../src/server/parser/encoding.ts';
+import { DEFAULT_FORMAT, formatText } from '../src/server/format/format.ts';
 import { findReferences, type RefEnv } from '../src/server/refactor/references.ts';
 import { loadStubs } from '../src/server/stubs/stubs.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
@@ -39,6 +40,10 @@ interface Result {
   referencesMs: number;
   referencesMaxMs: number;
   referencesCount: number;
+  /** Formateur : temps total, fichier le plus lent, fichiers qui manquent une garantie (jetons, PHP valide, idempotence) */
+  formatMs: number;
+  formatMaxMs: number;
+  formatFailures: number;
   entries: number;
   byCode: Record<string, number>;
 }
@@ -151,11 +156,34 @@ for (const root of corpus) {
   }
   const referencesMs = Math.round(referenceTimes.reduce((a, b) => a + b, 0) / Math.max(1, referenceTimes.length));
   const referencesMaxMs = Math.round(Math.max(0, ...referenceTimes));
+  // Formateur sur tous les fichiers hors librairie sans erreur de syntaxe : garanties du §5.5
+  let formatMs = 0;
+  let formatMaxMs = 0;
+  let formatFailures = 0;
+  for (const file of index.files()) {
+    const fsPath = URI.parse(file.uri).fsPath;
+    if (!file.flow || env.library(fsPath)) continue;
+    const text = decode(readFileSync(fsPath));
+    const tree = parsePhp(parser, text);
+    if (!tree.rootNode.hasError) {
+      const start = performance.now();
+      const out = formatText(tree, text, DEFAULT_FORMAT);
+      const ms = performance.now() - start;
+      formatMs += ms;
+      formatMaxMs = Math.max(formatMaxMs, ms);
+      const again = parsePhp(parser, out);
+      if (out.replace(/\s+/g, '') !== text.replace(/\s+/g, '') || again.rootNode.hasError || formatText(again, out, DEFAULT_FORMAT) !== out) formatFailures++;
+      again.delete();
+    }
+    tree.delete();
+  }
+  formatMs = Math.round(formatMs);
+  formatMaxMs = Math.round(formatMaxMs);
   results.push({
     project: path.basename(root), files: stats.files, parsed: stats.parsed, skipped: stats.skipped, syntaxErrors: stats.syntaxErrors,
     symbols, ms: stats.ms, heapMB: Math.round(process.memoryUsage().heapUsed / 1e6),
     completionP50: percentile(timings, 50), completionP95: percentile(timings, 95),
-    analysisMs, entries: graph.entries().length, workspaceDiagnosticsMs, referencesMs, referencesMaxMs, referencesCount, byCode,
+    analysisMs, entries: graph.entries().length, workspaceDiagnosticsMs, referencesMs, referencesMaxMs, referencesCount, formatMs, formatMaxMs, formatFailures, byCode,
   });
 }
 console.table(results.map(({ byCode, ...r }) => r));

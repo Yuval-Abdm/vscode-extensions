@@ -202,6 +202,19 @@ test('références et CodeLens d’implémentations', async () => {
   assert.ok(lenses.some((l) => l.command.title === '1 implementation'), JSON.stringify(lenses.map((l) => l.command && l.command.title)));
 });
 
+test('mise en forme du document', async () => {
+  const doc = await vscode.workspace.openTextDocument({ language: 'php', content: '<?php\nif($a){\nfoo( 1 );\n}\n' });
+  await vscode.window.showTextDocument(doc);
+  const edits = await waitFor(async () => {
+    const result = await vscode.commands.executeCommand('vscode.executeFormatDocumentProvider', doc.uri, { tabSize: 4, insertSpaces: true });
+    return result && result.length ? result : false;
+  }, 'formatage');
+  const edit = new vscode.WorkspaceEdit();
+  edit.set(doc.uri, edits);
+  await vscode.workspace.applyEdit(edit);
+  assert.strictEqual(doc.getText(), '<?php\nif ($a) {\n    foo(1);\n}\n');
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {
