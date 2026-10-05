@@ -17,7 +17,7 @@ import { decode } from '../src/server/parser/encoding.ts';
 import { DEFAULT_FORMAT, formatText } from '../src/server/format/format.ts';
 import { tokensOf } from '../src/server/format/tokens.ts';
 import { findReferences, type RefEnv } from '../src/server/refactor/references.ts';
-import { returnsData } from '../src/server/security/taint.ts';
+import { REQUEST_NAMES, returnsData } from '../src/server/security/taint.ts';
 import { loadSchema } from '../src/server/sql/sources.ts';
 import { loadStubs } from '../src/server/stubs/stubs.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
@@ -135,6 +135,10 @@ for (const root of corpus) {
       uri: input.uri,
       request: (name, at) => analysis.variable(input.uri, name.slice(1), at)?.request,
       requestAtEntry: () => !!analysis.variable(input.uri, '', { line: 0, character: 0 })?.request,
+      readsRequest: (name) => {
+        const hit = index.findFunction(name)[0];
+        return !!hit && hit.uri !== input.uri && !!index.get(hit.uri)?.names?.some((n) => REQUEST_NAMES.has(n));
+      },
       native: (name) => {
         const hit = stubs.findFunction(name)[0];
         return hit ? returnsData(hit.symbol.type) : undefined;

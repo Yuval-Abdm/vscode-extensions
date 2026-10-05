@@ -192,6 +192,26 @@ describe('sécurité : revue 0.8', () => {
     assert.deepEqual([{ kind: 'scalar', name: 'int' }, { kind: 'scalar', name: 'bool' }, { kind: 'class', fqn: 'DateTime' }].map((t) => returnsData(t as never)), [false, false, false]);
   });
 
+  it('fonction qui lit elle-même la requête (getter) : sa valeur rendue vient de la requête', async () => {
+    const code = [
+      '<?php',
+      'function get($n) { return isset($_GET[$n]) ? $_GET[$n] : ""; }',
+      '$id = get("id");',
+      'mysql_query("SELECT * FROM t WHERE id = $id");',
+      'echo get("name");',
+      'echo intval(get("n"));',
+      'function propre() { return 42; }',
+      'echo propre();',
+    ].join('\n');
+    assert.deepEqual(await found(code), ['3:sql-injection', '4:xss']);
+    assert.match((await messages(code))[0], /^Possible SQL injection: \$_GET\[\$n\] \(line 2\) → get\(\) \(line 3\) → \$id → mysql_query \(line 4\)$/);
+    // Autre fichier : seulement si l'index dit que la fonction lit la requête
+    const lib = await parse('<?php\nfunction param($k) {\n  return $_POST[$k];\n}\n');
+    const loadFunction = () => ({ uri: 'file:///p/lib.php', node: lib.rootNode.descendantsOfType('function_definition')[0], release() {} });
+    assert.deepEqual(await found('<?php\necho param("a");\n', { loadFunction, readsRequest: () => true }), ['1:xss']);
+    assert.deepEqual(await found('<?php\necho param("a");\n', { loadFunction, readsRequest: () => false }), []);
+  });
+
   it('@, match, die / exit', async () => {
     const code = [
       '<?php',

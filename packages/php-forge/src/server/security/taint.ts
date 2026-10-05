@@ -64,6 +64,8 @@ export interface TaintEnv {
   request?(name: string, at: { line: number; character: number }): { from: string; line: number } | undefined;
   /** Un fichier qui inclut celui-ci a fait `extract($_POST)` : le niveau fichier peut recevoir la requête */
   requestAtEntry?(): boolean;
+  /** Fonction du projet d'un autre fichier dont le fichier lit la requête (identifiants de l'index : `_get`, `_post`…) */
+  readsRequest?(name: string): boolean;
   /** Fonction native connue (stubs) : true si elle rend une chaîne ou un tableau (donnée transmise), false sinon */
   native?(name: string): boolean | undefined;
   /** Neutraliseurs personnalisés (`phpForge.security.sanitizers`), en minuscules : fonctions ou `classe::méthode` */
@@ -132,6 +134,8 @@ const NUMERIC_OPERATORS = new Set(['+', '-', '*', '/', '%', '**', '==', '!=', '<
 const GUARDS = new Set(['is_numeric', 'is_int', 'is_integer', 'is_float', 'ctype_digit', 'ctype_alnum', 'ctype_alpha', 'ctype_xdigit']);
 
 const MAX_DEPTH = 3;
+/** Résumé : valeur rendue venue directement de la requête (pas d'un paramètre) */
+const DIRECT = -1;
 /** Texte d'une portée qui peut contenir une source : sinon elle n'est pas parcourue (coût des nœuds tree-sitter) */
 const SOURCE_TEXT = /\$_(?:GET|POST|REQUEST|COOKIE|FILES|SERVER)\b|\bextract\s*\(|php:\/\/input/i;
 
@@ -395,10 +399,12 @@ class Analyzer {
     });
   }
 
+  /** Résumé : valeur rendue qui vient d'un paramètre, ou directement de la requête (`DIRECT`, fonction « getter ») */
   #return(taint: Taint | undefined): void {
-    if (!this.#summary || taint?.param === undefined) return;
-    if (this.#summary.returns.some((r) => r.param === taint.param)) return;
-    this.#summary.returns.push({ param: taint.param, steps: taint.steps, safe: taint.safe, quoted: taint.quoted });
+    if (!this.#summary || !taint) return;
+    const param = taint.param ?? DIRECT;
+    if (this.#summary.returns.some((r) => r.param === param)) return;
+    this.#summary.returns.push({ param, steps: taint.steps, safe: taint.safe, quoted: taint.quoted });
   }
 
   #read(name: string, node: Node): Taint | undefined {
@@ -673,7 +679,9 @@ class Analyzer {
 
   /** Fonction ou méthode du projet : résumé, appliqué aux arguments venus de la requête. */
   #user(label: string, local: Node | undefined, name: string, nodes: Node[], taints: (Taint | undefined)[], call: Node, method = false): Taint | undefined {
-    if (!taints.some((t) => t) || this.#depth <= 0 || (method && !local)) return undefined;
+    if (this.#depth <= 0 || (method && !local)) return undefined;
+    // Sans argument venu de la requête : seulement une fonction qui lit elle-même la requête (getter)
+    if (!taints.some((t) => t) && !(local ? SOURCE_TEXT.test(local.text) : this.#env.readsRequest?.(name))) return undefined;
     const summary = this.#summarize(name, local);
     if (!summary) return undefined;
     const line = call.startPosition.row;
@@ -687,6 +695,7 @@ class Analyzer {
       this.#report(sink.kind, nodes[sink.param] ?? call, steps, arg);
     }
     const returned = summary.returns.map((r) => {
+      if (r.param === DIRECT) return { steps: [...r.steps, { label: `${label}()`, line }], safe: r.safe, quoted: r.quoted };
       const arg = taints[r.param];
       return arg && { steps: [...arg.steps, { label: `${label}()`, line }], safe: new Set([...arg.safe, ...r.safe]), quoted: r.quoted || arg.quoted || undefined };
     });
@@ -863,6 +872,9 @@ function declarationsOf(tree: Tree): Declarations {
   return { functions, methods, all };
 }
 
+/** Identifiants de l'index (minuscules, sans « $ ») d'un fichier qui lit la requête */
+export const REQUEST_NAMES = new Set(['_get', '_post', '_request', '_cookie', '_files', '_server', 'extract']);
+
 /** Type rendu par une fonction native qui peut contenir la donnée : chaîne, tableau, mixed (non déclaré). */
 export function returnsData(type: TypeExpr | undefined): boolean {
   if (!type) return true;
@@ -888,14 +900,25 @@ export function analyzeTaint(tree: Tree, env: TaintEnv): Finding[] {
   const depth = env.depth ?? MAX_DEPTH;
   const out: Finding[] = [];
   const text = tree.rootNode.text;
-  if (SOURCE_TEXT.test(text) || (env.requestAtEntry ? env.requestAtEntry() : !!env.request)) {
+  // Fonctions appelées qui lisent elles-mêmes la requête (getters) : leurs appels sont aussi des sources
+  const readers = new Set<string>();
+  for (const call of tree.rootNode.descendantsOfType('function_call_expression')) {
+    const fn = call.childForFieldName('function');
+    if (fn?.type !== 'name' && fn?.type !== 'qualified_name') continue;
+    const name = lower(fn);
+    if (readers.has(name)) continue;
+    const local = declarations.functions.get(name);
+    if (local ? SOURCE_TEXT.test(local.text) : env.readsRequest?.(name)) readers.add(name);
+  }
+  const reads = (scope: string) => SOURCE_TEXT.test(scope) || [...readers].some((name) => scope.toLowerCase().includes(`${name}(`));
+  if (reads(text) || (env.requestAtEntry ? env.requestAtEntry() : !!env.request)) {
     const main = new Analyzer(env, env.uri, declarations, summaries, depth);
     main.runMain(tree.rootNode);
     out.push(...main.findings);
   }
-  if (!SOURCE_TEXT.test(text)) return out;
+  if (!reads(text)) return out;
   for (const fn of declarations.all) {
-    if (!SOURCE_TEXT.test(fn.text)) continue;
+    if (!reads(fn.text)) continue;
     const analyzer = new Analyzer(env, env.uri, declarations, summaries, depth);
     analyzer.runFunction(fn, false);
     out.push(...analyzer.findings);

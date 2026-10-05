@@ -29,7 +29,7 @@ import { SourceCache } from './refactor/sourceCache.ts';
 import { formatEdits, formatOptions, onTypeRange, onTypeWindow } from './format/format.ts';
 import { sqlCompletionList, sqlDefinitionAt, sqlHoverAt } from './sql/lsp.ts';
 import { migrationReport, type ReportFile } from './migration/report.ts';
-import { returnsData, type TaintEnv } from './security/taint.ts';
+import { REQUEST_NAMES, returnsData, type TaintEnv } from './security/taint.ts';
 import { Schema } from './sql/schema.ts';
 import { isSchemaSource, loadSchemas, type SchemaSources } from './sql/sources.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
@@ -329,6 +329,10 @@ function securityEnv(input: CollectInput): TaintEnv {
     // Noms du moteur d'inclusion sans « $ » ; un nom vide n'est jamais défini : il ne reste que la couche « requête »
     request: current ? (name, at) => current.variable(input.uri, name.slice(1), at)?.request : undefined,
     requestAtEntry: () => !!current?.variable(input.uri, '', { line: 0, character: 0 })?.request,
+    readsRequest: (name) => {
+      const hit = lookup.workspace.findFunction(name)[0];
+      return !!hit && hit.uri !== input.uri && !!workspace.get(hit.uri)?.names?.some((n) => REQUEST_NAMES.has(n));
+    },
     native: (name) => {
       const hit = lookup.stubs.findFunction(name)[0];
       return hit ? returnsData(hit.symbol.type) : undefined;
