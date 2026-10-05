@@ -114,12 +114,18 @@ export function extractFile(tree: Tree, uri: string, options: { infer?: boolean;
     const { flow, includes } = extractFlow(root, out.scopes, inferrer);
     out.flow = flow;
     out.includes = includes;
-    out.names = [...new Set(root.descendantsOfType('name').map((n) => n.text.toLowerCase()))].sort();
+    // Noms du code, et noms écrits dans une chaîne qui a la forme d'un callable ('f', 'Classe::methode')
+    const names = new Set(root.descendantsOfType('name').map((n) => n.text.toLowerCase()));
+    for (const content of root.descendantsOfType('string_content')) {
+      if (CALLABLE_STRING.test(content.text)) for (const part of content.text.toLowerCase().split(/::|\\/)) if (part) names.add(part);
+    }
+    out.names = [...names].sort();
   }
   if (inferrer) inferPending(out, pending, inferrer);
   return out;
 }
 
+const CALLABLE_STRING = /^\\?[A-Za-z_][\w\\]*(::[A-Za-z_]\w*)?$/;
 const clean = (s: string) => s.replace(/\s+/g, '').replace(/^\\/, '');
 const qualify = (scope: NameScope, name: string) => (scope.namespace ? `${scope.namespace}\\${name}` : name);
 const childOfType = (node: Node, type: string) => node.namedChildren.find((c) => c.type === type);

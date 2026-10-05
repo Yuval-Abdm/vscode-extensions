@@ -35,6 +35,7 @@ export interface Settings {
   codeLens: { references: boolean; implementations: boolean };
   /** Trier les use et retirer les inutilisés à l'enregistrement */
   organizeUsesOnSave: boolean;
+  completion: { autoImport: boolean };
 }
 
 export const DEFAULT_STUBS = [
@@ -59,6 +60,7 @@ export const DEFAULT_SETTINGS: Settings = {
   libraryPaths: ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
   codeLens: { references: true, implementations: true },
   organizeUsesOnSave: false,
+  completion: { autoImport: true },
 };
 
 /** Réglages complets à partir de valeurs partielles (options d'initialisation, changement de configuration). */
@@ -70,6 +72,7 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
     includes: { ...DEFAULT_SETTINGS.includes, ...partial?.includes },
     diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...partial?.diagnostics },
     codeLens: { ...DEFAULT_SETTINGS.codeLens, ...partial?.codeLens },
+    completion: { ...DEFAULT_SETTINGS.completion, ...partial?.completion },
   };
 }
 

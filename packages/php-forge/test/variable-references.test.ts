@@ -29,4 +29,14 @@ describe('références de variables', () => {
     assert.equal(variableTarget(file('a.php'), { line: 1, character: 6 }), undefined);
     assert.equal(variableTarget(file('a.php'), { line: 2, character: 33 }), undefined);
   });
+
+  it('pages qui partagent seulement un en-tête : variables indépendantes', async () => {
+    const { env, file } = await refEnv({
+      'header.php': '<?php\n$title = "x";\n',
+      'p1.php': "<?php\ninclude 'header.php';\n$row = 1;\n",
+      'p2.php': "<?php\ninclude 'header.php';\n$row = 2;\n",
+    });
+    const target = variableTarget(file('p1.php'), { line: 2, character: 2 })!;
+    assert.deepEqual(where(variableReferences(env, file('p1.php'), target)), ['p1.php:2:1']);
+  });
 });

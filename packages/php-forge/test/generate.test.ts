@@ -65,6 +65,26 @@ describe('constructeur', () => {
     assert.equal(await run(code, 'Generate constructor', '7.4'), '<?php\nclass User\n{\n    private $name;\n    /** @var int */\n    private $age;\n\n    public function __construct($name, $age)\n    {\n        $this->name = $name;\n        $this->age = $age;\n    }\n\n    public function f() {}\n}\n');
   });
 
+  it('PHP 8 : propriété avec attribut ou sur une ligne partagée → pas de promotion, assignations', async () => {
+    const code = '<?php\nclass U\n{\n    #[Column]\n    private string $tag;\n    private readonly string $name;\n    private int $a; private int $b;\n|}\n';
+    const out = await run(code, 'Generate constructor');
+    assert.equal(out, '<?php\nclass U\n{\n    #[Column]\n    private string $tag;\n    private readonly string $name;\n    private int $a; private int $b;\n\n    public function __construct(string $tag, string $name, int $a, int $b)\n    {\n        $this->tag = $tag;\n        $this->name = $name;\n        $this->a = $a;\n        $this->b = $b;\n    }\n}\n');
+  });
+
+  it('PHP 8 : readonly gardé dans la promotion', async () => {
+    const out = await run('<?php\nclass U\n{\n    private readonly string $name;\n|}\n', 'Generate constructor');
+    assert.equal(out, '<?php\nclass U\n{\n    public function __construct(\n        private readonly string $name,\n    ) {\n    }\n}\n');
+  });
+
+  it('classe sur une ligne : code généré dans la classe, PHP valide', async () => {
+    for (const title of ['Generate getters and setters', 'Generate constructor']) {
+      const out = await run('<?php\nclass A { private $x;| }\n', title, '7.4');
+      assert.ok(!(await parse(out)).rootNode.hasError, out);
+      assert.match(out, /^<\?php\nclass A \{ private \$x;\n/);
+      assert.match(out, /\}\n$/);
+    }
+  });
+
   it('constructeur déjà là : pas d’action', async () => {
     assert.ok(!(await actions('<?php\nclass A\n{\n    private $x;\n    public function __construct() {}\n|}\n')).list.some((a) => a.title === 'Generate constructor'));
   });

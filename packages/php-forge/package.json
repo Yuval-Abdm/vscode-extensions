@@ -300,6 +300,11 @@
           "default": true,
           "markdownDescription": "%phpForge.codeLens.implementations.description%"
         },
+        "phpForge.completion.autoImport": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.completion.autoImport.description%"
+        },
         "phpForge.organizeUsesOnSave": {
           "type": "boolean",
           "default": false,

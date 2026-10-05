@@ -135,6 +135,7 @@ function readSettings(): Partial<Settings> {
     },
     libraryPaths: config.get<string[]>('libraryPaths') ?? ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
     organizeUsesOnSave: config.get<boolean>('organizeUsesOnSave', false),
+    completion: { autoImport: config.get<boolean>('completion.autoImport', true) },
     codeLens: { references: config.get<boolean>('codeLens.references', true), implementations: config.get<boolean>('codeLens.implementations', true) },
   };
   const exclude = config.get<string[]>('exclude');

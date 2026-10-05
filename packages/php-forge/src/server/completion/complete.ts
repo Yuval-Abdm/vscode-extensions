@@ -25,6 +25,8 @@ export interface CompletionEnv {
   resolver: TypeResolver;
   parser: Parser;
   folders: string[];
+  /** Ajouter le `use` d'un nom d'un autre namespace (défaut : oui) */
+  autoImport?: boolean;
 }
 
 /** Ce qu'il faut pour retrouver la déclaration d'un élément lors de `completionItem/resolve`. */
@@ -314,7 +316,7 @@ class Completion {
         // Import automatique : `use` ajouté à sa place, sauf conflit de nom court (nom complet alors)
         const useKind = kind === 'class' ? 'class' : kind === 'function' ? 'function' : 'const';
         const tree = this.#doc.tree;
-        if (fqn.includes('\\') && !useConflict(tree, fqn, useKind)) imported = addUse(tree, this.#text(), fqn, useKind);
+        if (this.#env.autoImport !== false && fqn.includes('\\') && !useConflict(tree, fqn, useKind)) imported = addUse(tree, this.#text(), fqn, useKind);
         if (!imported) text = `\\${fqn}`;
       }
     }

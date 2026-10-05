@@ -3,7 +3,7 @@
 // définition »). Un membre appelé sur un objet de type inconnu n'est retenu que si son nom n'est déclaré qu'une
 // fois dans le projet (sinon on ne sait pas de quelle classe il s'agit).
 import type { Location } from 'vscode-languageserver/node';
-import type { FileSymbols, Position, SymbolKind } from '../../shared/types.ts';
+import type { FileSymbols, PhpSymbol, Position, SymbolKind } from '../../shared/types.ts';
 import type { IncludeGraph } from '../includes/graph.ts';
 import type { Lookup } from '../index/lookup.ts';
 import type { IndexedSymbol } from '../index/symbolIndex.ts';
@@ -73,16 +73,107 @@ function shortName(name: string): string {
 /** Symbole désigné à une position (déclaration ou utilisation). */
 export function targetAt(env: RefEnv, file: SourceFile, pos: Position): Target | undefined {
   const ref = nameAt(file.tree, pos);
-  if (!ref) return undefined;
+  if (!ref) return defineAt(file, pos);
   const declarations = resolveAt(env.lookup, file.symbols, file.tree, pos, env.resolver);
   if (!declarations.length) return undefined;
   const kind = ref.kind === 'member' ? MEMBER_KINDS[ref.member] : KIND_OF[declarations[0].symbol.kind];
   if (!kind) return undefined;
   if (ref.kind === 'member' && !knownOwner(env, file, ref)) {
-    // Objet de type inconnu : seulement si le nom n'est déclaré qu'une fois
-    if (declarations.length !== 1) return undefined;
+    // Objet de type inconnu : seulement si le nom n'est déclaré qu'une fois, ni dans le projet ni par une classe de PHP
+    if (declarations.length !== 1 || stubMembers(env).has(ref.name.toLowerCase())) return undefined;
   }
-  return { kind, name: shortName(declarations[0].symbol.name), declarations };
+  const name = shortName(declarations[0].symbol.name);
+  return { kind, name, declarations: kind === 'method' ? methodFamily(env, name, declarations) : declarations };
+}
+
+const inside = (r: { start: Position; end: Position }, pos: Position) =>
+  (pos.line > r.start.line || (pos.line === r.start.line && pos.character >= r.start.character)) && (pos.line < r.end.line || (pos.line === r.end.line && pos.character <= r.end.character));
+
+/** Nom d'une constante dans son `define('NOM', …)`. */
+function defineAt(file: SourceFile, pos: Position): Target | undefined {
+  const symbol = file.symbols.symbols.find((s) => s.kind === 'constant' && inside(s.selectionRange, pos));
+  return symbol && { kind: 'constant', name: symbol.name, declarations: [{ uri: file.uri, symbol }] };
+}
+
+const stubMemberCache = new WeakMap<object, Set<string>>();
+
+/** Noms (minuscules) des membres des classes de PHP. */
+function stubMembers(env: RefEnv): Set<string> {
+  let names = stubMemberCache.get(env.lookup.stubs);
+  if (!names) {
+    names = new Set();
+    for (const file of env.lookup.stubs.files()) for (const symbol of file.symbols) for (const child of symbol.children ?? []) names.add(child.name.toLowerCase());
+    stubMemberCache.set(env.lookup.stubs, names);
+  }
+  return names;
+}
+
+const CLASS_KINDS = new Set(['class', 'interface', 'trait', 'enum']);
+
+/**
+ * Méthode : toutes les déclarations reliées par la hiérarchie (méthode redéfinie, implémentée ou implémentant),
+ * de proche en proche — renommer l'une sans les autres casserait le code.
+ */
+function methodFamily(env: RefEnv, name: string, declarations: IndexedSymbol[]): IndexedSymbol[] {
+  const lower = name.toLowerCase();
+  // Classes du projet et de PHP : parents directs et enfants directs
+  const classes = new Map<string, { uri: string; symbol: PhpSymbol }[]>();
+  const children = new Map<string, Set<string>>();
+  for (const index of [env.lookup.workspace, env.lookup.stubs]) {
+    for (const file of index.files()) {
+      for (const symbol of file.symbols) {
+        if (!CLASS_KINDS.has(symbol.kind) || !symbol.fqn) continue;
+        const key = symbol.fqn.toLowerCase();
+        classes.set(key, [...(classes.get(key) ?? []), { uri: file.uri, symbol }]);
+        for (const parent of [...(symbol.extends ?? []), ...(symbol.implements ?? []), ...(symbol.uses ?? [])]) {
+          const set = children.get(parent.toLowerCase()) ?? new Set();
+          set.add(key);
+          children.set(parent.toLowerCase(), set);
+        }
+      }
+    }
+  }
+  const ownerOf = (d: IndexedSymbol) => {
+    for (const [key, list] of classes) if (list.some((c) => c.uri === d.uri && c.symbol.children?.includes(d.symbol))) return key;
+    return undefined;
+  };
+  const parentsOf = (key: string) => (classes.get(key) ?? []).flatMap(({ symbol }) => [...(symbol.extends ?? []), ...(symbol.implements ?? []), ...(symbol.uses ?? [])].map((p) => p.toLowerCase()));
+  const declares = (key: string) => {
+    for (const { uri, symbol } of classes.get(key) ?? []) {
+      const method = symbol.children?.find((c) => c.kind === 'method' && c.name.toLowerCase() === lower);
+      if (method) return { uri, symbol: method };
+    }
+    return undefined;
+  };
+  /** Classes atteintes depuis `start` en suivant `next` (start exclue). */
+  const reach = (start: string, next: (key: string) => Iterable<string>) => {
+    const seen = new Set([start]);
+    const queue = [...next(start)];
+    while (queue.length) {
+      const key = queue.shift()!;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      queue.push(...next(key));
+    }
+    seen.delete(start);
+    return seen;
+  };
+  // Depuis chaque classe qui déclare la méthode : ses ancêtres qui la déclarent, ses descendants qui la redéfinissent
+  const out = [...declarations];
+  const done = new Set<string>();
+  const queue = declarations.map(ownerOf).filter((k): k is string => !!k);
+  while (queue.length) {
+    const key = queue.shift()!;
+    if (done.has(key)) continue;
+    done.add(key);
+    for (const other of [...reach(key, parentsOf), ...reach(key, (k) => children.get(k) ?? [])]) {
+      const method = declares(other);
+      if (!method) continue;
+      if (!out.some((d) => d.symbol === method.symbol)) out.push(method);
+      queue.push(other);
+    }
+  }
+  return out;
 }
 
 function knownOwner(env: RefEnv, file: SourceFile, ref: Reference): boolean {
@@ -113,7 +204,7 @@ export function referencesIn(env: RefEnv, file: SourceFile, target: Target, incl
     }
     const hits = resolveAt(env.lookup, file.symbols, file.tree, pos, env.resolver);
     if (!hits.some((hit) => target.declarations.some((d) => sameDeclaration(d, hit)))) continue;
-    if (ref.kind === 'member' && !knownOwner(env, file, ref) && hits.length !== 1) continue;
+    if (ref.kind === 'member' && !knownOwner(env, file, ref) && (hits.length !== 1 || stubMembers(env).has(ref.name.toLowerCase()))) continue;
     const declaration = target.declarations.some((d) => d.uri === file.uri && d.symbol.selectionRange.start.line === pos.line && Math.abs(d.symbol.selectionRange.start.character - pos.character) <= 1);
     if (declaration && !includeDeclaration) continue;
     out.push({ uri: file.uri, range: { start: pos, end } });

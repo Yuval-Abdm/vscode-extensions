@@ -6,7 +6,7 @@ import { extract, parser } from './helpers.ts';
 describe('résumés : noms utilisés, remplacements', () => {
   it('identifiants utilisés par le fichier (minuscules, triés, uniques)', async () => {
     const file = await extract('<?php\nnamespace App;\nuse Lib\\User;\n$u = new User();\n$u->Save();\necho MAX, strlen("x");\n');
-    assert.deepEqual(file.names, ['app', 'lib', 'max', 'save', 'strlen', 'u', 'user']);
+    assert.deepEqual(file.names, ['app', 'lib', 'max', 'save', 'strlen', 'u', 'user', 'x']);
   });
 
   it('modèle de remplacement d’une fonction dépréciée (attribut des stubs)', async () => {

@@ -65,7 +65,8 @@ export function importFixes(input: FixInput, diagnostics: Diagnostic[], env: Fix
     if (seen.has(target) || targetUri === input.uri) return;
     seen.add(target);
     const statement = includeStatement(input, target, env.graph);
-    out.push(action(l10n.t("Add include '{0}'", relative(env.graph, input.fsPath, target)), input.uri, [includeEdit(input.tree, statement)], [d]));
+    const edit = includeEdit(input.tree, input.text, statement, d.range.start.line);
+    if (edit) out.push(action(l10n.t("Add include '{0}'", relative(env.graph, input.fsPath, target)), input.uri, [edit], [d]));
   };
   for (const d of diagnostics) {
     const data = (d.data ?? {}) as SymbolData;

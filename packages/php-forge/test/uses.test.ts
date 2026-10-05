@@ -49,4 +49,25 @@ describe('organiser les use', () => {
     const clean = '<?php\nuse A\\X;\n\nnew X();\n';
     assert.deepEqual(organizeUses(await parse(clean), clean), []);
   });
+
+  it('ligne partagée avec du code : aucune modification', async () => {
+    const shared = '<?php\nuse A\\X; $y = 1;\nnew X();\n';
+    assert.deepEqual(organizeUses(await parse(shared), shared), []);
+  });
+});
+
+describe('ajout d’un use : cas qui casseraient le fichier', () => {
+  it('après declare(strict_types=1)', async () => {
+    assert.equal(await add('<?php\ndeclare(strict_types=1);\n\nnew A();\n', 'Lib\\User'), '<?php\ndeclare(strict_types=1);\n\nuse Lib\\User;\n\nnew A();\n');
+  });
+
+  it('fichier qui commence par du HTML, balise suivie de ?> sur la ligne : pas d’ajout', async () => {
+    assert.equal(await add('<body><?php echo $x; ?></body>\n', 'Lib\\User'), undefined);
+    assert.equal(await add('<?php $a = 1; ?>\n<p>x</p>\n', 'Lib\\User'), undefined);
+  });
+
+  it('classe de même nom court déclarée dans le fichier : conflit', async () => {
+    assert.equal(useConflict(await parse('<?php\nnamespace App;\nclass User {}\n'), 'Lib\\User', 'class'), true);
+    assert.equal(useConflict(await parse('<?php\nfunction helper() {}\n'), 'Lib\\helper', 'function'), true);
+  });
 });

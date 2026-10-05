@@ -11,6 +11,7 @@ import { members } from '../types/type.ts';
 import type { RefEnv, SourceFile, Target } from './references.ts';
 
 const NAME_CHECKS = new Set(['function_exists', 'is_callable']);
+const CONSTANT_FUNCTIONS = new Set(['define', 'defined', 'constant']);
 
 function literal(node: Node): string | undefined {
   if (node.type !== 'string' && node.type !== 'encapsed_string') return undefined;
@@ -31,6 +32,15 @@ export function stringReference(env: RefEnv, file: SourceFile, target: Target, i
   const offset = index - string.startIndex;
   const range: Range = { start: { line: start.line, character: start.character + offset }, end: { line: start.line, character: start.character + offset + target.name.length } };
   if (target.kind === 'function') return functionString(env, string, value, target) ? range : undefined;
+  if (target.kind === 'constant') {
+    // define('NOM', …), defined('NOM'), constant('NOM') : premier argument
+    const argument = string.parent;
+    const call = argument?.parent?.parent;
+    const fn = call?.type === 'function_call_expression' ? call.childForFieldName('function')?.text.replace(/^\\/, '').toLowerCase() : undefined;
+    const first = argument?.parent?.namedChildren.find((a) => a.type === 'argument');
+    if (!fn || !CONSTANT_FUNCTIONS.has(fn) || first?.id !== argument?.id) return undefined;
+    return target.declarations.some((d) => (d.symbol.fqn ?? d.symbol.name) === value.replace(/^\\/, '')) || value === target.name ? range : undefined;
+  }
   if (target.kind === 'class') {
     // « Lib\User::make » : nom complet (une chaîne n'est jamais relative au namespace), occurrence dans la partie classe
     const pair = /^\\?([\w\\]+)::\w+$/.exec(value);

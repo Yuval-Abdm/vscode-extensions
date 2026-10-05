@@ -83,6 +83,9 @@ interface PropertyInfo {
   alone: boolean;
   documented: boolean;
   isStatic: boolean;
+  /** Déclaration seule sur sa ligne, sans attribut : peut devenir un paramètre promu */
+  promotable: boolean;
+  readonly: boolean;
 }
 
 function properties(body: Node): PropertyInfo[] {
@@ -92,10 +95,13 @@ function properties(body: Node): PropertyInfo[] {
     const elements = decl.namedChildren.filter((c) => c.type === 'property_element');
     const isStatic = decl.namedChildren.some((c) => c.type === 'static_modifier');
     const written = decl.childForFieldName('type')?.text;
+    const own = rangeOf(decl).start.line === rangeOf(decl).end.line && (decl.tree.rootNode.text.split('\n')[rangeOf(decl).start.line] ?? '').trim() === decl.text.trim();
+    const promotable = own && !decl.namedChildren.some((c) => c.type === 'attribute_list');
+    const readonly = decl.namedChildren.some((c) => c.type === 'readonly_modifier');
     for (const element of elements) {
       const name = element.namedChildren.find((c) => c.type === 'variable_name')?.text.replace(/^\$/, '');
       if (!name) continue;
-      out.push({ name, ...(written ? { written } : {}), node: decl, hasDefault: element.childForFieldName('default_value') !== null || /=/.test(element.text), alone: elements.length === 1, documented: !!docComment(decl), isStatic });
+      out.push({ name, ...(written ? { written } : {}), node: decl, hasDefault: element.childForFieldName('default_value') !== null || /=/.test(element.text), alone: elements.length === 1, documented: !!docComment(decl), isStatic, promotable, readonly });
     }
   }
   return out;
@@ -122,9 +128,8 @@ function accessors(input: GenerateInput, env: GenerateEnv, body: Node, only?: st
     }
   }
   if (!parts.length) return [];
-  const close = rangeOf(body).end.line;
   const title = only ? l10n.t('Generate getter and setter for {0}', `$${only}`) : l10n.t('Generate getters and setters');
-  return [action(title, input, [insert(close, parts.map((p) => `\n${p}`).join(''))])];
+  return [action(title, input, [beforeClose(input, body, parts.map((p) => `\n${p}`).join(''))])];
 }
 
 function constructor(input: GenerateInput, env: GenerateEnv, body: Node): CodeAction[] {
@@ -136,9 +141,10 @@ function constructor(input: GenerateInput, env: GenerateEnv, body: Node): CodeAc
   const lines = input.text.split('\n');
   const title = l10n.t('Generate constructor');
   if (atLeast(env.phpVersion, '8.0')) {
-    const promoted = props.filter((p) => p.alone && !p.documented);
+    // Promotion seulement si toutes les propriétés s'y prêtent (sinon le constructeur classique, valide aussi en PHP 8)
+    const promoted = props.every((p) => p.alone && !p.documented && p.promotable) ? props : [];
     if (promoted.length) {
-      const params = promoted.map((p) => `${indent}    ${visibility(p.node)} ${p.written ? `${p.written} ` : ''}$${p.name},`).join('\n');
+      const params = promoted.map((p) => `${indent}    ${visibility(p.node)} ${p.readonly ? 'readonly ' : ''}${p.written ? `${p.written} ` : ''}$${p.name},`).join('\n');
       const text = `${indent}public function __construct(\n${params}\n${indent}) {\n${indent}}\n`;
       const edits: TextEdit[] = promoted.map((p, i) => {
         const line = rangeOf(p.node).start.line;
@@ -149,9 +155,25 @@ function constructor(input: GenerateInput, env: GenerateEnv, body: Node): CodeAc
   }
   const last = Math.max(...properties(body).map((p) => rangeOf(p.node).end.line));
   const params = props.map((p) => `${p.written ? `${p.written} ` : ''}$${p.name}`).join(', ');
-  const blankAfter = (lines[last + 1] ?? '').trim() === '' ? '' : '\n';
-  const text = `\n${method(indent, `public function __construct(${params})`, props.map((p) => `$this->${p.name} = $${p.name};`))}${blankAfter}`;
-  return [action(title, input, [insert(last + 1, text)])];
+  const constructorText = method(indent, `public function __construct(${params})`, props.map((p) => `$this->${p.name} = $${p.name};`));
+  // Classe sur une ligne : avant son accolade fermante
+  if (last === rangeOf(body).end.line) return [action(title, input, [beforeClose(input, body, `\n${constructorText}`)])];
+  const next = (lines[last + 1] ?? '').trim();
+  const blankAfter = next === '' || next.startsWith('}') ? '' : '\n';
+  return [action(title, input, [insert(last + 1, `\n${constructorText}${blankAfter}`)])];
+}
+
+/**
+ * Insertion avant l'accolade fermante de la classe : en début de sa ligne, ou, si la classe tient sur une ligne,
+ * juste avant l'accolade qui passe alors sur sa propre ligne.
+ */
+function beforeClose(input: GenerateInput, body: Node, text: string): TextEdit {
+  const close = rangeOf(body).end;
+  const lineText = input.text.split('\n')[close.line] ?? '';
+  if (lineText.slice(0, close.character - 1).trim() === '') return insert(close.line, text);
+  const brace = { line: close.line, character: close.character - 1 };
+  const start = { line: close.line, character: lineText.slice(0, close.character - 1).trimEnd().length };
+  return { range: { start, end: brace }, newText: `${text}${indentOf(input.text, rangeOf(body.parent ?? body).start.line)}` };
 }
 
 /** Signature déclarée (`function f(int $x): T`) → en-tête réécrit pour la classe qui implémente. */
@@ -220,7 +242,7 @@ function missingMethods(input: GenerateInput, env: GenerateEnv, classNode: Node,
   const indent = indentOf(input.text, rangeOf(body).start.line) + '    ';
   const hasMembers = body.namedChildren.some((c) => c.type !== 'comment');
   const text = missing.map((m, i) => `${i > 0 || hasMembers ? '\n' : ''}${implementation(m, indent)}`).join('');
-  return [action(l10n.t('Implement {0} missing methods', missing.length), input, [insert(rangeOf(body).end.line, text)])];
+  return [action(l10n.t('Implement {0} missing methods', missing.length), input, [beforeClose(input, body, text)])];
 }
 
 function phpdoc(input: GenerateInput, fn: Node): CodeAction[] {

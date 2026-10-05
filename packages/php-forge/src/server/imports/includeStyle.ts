@@ -67,10 +67,21 @@ function offsetOf(text: string, pos: { line: number; character: number }): numbe
   return offset + pos.character;
 }
 
-/** Insertion après le dernier include du niveau fichier, sinon après <?php. */
-export function includeEdit(tree: Tree, statement: string): TextEdit {
-  const includes = tree.rootNode.namedChildren.filter((c) => c.type === 'expression_statement' && /^(include|require)/.test(c.namedChildren[0]?.type ?? ''));
-  const tag = tree.rootNode.namedChildren.find((c) => c.type === 'php_tag');
-  const line = includes.length ? rangeOf(includes[includes.length - 1]).end.line + 1 : (tag ? rangeOf(tag).end.line + 1 : 0);
+/**
+ * Insertion après le dernier include du niveau fichier qui précède la ligne `before` (l'utilisation), sinon après
+ * les declare(…) ou <?php. undefined quand la ligne d'ancrage se termine dans le HTML (`?>` après l'ancre) ou que
+ * le fichier commence par du HTML.
+ */
+export function includeEdit(tree: Tree, text: string, statement: string, before: number): TextEdit | undefined {
+  const root = tree.rootNode;
+  const top = root.namedChildren.filter((c) => rangeOf(c).end.line < before);
+  const includes = top.filter((c) => c.type === 'expression_statement' && /^(include|require)/.test(c.namedChildren[0]?.type ?? ''));
+  const declares = top.filter((c) => c.type === 'declare_statement');
+  const tag = root.namedChildren.find((c) => c.type === 'php_tag');
+  const anchor = includes[includes.length - 1] ?? declares[declares.length - 1] ?? tag;
+  if (!anchor || root.namedChildren[0]?.type === 'text' && root.namedChildren[0].text.trim() !== '' && !includes.length) return undefined;
+  const end = rangeOf(anchor).end;
+  if ((text.split('\n')[end.line] ?? '').slice(end.character).includes('?>')) return undefined;
+  const line = end.line + 1;
   return { range: { start: { line, character: 0 }, end: { line, character: 0 } }, newText: `${statement}\n` };
 }

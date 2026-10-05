@@ -25,6 +25,7 @@ import { includeDefinition, includeLinks, includerLinks, includersLens } from '.
 import { quickFixes } from './features/codeActions.ts';
 import { findReferences, targetAt, type RefEnv, type SourceFile } from './refactor/references.ts';
 import { variableReferences, variableTarget } from './refactor/variables.ts';
+import { SourceCache } from './refactor/sourceCache.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
 import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { organizeUses } from './imports/uses.ts';
@@ -251,7 +252,11 @@ function sourceOf(uri: string): { file: SourceFile; release(): void } | undefine
   const doc = documents.get(uri);
   if (doc) return { file: { uri, text: doc.doc.getText(), tree: doc.tree, symbols: doc.symbols }, release: () => undefined };
   const symbols = workspace.get(uri);
-  if (!symbols) return undefined;
+  return symbols ? sources.get(uri, symbols) : undefined;
+}
+
+/** Fichiers du disque analysés pour les recherches, gardés pour les requêtes voisines (lentilles d'un fichier). */
+const sources = new SourceCache(200, (uri) => {
   const fsPath = URI.parse(uri).fsPath;
   let bytes: Buffer;
   try {
@@ -261,9 +266,8 @@ function sourceOf(uri: string): { file: SourceFile; release(): void } | undefine
     return undefined;
   }
   const text = decode(bytes);
-  const tree = parsePhp(parser, text);
-  return { file: { uri, text, tree, symbols }, release: () => tree.delete() };
-}
+  return { text, tree: parsePhp(parser, text) };
+});
 
 function refEnv(): RefEnv {
   return { lookup, resolver, files: () => [...workspace.files()], source: sourceOf, graph: analysis?.graph };
@@ -514,7 +518,7 @@ connection.onHover(
 connection.onCompletion(
   safe(null, ({ textDocument, position }) => {
     const doc = docAt(textDocument.uri);
-    return doc ? complete({ resolver, parser, folders }, doc, position) : null;
+    return doc ? complete({ resolver, parser, folders, autoImport: settings.completion.autoImport }, doc, position) : null;
   }),
 );
 

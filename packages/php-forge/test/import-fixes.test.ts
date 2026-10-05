@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Diagnostic } from 'vscode-languageserver/node';
 import { importAllMissing, importFixes } from '../src/server/imports/fixes.ts';
-import { includeStatement } from '../src/server/imports/includeStyle.ts';
+import { includeEdit, includeStatement } from '../src/server/imports/includeStyle.ts';
 import { IncludeGraph } from '../src/server/includes/graph.ts';
 import { Lookup } from '../src/server/index/lookup.ts';
 import { SymbolIndex } from '../src/server/index/symbolIndex.ts';
@@ -62,5 +62,13 @@ describe('imports proposés', () => {
     assert.equal(all.title, 'Import all missing classes');
     assert.deepEqual(all.edit?.changes?.[uriOf('app.php')].map((e) => e.newText), ['use Lib\\A;\nuse Lib\\B;\n\n']);
     assert.deepEqual(importFixes(input, [diagnostics[2]], env).map((a) => a.title), ["Add include 'includes/helpers.php'"]);
+  });
+
+  it('Add include : avant l’utilisation, après declare, jamais dans le HTML', async () => {
+    const edit = async (text: string, before: number) => includeEdit(await parse(text), text, "require 'x.php';", before);
+    assert.equal((await edit("<?php\nrequire 'header.php';\nformat_date();\nrequire 'footer.php';\n", 2))?.range.start.line, 2);
+    assert.equal((await edit('<?php\ndeclare(strict_types=1);\nformat_date();\n', 2))?.range.start.line, 2);
+    assert.equal(await edit("<?php require 'a.php'; ?>\n<html><?php f(); ?>\n", 1), undefined);
+    assert.equal(await edit('<p><?php f(); ?></p>\n', 0), undefined);
   });
 });

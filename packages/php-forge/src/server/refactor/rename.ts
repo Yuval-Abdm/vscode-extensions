@@ -86,16 +86,20 @@ function namedArguments(env: RefEnv, file: SourceFile, variable: VariableTarget)
   const target = targetAt(env, file, rangeOf(nameNode).start);
   if (!target) return [];
   const out: { uri: string; range: Range }[] = [];
-  for (const location of findReferences(env, target, false)) {
-    const source = env.source(location.uri);
+  // Appels groupés par fichier : chaque fichier lu une fois
+  const byFile = new Map<string, Range[]>();
+  for (const location of findReferences(env, target, false)) byFile.set(location.uri, [...(byFile.get(location.uri) ?? []), location.range]);
+  for (const [uri, ranges] of byFile) {
+    const source = env.source(uri);
     if (!source) continue;
     try {
-      const at = source.file.tree.rootNode.descendantForPosition({ row: location.range.start.line, column: location.range.start.character });
-      let call: Node | null = at;
-      while (call && !call.type.endsWith('call_expression') && call.type !== 'object_creation_expression') call = call.parent;
-      for (const argument of call?.childForFieldName('arguments')?.namedChildren ?? []) {
-        const label = argument.type === 'argument' ? argument.childForFieldName('name') : null;
-        if (label?.text === variable.name) out.push({ uri: location.uri, range: rangeOf(label) });
+      for (const range of ranges) {
+        let call: Node | null = source.file.tree.rootNode.descendantForPosition({ row: range.start.line, column: range.start.character });
+        while (call && !call.type.endsWith('call_expression') && call.type !== 'object_creation_expression') call = call.parent;
+        for (const argument of call?.childForFieldName('arguments')?.namedChildren ?? []) {
+          const label = argument.type === 'argument' ? argument.childForFieldName('name') : null;
+          if (label?.text === variable.name) out.push({ uri, range: rangeOf(label) });
+        }
       }
     } finally {
       source.release();

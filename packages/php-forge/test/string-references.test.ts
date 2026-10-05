@@ -31,4 +31,13 @@ describe('références dans les chaînes et les callables', () => {
     const run = targetAt(env, file('c.php'), { line: 1, character: 30 })!;
     assert.deepEqual(where(findReferences(env, run, false)), ['c.php:4:21']);
   });
+
+  it('chaîne seule dans un autre fichier : fichier candidat', async () => {
+    const { env, file } = await refEnv({
+      'c.php': '<?php\nclass Cron { public static function boot() {} }\nfunction cmp($a, $b) { return 0; }\n',
+      'd.php': "<?php\ncall_user_func('Cron::boot');\nusort($t, 'cmp');\n",
+    });
+    assert.deepEqual(where(findReferences(env, targetAt(env, file('c.php'), { line: 1, character: 37 })!, false)), ['d.php:1:22']);
+    assert.deepEqual(where(findReferences(env, targetAt(env, file('c.php'), { line: 2, character: 10 })!, false)), ['d.php:2:11']);
+  });
 });

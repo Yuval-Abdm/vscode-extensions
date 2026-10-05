@@ -19,6 +19,12 @@ describe('déclarer la variable', () => {
     assert.deepEqual(fix.edit?.changes?.[URI], [{ range: { start: { line: 4, character: 0 }, end: { line: 4, character: 0 } }, newText: '        $total = null;\n' }]);
   });
 
+  it('peut-être non définie : valeur des appelants gardée', async () => {
+    const text = '<?php\necho $title;\n';
+    const [fix] = await fixes(text, diag(1, 5, 11, 'maybe-undefined-variable', { variable: 'title' }));
+    assert.deepEqual(fix.edit?.changes?.[URI]?.[0].newText, 'if (!isset($title)) {\n    $title = null;\n}\n');
+  });
+
   it('instruction qui ne commence pas sa ligne (HTML) : pas de correction', async () => {
     const text = '<p><?= $nom ?></p>\n';
     assert.deepEqual(await fixes(text, diag(0, 7, 11, 'undefined-variable', { variable: 'nom' })), []);

@@ -7,7 +7,7 @@ import { SymbolIndex } from '../src/server/index/symbolIndex.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
 import { extract, parser } from './helpers.ts';
 
-async function items(code: string, line: number, character: number) {
+async function items(code: string, line: number, character: number, autoImport = true) {
   const workspace = new SymbolIndex();
   workspace.set(await extract('<?php\nnamespace Lib;\nclass User {}\nfunction helper() {}\n', 'file:///p/lib.php'));
   workspace.set(await extract('<?php\nnamespace Other;\nclass User {}\n', 'file:///p/other.php'));
@@ -15,7 +15,7 @@ async function items(code: string, line: number, character: number) {
   const doc = store.open('file:///p/page.php', 'php', 1, code);
   workspace.set(doc.symbols);
   const resolver = new TypeResolver(new Lookup(workspace, new SymbolIndex()), '8.3');
-  return complete({ resolver, parser: await parser(), folders: [] }, doc, { line, character })!.items;
+  return complete({ resolver, parser: await parser(), folders: [], autoImport }, doc, { line, character })!.items;
 }
 
 describe('import automatique', () => {
@@ -39,5 +39,11 @@ describe('import automatique', () => {
     assert.equal(other.additionalTextEdits, undefined);
     const fn = (await items('<?php\nnamespace App;\n\nhelp\n', 3, 4)).find((i) => i.label === 'helper')!;
     assert.deepEqual(fn.additionalTextEdits?.[0].newText, 'use function Lib\\helper;\n\n');
+  });
+
+  it('import automatique désactivé : nom complet', async () => {
+    const user = (await items('<?php\nnamespace App;\n\nnew Use\n', 3, 7, false)).find((i) => i.label === 'User' && i.labelDetails?.description === 'Lib')!;
+    assert.equal((user.textEdit as { newText: string }).newText, '\\Lib\\User');
+    assert.equal(user.additionalTextEdits, undefined);
   });
 });

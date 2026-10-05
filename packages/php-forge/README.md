@@ -88,6 +88,7 @@ Variables created in included files keep their type and origin (hover, completio
 | `phpForge.libraryPaths` | `["**/vendor/**", "**/PHPExcel/**", "**/Google/Api/**"]` | Library folders: indexed, never diagnosed |
 | `phpForge.codeLens.references` | `true` | "N references" above classes, functions and methods |
 | `phpForge.codeLens.implementations` | `true` | "N implementations" above interfaces, abstract classes and their methods |
+| `phpForge.completion.autoImport` | `true` | Add the `use` statement when a name from another namespace is accepted in completion |
 | `phpForge.organizeUsesOnSave` | `false` | Sort `use` statements and remove unused ones on save |
 | `phpForge.trace.server` | `off` | Language server trace |
 

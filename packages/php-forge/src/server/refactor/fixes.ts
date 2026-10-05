@@ -37,7 +37,11 @@ function declare(uri: string, text: string, tree: Tree, d: Diagnostic, name: str
   const lineText = text.split('\n')[start.line] ?? '';
   const indent = lineText.slice(0, start.character);
   if (indent.trim() !== '') return [];
-  const edit = { range: { start: { line: start.line, character: 0 }, end: { line: start.line, character: 0 } }, newText: `${indent}$${name} = null;\n` };
+  // « Peut-être non définie » : certains appelants la définissent, leur valeur est gardée
+  const newText = d.code === 'maybe-undefined-variable'
+    ? `${indent}if (!isset($${name})) {\n${indent}    $${name} = null;\n${indent}}\n`
+    : `${indent}$${name} = null;\n`;
+  const edit = { range: { start: { line: start.line, character: 0 }, end: { line: start.line, character: 0 } }, newText };
   return [{ title: l10n.t('Declare {0}', `$${name}`), kind: CodeActionKind.QuickFix, diagnostics: [d], edit: { changes: { [uri]: [edit] } } }];
 }
 

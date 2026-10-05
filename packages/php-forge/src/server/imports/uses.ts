@@ -47,9 +47,20 @@ function entries(tree: Tree): UseEntry[] {
   return out;
 }
 
+const DECLARATIONS: Record<UseKind, string[]> = {
+  class: ['class_declaration', 'interface_declaration', 'trait_declaration', 'enum_declaration'],
+  function: ['function_definition'],
+  const: ['const_element'],
+};
+
+/** Nom court déjà importé pour un autre nom complet, ou déclaré dans le fichier. */
 export function useConflict(tree: Tree, fqn: string, kind: UseKind): boolean {
   const short = shortOf({ fqn });
-  return entries(tree).some((e) => e.kind === kind && shortOf(e) === short && e.fqn.toLowerCase() !== fqn.toLowerCase());
+  if (entries(tree).some((e) => e.kind === kind && shortOf(e) === short && e.fqn.toLowerCase() !== fqn.toLowerCase())) return true;
+  return tree.rootNode.descendantsOfType(DECLARATIONS[kind]).some((d) => {
+    const name = d.childForFieldName('name') ?? d.namedChildren.find((c) => c.type === 'name');
+    return name?.text.toLowerCase() === short;
+  });
 }
 
 export function addUse(tree: Tree, text: string, fqn: string, kind: UseKind): TextEdit | undefined {
@@ -65,9 +76,16 @@ export function addUse(tree: Tree, text: string, fqn: string, kind: UseKind): Te
     const anchorLine = next ? rangeOf(next.declaration).start.line : rangeOf(existing[existing.length - 1].declaration).end.line + 1;
     return { range: { start: { line: anchorLine, character: 0 }, end: { line: anchorLine, character: 0 } }, newText: line };
   }
-  const namespace = tree.rootNode.namedChildren.find((c) => c.type === 'namespace_definition' && !c.childForFieldName('body'));
-  const tag = tree.rootNode.namedChildren.find((c) => c.type === 'php_tag');
-  let at = (namespace ? rangeOf(namespace).end.line : tag ? rangeOf(tag).end.line : 0) + 1;
+  const root = tree.rootNode;
+  const namespace = root.namedChildren.find((c) => c.type === 'namespace_definition' && !c.childForFieldName('body'));
+  const tag = root.namedChildren.find((c) => c.type === 'php_tag');
+  // Fichier qui commence par du HTML : l'ajout tomberait dans le HTML
+  if (!namespace && root.namedChildren[0]?.type === 'text' && root.namedChildren[0].text.trim() !== '') return undefined;
+  // Après le namespace, sinon après les declare(…) du début, sinon après <?php
+  const declares = root.namedChildren.filter((c) => c.type === 'declare_statement');
+  const anchor = namespace ?? declares[declares.length - 1] ?? tag;
+  if (anchor && (lines[rangeOf(anchor).end.line] ?? '').slice(rangeOf(anchor).end.character).includes('?>')) return undefined;
+  let at = (anchor ? rangeOf(anchor).end.line : 0) + 1;
   if ((lines[at] ?? '').trim() === '' && at < lines.length - 1) at++;
   const blankAfter = (lines[at] ?? '').trim() === '' ? '' : '\n';
   return { range: { start: { line: at, character: 0 }, end: { line: at, character: 0 } }, newText: `${line}${blankAfter}` };
@@ -80,6 +98,8 @@ export function organizeUses(tree: Tree, text: string): TextEdit[] {
   const last = rangeOf(decls[decls.length - 1]).end.line;
   const lines = text.split('\n');
   // Un commentaire ou du code entre les use : on ne touche à rien (rien ne doit se perdre)
+  // Une déclaration qui partage sa ligne avec du code : on ne touche à rien
+  if (decls.some((d) => (lines[rangeOf(d).start.line] ?? '').trim() !== d.text.trim() && rangeOf(d).start.line === rangeOf(d).end.line)) return [];
   const between = lines.slice(first, last + 1).filter((l, i) => !decls.some((d) => rangeOf(d).start.line <= first + i && first + i <= rangeOf(d).end.line) && l.trim() !== '');
   if (between.length) return [];
   const { names, docs } = usedNames(tree);
