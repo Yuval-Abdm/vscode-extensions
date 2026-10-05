@@ -2,8 +2,9 @@
 // utilisée, commandes, cohabitation avec d'autres extensions PHP.
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
+import type { Level } from '../server/diagnostics/policy.ts';
 import { IncludeTreeProvider } from './includeTree.ts';
-import { INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
+import { BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type BaselineResult, type BaselineStatus, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
 
 /** Extensions PHP dont la complétion et les diagnostics feraient doublon. */
 const COMPETITORS = ['bmewburn.vscode-intelephense-client', 'DEVSENSE.phptools-vscode'];
@@ -47,6 +48,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     status.text = `PHP ${params.phpVersion}`;
     status.detail = sourceLabel(params.source);
   });
+  const baselineStatus = vscode.languages.createLanguageStatusItem('phpForge.baseline', { language: 'php' });
+  baselineStatus.name = vscode.l10n.t('PHP Forge baseline');
+  baselineStatus.text = '';
+  client.onNotification(BASELINE_STATUS_NOTIFICATION, (params: BaselineStatus) => {
+    baselineStatus.text = params.active ? vscode.l10n.t('{0} problems hidden by the baseline', params.hidden) : vscode.l10n.t('No baseline');
+    baselineStatus.command = params.active ? { title: vscode.l10n.t('Update'), command: 'phpForge.updateBaseline' } : { title: vscode.l10n.t('Create'), command: 'phpForge.createBaseline' };
+  });
+  const baseline = async (action: 'create' | 'update' | 'clear') => {
+    const result = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('PHP Forge: analyzing the workspace…') },
+      () => client!.sendRequest<BaselineResult>(BASELINE_REQUEST, { action }),
+    );
+    const message = action === 'clear' ? vscode.l10n.t('Baseline cleared: all problems are shown again.') : vscode.l10n.t('Baseline saved: {0} existing problems are hidden.', result.entries);
+    void vscode.window.showInformationMessage(message);
+  };
 
   const tree = new IncludeTreeProvider(async (uri) => (await client?.sendRequest<IncludeTree>(INCLUDE_TREE_REQUEST, { uri })) ?? { includedBy: [], includes: [] });
   const followEditor = (editor: vscode.TextEditor | undefined) => {
@@ -56,6 +72,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     status,
+    baselineStatus,
+    vscode.commands.registerCommand('phpForge.createBaseline', () => baseline('create')),
+    vscode.commands.registerCommand('phpForge.updateBaseline', () => baseline('update')),
+    vscode.commands.registerCommand('phpForge.clearBaseline', () => baseline('clear')),
     vscode.window.createTreeView('phpForge.includeTree', { treeDataProvider: tree, showCollapseAll: true }),
     vscode.window.onDidChangeActiveTextEditor(followEditor),
     vscode.commands.registerCommand('phpForge.showIncludeTree', () => vscode.commands.executeCommand('phpForge.includeTree.focus')),
@@ -102,6 +122,11 @@ function readSettings(): Partial<Settings> {
     serverRoot: config.get<string>('serverRoot') ?? '',
     includes: { maxContexts: config.get<number>('includes.maxContexts', 64) },
     externalGlobals: config.get<string[]>('externalGlobals') ?? [],
+    diagnostics: {
+      rules: config.get<Record<string, Level>>('diagnostics.rules') ?? {},
+      scope: config.get<'openFiles' | 'workspace'>('diagnostics.scope') ?? 'workspace',
+    },
+    libraryPaths: config.get<string[]>('libraryPaths') ?? ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
   };
   const exclude = config.get<string[]>('exclude');
   const maxFileSize = config.get<number>('maxFileSize');

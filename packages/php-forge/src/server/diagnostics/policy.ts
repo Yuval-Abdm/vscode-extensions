@@ -79,10 +79,10 @@ export function applyPolicy(diagnostics: Diagnostic[], text: string, rules: Reco
   return out;
 }
 
-/** Ligne dans du HTML (hors bloc PHP) : un commentaire PHP doit y être entouré de balises. */
+/** Ligne dans du HTML (hors bloc PHP) : un commentaire PHP doit y être entouré de balises ; un fichier commence en HTML. */
 function isHtmlLine(text: string, line: number): boolean {
   const before = text.split('\n').slice(0, line).join('\n');
-  return before.lastIndexOf('?>') > before.lastIndexOf('<?');
+  return before.lastIndexOf('?>') >= before.lastIndexOf('<?');
 }
 
 /** « Ignorer sur cette ligne » et « Ignorer dans ce fichier » pour un diagnostic. */

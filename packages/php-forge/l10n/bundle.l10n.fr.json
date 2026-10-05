@@ -65,5 +65,13 @@
   "A string offset with braces {0}": "Un offset de chaîne entre accolades {0}",
   "{0} is already declared in {1}": "{0} est déjà déclaré dans {1}",
   "Ignore {0} on this line": "Ignorer {0} sur cette ligne",
-  "Ignore {0} in this file": "Ignorer {0} dans ce fichier"
+  "Ignore {0} in this file": "Ignorer {0} dans ce fichier",
+  "PHP Forge baseline": "Baseline PHP Forge",
+  "{0} problems hidden by the baseline": "{0} problèmes masqués par la baseline",
+  "No baseline": "Pas de baseline",
+  "Update": "Mettre à jour",
+  "Create": "Créer",
+  "PHP Forge: analyzing the workspace…": "PHP Forge : analyse du workspace…",
+  "Baseline cleared: all problems are shown again.": "Baseline supprimée : tous les problèmes sont de nouveau affichés.",
+  "Baseline saved: {0} existing problems are hidden.": "Baseline enregistrée : {0} problèmes existants sont masqués."
 }

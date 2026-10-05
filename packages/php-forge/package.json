@@ -97,6 +97,21 @@
         "command": "phpForge.showIncluders",
         "title": "%phpForge.showIncluders.title%",
         "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.createBaseline",
+        "title": "%phpForge.createBaseline.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.updateBaseline",
+        "title": "%phpForge.updateBaseline.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.clearBaseline",
+        "title": "%phpForge.clearBaseline.title%",
+        "category": "PHP Forge"
       }
     ],
     "configuration": {
@@ -233,6 +248,42 @@
           },
           "default": [],
           "markdownDescription": "%phpForge.externalGlobals.description%"
+        },
+        "phpForge.diagnostics.scope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "openFiles"
+          ],
+          "default": "workspace",
+          "markdownDescription": "%phpForge.diagnostics.scope.description%"
+        },
+        "phpForge.diagnostics.rules": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "information",
+              "hint",
+              "off"
+            ]
+          },
+          "markdownDescription": "%phpForge.diagnostics.rules.description%"
+        },
+        "phpForge.libraryPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/vendor/**",
+            "**/PHPExcel/**",
+            "**/Google/Api/**"
+          ],
+          "markdownDescription": "%phpForge.libraryPaths.description%"
         }
       }
     },

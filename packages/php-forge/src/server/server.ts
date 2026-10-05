@@ -1,18 +1,21 @@
 // Serveur LSP PHP Forge : documents ouverts, indexation du workspace (cache + workers), navigation,
 // complétion, aide aux paramètres, indications inline, tokens sémantiques.
 // Aucune exception ne doit faire tomber le serveur : chaque gestionnaire est protégé par `safe`.
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import * as l10n from '@vscode/l10n';
 import { CodeActionKind, createConnection, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
-  INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
-  type IncludeTree, type IndexedParams, type InitOptions, type Settings, type StatusParams,
+  BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
+  type BaselineParams, type BaselineResult, type IncludeTree, type IndexedParams, type InitOptions, type Settings, type StatusParams,
 } from '../shared/protocol.ts';
 import { complete, resolveCompletion } from './completion/complete.ts';
-import { syntaxDiagnostics } from './diagnostics/syntax.ts';
-import { tagDiagnostics } from './diagnostics/tags.ts';
-import { sqlQuoteDiagnostics } from './sql/quotes.ts';
+import { Baseline } from './diagnostics/baseline.ts';
+import { collectDiagnostics, semanticPart, type CollectEnv, type CollectInput } from './diagnostics/collect.ts';
+import { findComposerDirs, isLibrary } from './diagnostics/policy.ts';
+import { WorkspaceDiagnostics } from './diagnostics/workspace.ts';
+import { decode } from './parser/encoding.ts';
 import { shiftDiagnostics } from './diagnostics/shift.ts';
 import { DocumentStore, type OpenDocument } from './documents.ts';
 import { IncludeAnalysis } from './includes/analysis.ts';
@@ -39,7 +42,7 @@ import { Lookup } from './index/lookup.ts';
 import { isIndexable } from './index/scan.ts';
 import { SymbolIndex } from './index/symbolIndex.ts';
 import { applyFileChanges } from './index/updates.ts';
-import { createParser, initParser, type Parser, type WasmPaths } from './parser/parser.ts';
+import { createParser, initParser, parsePhp, type Parser, type WasmPaths } from './parser/parser.ts';
 import { detectPhpVersion } from './settings/phpVersion.ts';
 import { loadStubs } from './stubs/stubs.ts';
 import { TypeResolver } from './types/expand.ts';
@@ -67,6 +70,14 @@ let analysisTimer: ReturnType<typeof setTimeout> | undefined;
 const ANALYSIS_DELAY = 500;
 /** Incrémentée à chaque modification : une analyse en cours devenue obsolète s'interrompt */
 let analysisGeneration = 0;
+/** Règles sémantiques des documents ouverts, recalculées après une pause de frappe */
+const semanticCache = new Map<string, Diagnostic[]>();
+/** Alertes masquées par la baseline, par fichier */
+const hiddenByUri = new Map<string, number>();
+const baselines = new Map<string, Baseline>();
+let composerDirs: string[] = [];
+const workspaceDiagnostics = new WorkspaceDiagnostics();
+let statusTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Gestionnaire protégé : une exception est journalisée et le résultat par défaut renvoyé. */
 function safe<A extends unknown[], R>(fallback: R, handler: (...args: A) => R | Promise<R>): (...args: A) => Promise<R> {
@@ -130,6 +141,10 @@ connection.onInitialized(() => {
   void connection.sendNotification(STATUS_NOTIFICATION, status);
   indexing = reindex();
   scheduleAnalysis(0);
+  loadBaselines();
+  void Promise.all(folders.map(findComposerDirs)).then((dirs) => {
+    composerDirs = dirs.flat();
+  });
 });
 
 connection.onDidChangeConfiguration(
@@ -146,6 +161,10 @@ connection.onDidChangeConfiguration(
     }
     if (next.documentRoot !== previous.documentRoot || next.serverRoot !== previous.serverRoot || next.includes.maxContexts !== previous.includes.maxContexts || next.externalGlobals.join() !== previous.externalGlobals.join()) {
       scheduleAnalysis(0);
+    }
+    if (JSON.stringify(next.diagnostics) !== JSON.stringify(previous.diagnostics) || next.libraryPaths.join() !== previous.libraryPaths.join()) {
+      for (const doc of documents.all()) publish(doc);
+      startWorkspaceDiagnostics();
     }
     void connection.languages.inlayHint.refresh();
   }),
@@ -192,20 +211,111 @@ function includeDiagnosticsOf(doc: OpenDocument): Diagnostic[] {
   return includeDiagnostics(report, doc.symbols, (via) => callerLabel(graph, via));
 }
 
-function diagnosticsOf(doc: OpenDocument): Diagnostic[] {
-  const text = doc.doc.getText();
-  const local = [...syntaxDiagnostics(doc.tree, 100, { parser, text }), ...tagDiagnostics(doc.tree, text), ...sqlQuoteDiagnostics(doc.tree)];
-  if (!includeCache.has(doc.uri)) includeCache.set(doc.uri, includeDiagnosticsOf(doc));
-  return [...local, ...(includeCache.get(doc.uri) ?? [])];
+const rootOf = (fsPath: string) => folders.find((folder) => fsPath.startsWith(folder + path.sep));
+
+function collectEnv(): CollectEnv {
+  return {
+    parser,
+    resolver,
+    analysis,
+    rules: settings.diagnostics.rules,
+    library: (fsPath) => isLibrary(fsPath, folders, settings.libraryPaths, composerDirs),
+    baseline: (fsPath) => {
+      const root = rootOf(fsPath);
+      const baseline = root ? baselines.get(root) : undefined;
+      return root && baseline ? { baseline, rel: path.relative(root, fsPath).split(path.sep).join('/') } : undefined;
+    },
+    includes: (input) => {
+      const doc = documents.get(input.uri);
+      if (!doc) return undefined;
+      if (!includeCache.has(doc.uri)) includeCache.set(doc.uri, includeDiagnosticsOf(doc));
+      return includeCache.get(doc.uri);
+    },
+  };
 }
 
-/** Derniers diagnostics publiés par document ouvert (survol des problèmes de la ligne). */
+function inputOf(doc: OpenDocument): CollectInput {
+  return { uri: doc.uri, fsPath: URI.parse(doc.uri).fsPath, symbols: doc.symbols, tree: doc.tree, text: doc.doc.getText() };
+}
+
+function setHidden(uri: string, hidden: number): void {
+  if (hidden) hiddenByUri.set(uri, hidden);
+  else hiddenByUri.delete(uri);
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => {
+    let total = 0;
+    for (const n of hiddenByUri.values()) total += n;
+    void connection.sendNotification(BASELINE_STATUS_NOTIFICATION, { hidden: total, active: baselines.size > 0 });
+  }, 200);
+}
+
+/** Derniers diagnostics publiés par fichier (survol des problèmes de la ligne). */
 const published = new Map<string, Diagnostic[]>();
 
 function publish(doc: OpenDocument): void {
-  const diagnostics = diagnosticsOf(doc);
-  published.set(doc.uri, diagnostics);
-  void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics });
+  const result = collectDiagnostics(inputOf(doc), collectEnv(), semanticCache.get(doc.uri) ?? []);
+  setHidden(doc.uri, result.hidden);
+  published.set(doc.uri, result.diagnostics);
+  void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics: result.diagnostics });
+}
+
+/** Règles sémantiques d'un document ouvert (après une pause de frappe, à l'ouverture). */
+function updateSemantic(doc: OpenDocument): void {
+  semanticCache.set(doc.uri, semanticPart(inputOf(doc), collectEnv()));
+}
+
+/** Diagnostics d'un fichier du disque (passe du workspace, baseline) ; undefined : ignoré. */
+function diskDiagnostics(uri: string): { raw: Diagnostic[]; diagnostics: Diagnostic[]; text: string } | undefined {
+  const symbols = workspace.get(uri);
+  if (!symbols?.flow) return undefined;
+  const fsPath = URI.parse(uri).fsPath;
+  const env = collectEnv();
+  if (env.library(fsPath)) return undefined;
+  let bytes: Buffer;
+  try {
+    if (statSync(fsPath).size > settings.maxFileSize) return undefined;
+    bytes = readFileSync(fsPath);
+  } catch {
+    return undefined;
+  }
+  const text = decode(bytes);
+  const tree = parsePhp(parser, text);
+  try {
+    const input: CollectInput = { uri, fsPath, symbols, tree, text };
+    const result = collectDiagnostics(input, env, semanticPart(input, env));
+    setHidden(uri, result.hidden);
+    return { raw: result.raw, diagnostics: result.diagnostics, text };
+  } finally {
+    tree.delete();
+  }
+}
+
+function publishUri(uri: string, diagnostics: Diagnostic[]): void {
+  if (diagnostics.length) published.set(uri, diagnostics);
+  else published.delete(uri);
+  void connection.sendDiagnostics({ uri, diagnostics });
+}
+
+/** Passe du workspace (phpForge.diagnostics.scope = workspace), relancée après chaque analyse des inclusions. */
+function startWorkspaceDiagnostics(): void {
+  if (settings.diagnostics.scope !== 'workspace') {
+    workspaceDiagnostics.clear(publishUri);
+    return;
+  }
+  void workspaceDiagnostics.run({
+    files: () => [...workspace.files()].map((f) => f.uri).filter((uri) => uri.startsWith('file:')),
+    skip: (uri) => documents.get(uri) !== undefined,
+    compute: (uri) => diskDiagnostics(uri)?.diagnostics,
+    publish: publishUri,
+  }).catch((err) => connection.console.error(String((err as Error)?.stack ?? err)));
+}
+
+function loadBaselines(): void {
+  baselines.clear();
+  for (const folder of folders) {
+    const baseline = Baseline.load(folder);
+    if (baseline) baselines.set(folder, baseline);
+  }
 }
 
 /** Variables venues des fichiers inclus et des appelants pour un document ouvert (après chaque extraction). */
@@ -247,11 +357,17 @@ async function runAnalysis(): Promise<void> {
   includeCache.clear();
   connection.console.info(`Include analysis: ${graph.size} files in ${Date.now() - started} ms`);
   for (const doc of documents.all()) publish(doc);
+  startWorkspaceDiagnostics();
   void connection.sendRequest('workspace/codeLens/refresh').catch(() => undefined);
 }
 
 connection.onDidOpenTextDocument(
-  safe(undefined, ({ textDocument: d }) => refresh(documents.open(d.uri, d.languageId, d.version, d.text))),
+  safe(undefined, ({ textDocument: d }) => {
+    const doc = documents.open(d.uri, d.languageId, d.version, d.text);
+    workspaceDiagnostics.forget(d.uri);
+    updateSemantic(doc);
+    refresh(doc);
+  }),
 );
 
 connection.onDidChangeTextDocument(
@@ -269,8 +385,15 @@ connection.onDidChangeTextDocument(
         inference.delete(doc.uri);
         try {
           const inferred = documents.inferTypes(doc.uri);
-          if (inferred) workspace.set(inferred.symbols);
-          if (inferred) track(inferred);
+          if (inferred) {
+            workspace.set(inferred.symbols);
+            track(inferred);
+          }
+          const current = documents.get(doc.uri);
+          if (current) {
+            updateSemantic(current);
+            publish(current);
+          }
         } catch (err) {
           connection.console.error(String((err as Error)?.stack ?? err));
         }
@@ -285,13 +408,17 @@ connection.onDidCloseTextDocument(
     inference.delete(textDocument.uri);
     documents.close(textDocument.uri);
     includeCache.delete(textDocument.uri);
+    semanticCache.delete(textDocument.uri);
+    setHidden(textDocument.uri, 0);
     published.delete(textDocument.uri);
-    void connection.sendDiagnostics({ uri: textDocument.uri, diagnostics: [] });
     const uri = URI.parse(textDocument.uri);
     // Retour à la version du disque, si le fichier fait partie du workspace
     const file = uri.scheme === 'file' && folderOf(uri.fsPath) ? indexFileSync(parser, uri.fsPath, settings.maxFileSize) : undefined;
     if (file) workspace.set(file);
     else workspace.delete(textDocument.uri);
+    // Workspace : le fichier fermé garde ses problèmes (version du disque) ; sinon ils disparaissent
+    const disk = settings.diagnostics.scope === 'workspace' ? diskDiagnostics(textDocument.uri)?.diagnostics : undefined;
+    publishUri(textDocument.uri, disk ?? []);
   }),
 );
 
@@ -374,7 +501,7 @@ connection.onDocumentHighlight(
   }),
 );
 
-connection.onCodeAction(safe([], ({ textDocument, context }) => quickFixes(textDocument.uri, context.diagnostics)));
+connection.onCodeAction(safe([], ({ textDocument, context }) => quickFixes(textDocument.uri, context.diagnostics, docAt(textDocument.uri)?.doc.getText())));
 
 connection.onFoldingRanges(
   safe([], ({ textDocument }) => {
@@ -424,6 +551,45 @@ connection.onRequest(
     includedBy: analysis ? includerLinks(analysis.graph, uri) : [],
     includes: analysis ? includeLinks(analysis.graph, uri) : [],
   })),
+);
+
+connection.onRequest(
+  BASELINE_REQUEST,
+  safe({ files: 0, entries: 0 } as BaselineResult, async ({ action }: BaselineParams): Promise<BaselineResult> => {
+    await indexing;
+    if (action === 'clear') {
+      for (const folder of folders) Baseline.clear(folder);
+      baselines.clear();
+    } else {
+      baselines.clear();
+      const byRoot = new Map<string, { rel: string; diagnostics: Diagnostic[]; text: string }[]>();
+      const add = (fsPath: string, diagnostics: Diagnostic[], text: string) => {
+        const root = rootOf(fsPath);
+        if (!root || !diagnostics.length) return;
+        const list = byRoot.get(root) ?? [];
+        list.push({ rel: path.relative(root, fsPath).split(path.sep).join('/'), diagnostics, text });
+        byRoot.set(root, list);
+      };
+      for (const file of workspace.files()) {
+        if (!file.uri.startsWith('file:')) continue;
+        const doc = documents.get(file.uri);
+        if (doc) {
+          const result = collectDiagnostics(inputOf(doc), collectEnv(), semanticCache.get(doc.uri) ?? []);
+          add(URI.parse(doc.uri).fsPath, result.raw, doc.doc.getText());
+        } else {
+          const disk = diskDiagnostics(file.uri);
+          if (disk) add(URI.parse(file.uri).fsPath, disk.raw, disk.text);
+        }
+      }
+      for (const folder of folders) Baseline.from(byRoot.get(folder) ?? []).save(folder);
+      loadBaselines();
+    }
+    for (const doc of documents.all()) publish(doc);
+    startWorkspaceDiagnostics();
+    let entries = 0;
+    for (const baseline of baselines.values()) entries += baseline.size;
+    return { files: baselines.size, entries };
+  }),
 );
 
 connection.listen();

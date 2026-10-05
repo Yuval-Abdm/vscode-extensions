@@ -1,4 +1,5 @@
 // Contrat client ↔ serveur : options d'initialisation, réglages, requêtes et notifications propres à PHP Forge.
+import type { Level } from '../server/diagnostics/policy.ts';
 import type { IndexStats } from '../server/index/indexer.ts';
 
 export interface InlayHintSettings {
@@ -22,6 +23,14 @@ export interface Settings {
   includes: { maxContexts: number };
   /** Variables définies par l'environnement (auto_prepend_file, framework…) */
   externalGlobals: string[];
+  diagnostics: {
+    /** Niveau par code de diagnostic ; « off » : désactivé */
+    rules: Record<string, Level>;
+    /** Documents ouverts seulement, ou tout le workspace en arrière-plan */
+    scope: 'openFiles' | 'workspace';
+  };
+  /** Globs des dossiers librairie : indexés, jamais diagnostiqués */
+  libraryPaths: string[];
 }
 
 export const DEFAULT_STUBS = [
@@ -42,6 +51,8 @@ export const DEFAULT_SETTINGS: Settings = {
   serverRoot: '',
   includes: { maxContexts: 64 },
   externalGlobals: [],
+  diagnostics: { rules: {}, scope: 'workspace' },
+  libraryPaths: ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
 };
 
 /** Réglages complets à partir de valeurs partielles (options d'initialisation, changement de configuration). */
@@ -51,6 +62,7 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
     ...partial,
     inlayHints: { ...DEFAULT_SETTINGS.inlayHints, ...partial?.inlayHints },
     includes: { ...DEFAULT_SETTINGS.includes, ...partial?.includes },
+    diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...partial?.diagnostics },
   };
 }
 
@@ -98,4 +110,24 @@ export const INCLUDE_TREE_REQUEST = 'phpForge/includeTree';
 export interface IncludeTree {
   includedBy: IncludeLink[];
   includes: IncludeLink[];
+}
+
+/** Crée, met à jour ou supprime la baseline des alertes existantes. */
+export const BASELINE_REQUEST = 'phpForge/baseline';
+
+export interface BaselineParams {
+  action: 'create' | 'update' | 'clear';
+}
+
+export interface BaselineResult {
+  files: number;
+  entries: number;
+}
+
+/** Alertes masquées par la baseline (barre d'état). */
+export const BASELINE_STATUS_NOTIFICATION = 'phpForge/baselineStatus';
+
+export interface BaselineStatus {
+  hidden: number;
+  active: boolean;
 }

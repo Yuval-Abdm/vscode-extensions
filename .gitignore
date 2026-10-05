@@ -8,3 +8,4 @@ dist/
 .cache/
 bench-results/
 .superpowers/
+packages/php-forge/test/fixtures/**/.vscode/

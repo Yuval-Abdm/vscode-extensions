@@ -1,7 +1,7 @@
 // Serveur complet lancé comme par VS Code (stdio) sur le projet de test : indexation, cache, requêtes, robustesse.
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -21,6 +21,7 @@ interface Server {
   diagnostics: Map<string, { code: string; range: { start: { line: number } } }[]>;
   statuses: StatusParams[];
   /** Toutes les publications, avec la version du document */
+  baseline: { hidden: number }[];
   history: { uri: string; version?: number; diagnostics: { code: string; range: { start: { line: number } } }[] }[];
 }
 
@@ -29,6 +30,10 @@ async function startServer(storagePath: string): Promise<Server> {
   const connection = createMessageConnection(new StreamMessageReader(child.stdout!), new StreamMessageWriter(child.stdin!));
   const diagnostics: Server['diagnostics'] = new Map();
   const history: Server['history'] = [];
+  const baseline: Server['baseline'] = [];
+  connection.onNotification('phpForge/baselineStatus', (params) => {
+    baseline.push(params as { hidden: number });
+  });
   const indexed = new Promise<IndexedParams>((resolve) => connection.onNotification('phpForge/indexed', resolve));
   connection.onNotification('textDocument/publishDiagnostics', (params) => {
     const p = params as { uri: string; diagnostics: Server['diagnostics'] extends Map<string, infer D> ? D : never };
@@ -49,7 +54,7 @@ async function startServer(storagePath: string): Promise<Server> {
     initializationOptions: { storagePath },
   });
   await connection.sendNotification('initialized', {});
-  return { child, connection, indexed: await indexed, diagnostics, statuses, history };
+  return { child, connection, indexed: await indexed, diagnostics, statuses, history, baseline };
 }
 
 async function stopServer(server: Server): Promise<void> {
@@ -78,10 +83,13 @@ describe('serveur LSP', () => {
   before(async () => {
     server = await startServer(storage);
   });
-  after(async () => stopServer(server));
+  after(async () => {
+    await stopServer(server);
+    rmSync(path.join(fixture, '.vscode'), { recursive: true, force: true });
+  });
 
   it('indexe le projet et écrit le cache', () => {
-    assert.deepEqual({ ...server.indexed.stats, ms: 0 }, { files: 8, parsed: 8, fromCache: 0, skipped: 0, syntaxErrors: 1, ms: 0 });
+    assert.deepEqual({ ...server.indexed.stats, ms: 0 }, { files: 9, parsed: 9, fromCache: 0, skipped: 0, syntaxErrors: 1, ms: 0 });
     assert.equal(readdirSync(storage).filter((f) => f.endsWith('.json.gz')).length, 1);
   });
 
@@ -153,6 +161,24 @@ describe('serveur LSP', () => {
     assert.deepEqual(includers.map((i) => i.label).sort(), ['pages/about.php:2', 'pages/home.php:3']);
   });
 
+  it('fichier non ouvert : diagnostics publiés par la passe du workspace', async () => {
+    const found = await waitFor(() => server.diagnostics.get(uri('includes/legacy.php'))?.find((d) => d.code === 'argument-count'), 'argument-count');
+    assert.equal(found.range.start.line, 6);
+  });
+
+  it('niveau par règle et baseline', async () => {
+    await server.connection.sendNotification('workspace/didChangeConfiguration', { settings: { phpForge: { diagnostics: { rules: { 'argument-count': 'off' }, scope: 'workspace' } } } });
+    await waitFor(() => (server.diagnostics.get(uri('includes/legacy.php'))?.some((d) => d.code === 'argument-count') ? undefined : true), 'règle désactivée');
+    await server.connection.sendNotification('workspace/didChangeConfiguration', { settings: { phpForge: {} } });
+    await waitFor(() => server.diagnostics.get(uri('includes/legacy.php'))?.find((d) => d.code === 'argument-count'), 'règle réactivée');
+    const result = (await server.connection.sendRequest('phpForge/baseline', { action: 'create' })) as { entries: number };
+    assert.ok(result.entries > 0);
+    await waitFor(() => (server.diagnostics.get(uri('includes/legacy.php'))?.length ? undefined : true), 'masqué par la baseline');
+    await waitFor(() => (server.baseline.at(-1)?.hidden ? true : undefined), 'alertes masquées dans la barre d’état');
+    await server.connection.sendRequest('phpForge/baseline', { action: 'clear' });
+    await waitFor(() => server.diagnostics.get(uri('includes/legacy.php'))?.find((d) => d.code === 'argument-count'), 'baseline supprimée');
+  });
+
   it('« ; » manquant signalé, avec sa correction rapide', async () => {
     await open(server, 'semicolon.php', '<?php\n$a = 1\n$b = 2;\n');
     const diagnostics = await waitFor(() => server.diagnostics.get(uri('semicolon.php')), 'diagnostics');
@@ -185,7 +211,8 @@ describe('serveur LSP', () => {
     const actions = (await server.connection.sendRequest('textDocument/codeAction', {
       textDocument: { uri: uri('tags.php') }, range: diagnostics[0].range, context: { diagnostics },
     })) as { edit: { changes: Record<string, { newText: string }[]> } }[];
-    assert.deepEqual(actions.map((a) => a.edit.changes[uri('tags.php')][0].newText), ['<?=', '<?php echo ']);
+    // Corrections du diagnostic, puis « ignorer » : la ligne est dans du HTML, le commentaire est entouré de balises PHP
+    assert.deepEqual(actions.map((a) => a.edit.changes[uri('tags.php')][0].newText), ['<?=', '<?php echo ', '<?php // @php-forge-ignore useless-output ?>\n', '<?php /** @php-forge-ignore-file useless-output */ ?>\n']);
   });
 
   it('document non ouvert ou inconnu : réponse vide, le serveur continue', async () => {
@@ -245,7 +272,7 @@ describe('serveur LSP', () => {
   it('second démarrage : tout vient du cache', async () => {
     const second = await startServer(storage);
     try {
-      assert.equal(second.indexed.stats.fromCache, 8);
+      assert.equal(second.indexed.stats.fromCache, 9);
       assert.equal(second.indexed.stats.parsed, 0);
     } finally {
       await stopServer(second);

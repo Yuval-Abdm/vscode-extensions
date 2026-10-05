@@ -18,5 +18,11 @@
   "phpForge.externalGlobals.description": "Variables defined outside the analyzed code (`auto_prepend_file`, framework), never reported as undefined, e.g. `$config`.",
   "phpForge.showIncludeTree.title": "Show Include Tree",
   "phpForge.showIncluders.title": "Show Files Including This File",
-  "phpForge.includeTree.name": "Include Tree"
+  "phpForge.includeTree.name": "Include Tree",
+  "phpForge.diagnostics.scope.description": "`workspace`: every file of the project is analyzed in the background and its problems are listed; `openFiles`: only open files.",
+  "phpForge.diagnostics.rules.description": "Level of each diagnostic, by code: `error`, `warning`, `information`, `hint` or `off`, e.g. `{ \"undefined-variable\": \"error\", \"unused-use\": \"off\" }`.",
+  "phpForge.libraryPaths.description": "Globs of library folders: indexed (completion, navigation) but never diagnosed. Folders that contain their own `composer.json` are libraries too.",
+  "phpForge.createBaseline.title": "Create Baseline (Hide Existing Problems)",
+  "phpForge.updateBaseline.title": "Update Baseline",
+  "phpForge.clearBaseline.title": "Clear Baseline"
 }
