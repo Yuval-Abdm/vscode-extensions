@@ -41,5 +41,15 @@
   "Included by": "Inclus par",
   "Includes": "Inclut",
   "Open": "Ouvrir",
-  "Files that include this file": "Fichiers qui incluent ce fichier"
+  "Files that include this file": "Fichiers qui incluent ce fichier",
+  "Call to undefined function {0}()": "Appel d'une fonction inexistante : {0}()",
+  "Undefined constant {0}": "Constante inexistante : {0}",
+  "Class {0} does not exist": "La classe {0} n'existe pas",
+  "{0} is not available in PHP {1} (added in PHP {2})": "{0} n'existe pas en PHP {1} (ajouté en PHP {2})",
+  "{0} was removed in PHP {1}": "{0} a été supprimé en PHP {1}",
+  "{0} is deprecated since PHP {1}": "{0} est déprécié depuis PHP {1}",
+  "Method {0}::{1}() does not exist": "La méthode {0}::{1}() n'existe pas",
+  "Property {0}::${1} does not exist": "La propriété {0}::${1} n'existe pas",
+  "Too few arguments to {0}: {1} given, at least {2} expected": "Pas assez d'arguments pour {0} : {1} donnés, au moins {2} attendus",
+  "Too many arguments to {0}: {1} given, at most {2} expected": "Trop d'arguments pour {0} : {1} donnés, au plus {2} attendus"
 }
