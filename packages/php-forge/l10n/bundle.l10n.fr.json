@@ -73,5 +73,9 @@
   "Create": "Créer",
   "PHP Forge: analyzing the workspace…": "PHP Forge : analyse du workspace…",
   "Baseline cleared: all problems are shown again.": "Baseline supprimée : tous les problèmes sont de nouveau affichés.",
-  "Baseline saved: {0} existing problems are hidden.": "Baseline enregistrée : {0} problèmes existants sont masqués."
+  "Baseline saved: {0} existing problems are hidden.": "Baseline enregistrée : {0} problèmes existants sont masqués.",
+  "Built-in PHP symbols cannot be renamed": "Les symboles natifs de PHP ne peuvent pas être renommés",
+  "Symbols declared in a library cannot be renamed": "Les symboles déclarés dans une librairie ne peuvent pas être renommés",
+  "This element cannot be renamed": "Cet élément ne peut pas être renommé",
+  "{0} is not a valid name": "{0} n'est pas un nom valide"
 }

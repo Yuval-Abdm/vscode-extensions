@@ -4,7 +4,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import * as l10n from '@vscode/l10n';
-import { CodeActionKind, createConnection, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
+import { CodeActionKind, createConnection, ErrorCodes, ResponseError, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
   BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
@@ -25,6 +25,7 @@ import { includeDefinition, includeLinks, includerLinks, includersLens } from '.
 import { quickFixes } from './features/codeActions.ts';
 import { findReferences, targetAt, type RefEnv, type SourceFile } from './refactor/references.ts';
 import { variableReferences, variableTarget } from './refactor/variables.ts';
+import { prepareRename, renameAt } from './refactor/rename.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
@@ -129,6 +130,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       signatureHelpProvider: { triggerCharacters: ['(', ','], retriggerCharacters: [','] },
       implementationProvider: true,
       referencesProvider: true,
+      renameProvider: { prepareProvider: true },
       documentHighlightProvider: true,
       foldingRangeProvider: true,
       selectionRangeProvider: true,
@@ -657,5 +659,28 @@ connection.onReferences(
     }
   }),
 );
+
+const libraryUri = (uri: string) => uri.startsWith('file:') && isLibrary(URI.parse(uri).fsPath, folders, settings.libraryPaths, composerDirs);
+
+/** Renommage : le refus métier remonte à VS Code (message affiché), les autres erreurs sont journalisées. */
+function renameHandler<P extends { textDocument: { uri: string } }, R>(run: (file: SourceFile, params: P) => R | { error: string }) {
+  return (params: P): R | ResponseError<void> | null => {
+    const source = sourceOf(params.textDocument.uri);
+    if (!source) return null;
+    try {
+      const result = run(source.file, params);
+      if (result && typeof result === 'object' && 'error' in result) return new ResponseError(ErrorCodes.InvalidRequest, (result as { error: string }).error);
+      return result as R;
+    } catch (err) {
+      connection.console.error(String((err as Error)?.stack ?? err));
+      return null;
+    } finally {
+      source.release();
+    }
+  };
+}
+
+connection.onPrepareRename(renameHandler((file, { position }) => prepareRename(refEnv(), file, position, libraryUri)));
+connection.onRenameRequest(renameHandler((file, { position, newName }) => renameAt(refEnv(), file, position, newName, libraryUri)));
 
 connection.listen();

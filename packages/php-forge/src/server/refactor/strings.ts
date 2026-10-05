@@ -31,6 +31,13 @@ export function stringReference(env: RefEnv, file: SourceFile, target: Target, i
   const offset = index - string.startIndex;
   const range: Range = { start: { line: start.line, character: start.character + offset }, end: { line: start.line, character: start.character + offset + target.name.length } };
   if (target.kind === 'function') return functionString(env, string, value, target) ? range : undefined;
+  if (target.kind === 'class') {
+    // « Lib\User::make » : nom complet (une chaîne n'est jamais relative au namespace), occurrence dans la partie classe
+    const pair = /^\\?([\w\\]+)::\w+$/.exec(value);
+    const classEnd = value.indexOf('::');
+    if (!pair || offset - 1 + target.name.length !== classEnd) return undefined;
+    return target.declarations.some((d) => same(d.symbol.fqn, pair[1])) ? range : undefined;
+  }
   if (target.kind === 'method') {
     const pair = /^\\?([\w\\]+)::(\w+)$/.exec(value);
     if (pair && same(pair[2], target.name)) {
