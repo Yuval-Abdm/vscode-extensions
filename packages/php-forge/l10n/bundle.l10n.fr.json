@@ -110,5 +110,13 @@
   "PHP Forge: reading the SQL schema of {0}…": "PHP Forge : lecture du schéma SQL de {0}…",
   "SQL schema refreshed: {0} tables from {1}.": "Schéma SQL mis à jour : {0} tables de {1}.",
   "Could not read the SQL schema: {0}. The previous schema is kept.": "Impossible de lire le schéma SQL : {0}. L'ancien schéma est conservé.",
-  "Project whose database schema to read": "Projet dont lire le schéma de la base"
+  "Project whose database schema to read": "Projet dont lire le schéma de la base",
+  "Possible SQL injection: {0}": "Injection SQL possible : {0}",
+  "Request data written to the page without escaping (XSS): {0}": "Donnée de la requête écrite dans la page sans échappement (XSS) : {0}",
+  "Possible command injection: {0}": "Injection de commande possible : {0}",
+  "File inclusion controlled by the request: {0}": "Inclusion de fichier contrôlée par la requête : {0}",
+  "unserialize() of request data: {0}": "unserialize() d'une donnée de la requête : {0}",
+  "Redirect to an address controlled by the request: {0}": "Redirection vers une adresse contrôlée par la requête : {0}",
+  "File path controlled by the request: {0}": "Chemin de fichier contrôlé par la requête : {0}",
+  "{0} (line {1})": "{0} (ligne {1})"
 }
