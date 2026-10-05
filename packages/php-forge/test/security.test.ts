@@ -212,6 +212,32 @@ describe('sécurité : revue 0.8', () => {
     assert.deepEqual(await found('<?php\necho param("a");\n', { loadFunction, readsRequest: () => false }), []);
   });
 
+  it('valeur échappée dans un littéral SQL (LIKE \'%…%\') : sûre ; hors littéral : signalée', async () => {
+    const code = [
+      '<?php',
+      '$q = mysql_real_escape_string($_GET["q"]);',
+      'mysql_query("SELECT * FROM t WHERE nom LIKE \'%$q%\'");',
+      'mysql_query("SELECT * FROM t WHERE nom LIKE \'%" . $q . "%\' AND a = \'x\'");',
+      'mysql_query("SELECT * FROM t WHERE a = \'x\' AND id = " . $q);',
+    ].join('\n');
+    assert.deepEqual(await found(code), ['4:sql-injection']);
+  });
+
+  it('gardes sur $_GET[…] directement, et combinées par || (sortie) ou && (branche)', async () => {
+    const code = [
+      '<?php',
+      'if (!is_numeric($_GET["id"])) die();',
+      'mysql_query("SELECT * FROM t WHERE id = " . $_GET["id"]);',
+      '$n = $_GET["n"];',
+      'if (!isset($n) || !is_numeric($n)) { exit; }',
+      'mysql_query("SELECT * FROM t WHERE n = $n");',
+      '$p = $_GET["p"];',
+      'if (isset($p) && ctype_digit($p)) { echo $p; }',
+      'echo $p;',
+    ].join('\n');
+    assert.deepEqual(await found(code), ['8:xss']);
+  });
+
   it('@, match, die / exit', async () => {
     const code = [
       '<?php',

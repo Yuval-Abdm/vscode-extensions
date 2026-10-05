@@ -338,11 +338,11 @@ class Analyzer {
   #if(node: Node): void {
     const condition = node.childForFieldName('condition');
     this.#eval(condition);
-    const guard = guarded(condition);
+    const guard = guards(condition);
     const before = this.#state;
     // Branche « alors » : la variable gardée est sûre ; garde niée (« if (!is_numeric($x)) exit; ») : sûre après
     this.#state = before.clone();
-    if (guard && !guard.negated) this.#state.vars.set(guard.name, undefined);
+    for (const name of guard.positive) this.#state.vars.set(name, undefined);
     const body = node.childForFieldName('body');
     if (body) this.#statement(body);
     const branches = [this.#state];
@@ -354,14 +354,14 @@ class Analyzer {
         this.#eval(alt.childForFieldName('condition'));
       } else {
         exhaustive = true;
-        if (guard?.negated) this.#state.vars.set(guard.name, undefined);
+        for (const name of guard.negated) this.#state.vars.set(name, undefined);
       }
       const altBody = alt.childForFieldName('body');
       if (altBody) this.#statement(altBody);
       branches.push(this.#state);
     }
     const after = exhaustive ? branches[0].clone() : before.clone();
-    if (!exhaustive && guard?.negated && exits) after.vars.set(guard.name, undefined);
+    if (!exhaustive && exits) for (const name of guard.negated) after.vars.set(name, undefined);
     for (const b of exhaustive ? branches.slice(1) : branches) {
       if (b === branches[0] && exits) continue;
       after.merge(b);
@@ -561,6 +561,8 @@ class Analyzer {
     this.#eval(index);
     if (base?.type === 'variable_name' && SUPERGLOBALS.has(base.text)) {
       const key = keyOf(index);
+      // Superglobale gardée (« if (!is_numeric($_GET['id'])) die(); ») : propre
+      if (key !== undefined && this.#state.vars.has(`${base.text}[${key}]`)) return this.#state.vars.get(`${base.text}[${key}]`);
       if (base.text === '$_SERVER' && !(key && SERVER_KEYS.test(key))) return undefined;
       return { steps: [{ label: node.text.length <= 60 ? node.text : `${base.text}[…]`, line: node.startPosition.row }], safe: new Set() };
     }
@@ -575,13 +577,13 @@ class Analyzer {
   /** Concaténation ou chaîne interpolée : une donnée échappée pour le SQL entre quotes est sûre pour le SQL. */
   #concat(parts: Node[]): Taint | undefined {
     const values = parts.map((p) => (p.type === 'string_content' || p.type === 'escape_sequence' ? undefined : this.#eval(p)));
-    const texts = parts.map((p, i) => (values[i] || !isLiteral(p) ? undefined : literalText(p)));
+    // Texte SQL autour de chaque morceau : les valeurs calculées comptent comme du texte sans guillemet
+    const texts = parts.map((p, i) => (values[i] || !isLiteral(p) ? 'x' : (literalText(p) ?? 'x')));
     const effective = values.map((value, i) => {
       if (!value?.quoted || value.safe.has('sql')) return value;
-      const before = texts.slice(0, i).reverse().find((t) => t !== undefined);
-      const after = texts.slice(i + 1).find((t) => t !== undefined);
-      const quote = before?.match(/['"]\s*$/)?.[0].trim();
-      return quote && after?.trimStart().startsWith(quote) ? { ...value, safe: new Set([...value.safe, 'sql' as SinkKind]) } : value;
+      // Dans un littéral SQL ouvert avant (« LIKE '% ») et refermé après (« %' ») : l'échappement protège
+      const quote = openQuote(texts.slice(0, i).join(''));
+      return quote && texts.slice(i + 1).join('').includes(quote) ? { ...value, safe: new Set([...value.safe, 'sql' as SinkKind]) } : value;
     });
     return union(...effective);
   }
@@ -814,6 +816,20 @@ function literalText(node: Node | undefined): string | undefined {
   return undefined;
 }
 
+/** Guillemet SQL laissé ouvert à la fin du texte (« \\' » et « '' » ne ferment pas). */
+function openQuote(text: string): string | undefined {
+  let quote: string | undefined;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === '\\') i++;
+      else if (c === quote && text[i + 1] === quote) i++;
+      else if (c === quote) quote = undefined;
+    } else if (c === "'" || c === '"') quote = c;
+  }
+  return quote;
+}
+
 function keyOf(index: Node | undefined): string | undefined {
   return literalText(index);
 }
@@ -825,25 +841,48 @@ function isLocation(arg: Node): boolean {
 }
 
 /** Garde d'une condition : `is_numeric($x)`, `in_array($x, [...], true)`, éventuellement niée. */
-function guarded(condition: Node | null): { name: string; negated: boolean } | undefined {
-  let node = condition;
-  let negated = false;
-  while (node?.type === 'parenthesized_expression') node = node.namedChildren[0];
-  if (node?.type === 'unary_op_expression' && node.child(0)?.type === '!') {
-    negated = true;
-    node = node.namedChildren[0];
-    while (node?.type === 'parenthesized_expression') node = node.namedChildren[0];
-  }
-  if (node?.type !== 'function_call_expression') return undefined;
-  const name = lower(node.childForFieldName('function'));
-  const args = argumentsOf(node);
-  if (args[0]?.type !== 'variable_name') return undefined;
-  if (GUARDS.has(name)) return { name: args[0].text, negated };
-  if (name === 'in_array' && args[1]?.type === 'array_creation_expression' && args[2]?.text.toLowerCase() === 'true') {
-    const literal = args[1].namedChildren.every((e) => e.namedChildren.every((c) => isLiteral(c) || c.type === 'integer'));
-    return literal ? { name: args[0].text, negated } : undefined;
+/** Nom suivi par l'état : variable, ou superglobale à clé littérale (« $_GET[id] »). */
+function guardKey(node: Node | undefined): string | undefined {
+  if (node?.type === 'variable_name') return node.text;
+  if (node?.type === 'subscript_expression' && SUPERGLOBALS.has(node.namedChildren[0]?.text ?? '')) {
+    const key = keyOf(node.namedChildren[1]);
+    return key === undefined ? undefined : `${node.namedChildren[0].text}[${key}]`;
   }
   return undefined;
+}
+
+/**
+ * Gardes d'une condition : `is_numeric($x)`, `in_array($x, [...], true)` (aussi sur `$_GET['x']`). `positive` : sûres
+ * dans la branche « alors » (combinées par &&) ; `negated` : sûres dans le « sinon » et après une branche « alors »
+ * qui sort (« if (!isset($x) || !is_numeric($x)) exit; », combinées par ||).
+ */
+function guards(condition: Node | null | undefined): { positive: string[]; negated: string[] } {
+  let node = condition;
+  while (node?.type === 'parenthesized_expression') node = node.namedChildren[0];
+  if (!node) return { positive: [], negated: [] };
+  if (node.type === 'binary_expression') {
+    const operator = node.childForFieldName('operator')?.type.toLowerCase();
+    const left = guards(node.childForFieldName('left'));
+    const right = guards(node.childForFieldName('right'));
+    if (operator === '&&' || operator === 'and') return { positive: [...left.positive, ...right.positive], negated: [] };
+    if (operator === '||' || operator === 'or') return { positive: [], negated: [...left.negated, ...right.negated] };
+    return { positive: [], negated: [] };
+  }
+  if (node.type === 'unary_op_expression' && node.child(0)?.type === '!') {
+    const inner = guards(node.namedChildren[0]);
+    return { positive: inner.negated, negated: inner.positive };
+  }
+  if (node.type !== 'function_call_expression') return { positive: [], negated: [] };
+  const name = lower(node.childForFieldName('function'));
+  const args = argumentsOf(node);
+  const key = guardKey(args[0]);
+  if (!key) return { positive: [], negated: [] };
+  if (GUARDS.has(name)) return { positive: [key], negated: [] };
+  if (name === 'in_array' && args[1]?.type === 'array_creation_expression' && args[2]?.text.toLowerCase() === 'true') {
+    const literal = args[1].namedChildren.every((e) => e.namedChildren.every((c) => isLiteral(c) || c.type === 'integer'));
+    return literal ? { positive: [key], negated: [] } : { positive: [], negated: [] };
+  }
+  return { positive: [], negated: [] };
 }
 
 /** Bloc qui se termine toujours par exit, die, return ou throw. */
