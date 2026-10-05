@@ -122,7 +122,7 @@ for (const root of corpus) {
   const { schema, files: sqlFiles } = loadSchema({ folders: [root], globs: DEFAULT_SETTINGS.sql.schema, exclude: DEFAULT_SETTINGS.exclude });
   const sqlSchemaMs = Math.round(performance.now() - schemaStart);
   const env: CollectEnv = {
-    schema,
+    schema: () => schema,
     parser,
     resolver: new TypeResolver(new Lookup(index, stubs), process.env.PHP_FORGE_VERSION ?? '7.3'),
     analysis,

@@ -218,14 +218,17 @@ async function showIncluders(uri: string): Promise<void> {
 
 /**
  * Lit le schéma de la base (phpForge.sql.connection, mot de passe dans le SecretStorage) et l'écrit dans
- * `.vscode/php-forge-schema.json` du premier dossier : le serveur le relit. Échec : l'ancien schéma est conservé.
+ * `.vscode/php-forge-schema.json` du dossier (choisi en multi-root) : le serveur le relit. Échec : l'ancien schéma est conservé.
  */
 async function refreshSqlSchema(context: vscode.ExtensionContext): Promise<void> {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (!folder) {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (!folders.length) {
     void vscode.window.showWarningMessage(vscode.l10n.t('Open a folder to refresh the SQL schema.'));
     return;
   }
+  // Un schéma par dossier : en multi-root, choisir le projet
+  const folder = folders.length > 1 ? await vscode.window.showWorkspaceFolderPick({ placeHolder: vscode.l10n.t('Project whose database schema to read') }) : folders[0];
+  if (!folder) return;
   const config = vscode.workspace.getConfiguration('phpForge', folder.uri).get<Partial<ConnectionSettings>>('sql.connection') ?? {};
   const missing = missingFields(config);
   if (missing.length) {

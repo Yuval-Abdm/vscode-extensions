@@ -86,6 +86,12 @@ function sqlFiles(folder: string, sources: SchemaSources): string[] {
   return out.sort();
 }
 
+/** Un schéma par dossier du workspace : deux projets ouverts ensemble ne mélangent pas leurs tables. */
+export function loadSchemas(sources: SchemaSources): Map<string, SchemaLoad> {
+  return new Map(sources.folders.map((folder) => [folder, loadSchema({ ...sources, folders: [folder] })]));
+}
+
+/** Schéma des dossiers donnés, réunis (un seul dossier en pratique : mesure, tests). */
 export function loadSchema(sources: SchemaSources): SchemaLoad {
   const schema = new Schema();
   const errors: string[] = [];

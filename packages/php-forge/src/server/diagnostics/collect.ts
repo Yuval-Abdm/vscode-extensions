@@ -35,8 +35,8 @@ export interface CollectEnv {
   baseline: (fsPath: string) => { baseline: Baseline; rel: string } | undefined;
   /** Diagnostics d'inclusion fournis par l'appelant (documents ouverts : décalés au fil de la frappe) */
   includes?: (input: CollectInput) => Diagnostic[] | undefined;
-  /** Schéma SQL du workspace (colonnes et tables inconnues) */
-  schema?: Schema;
+  /** Schéma SQL du dossier d'un fichier (colonnes et tables inconnues) */
+  schema?: (fsPath: string) => Schema | undefined;
 }
 
 const byPosition = (a: Diagnostic, b: Diagnostic) => a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character;
@@ -48,7 +48,7 @@ export function semanticPart(input: CollectInput, env: CollectEnv): Diagnostic[]
     ...semanticDiagnostics(input.symbols, input.tree, env.resolver),
     ...codeDiagnostics(input.tree),
     ...deprecatedSyntax(input.tree, input.text, env.resolver.phpVersion),
-    ...sqlDiagnostics(input.tree, input.text, env.schema),
+    ...sqlDiagnostics(input.tree, input.text, env.schema?.(input.fsPath)),
   ];
 }
 

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import { sqlDiagnostics } from '../src/server/sql/diagnostics.ts';
-import { globRoots, isSchemaSource, loadSchema, SCHEMA_CACHE } from '../src/server/sql/sources.ts';
+import { globRoots, isSchemaSource, loadSchema, loadSchemas, SCHEMA_CACHE } from '../src/server/sql/sources.ts';
 import { parseSqlFile } from '../src/server/sql/schema.ts';
 import { parse } from './helpers.ts';
 
@@ -110,6 +110,25 @@ describe('schéma SQL du workspace', () => {
     assert.ok(errors.some((e) => e.startsWith('sql/schema.sql') && e.includes('total')), errors.join());
     assert.deepEqual(globRoots(['sql/**/*.sql', 'sql/a/*.sql', 'migrations/**/*.sql']), ['migrations', 'sql']);
     assert.deepEqual(globRoots(['sql/**/*.sql', '**/schema.sql']), ['']);
+  });
+
+  it('multi-root : un schéma par dossier (le cache de la base de a n’active pas les tables inconnues dans b)', () => {
+    const a = mkdtempSync(path.join(tmpdir(), 'php-forge-a-'));
+    const b = mkdtempSync(path.join(tmpdir(), 'php-forge-b-'));
+    try {
+      mkdirSync(path.join(a, '.vscode'));
+      writeFileSync(path.join(a, SCHEMA_CACHE), JSON.stringify({ database: 'a', refreshed: '', tables: [{ name: 'users', columns: [{ name: 'id', type: 'int', nullable: false }] }] }));
+      mkdirSync(path.join(b, 'sql'));
+      writeFileSync(path.join(b, 'sql/schema.sql'), 'CREATE TABLE orders (id int);\n');
+      const loads = loadSchemas({ folders: [a, b], globs: ['sql/**/*.sql'], exclude: [] });
+      assert.equal(loads.get(a)!.schema.fromDatabase, true);
+      assert.equal(loads.get(a)!.schema.table('orders'), undefined);
+      assert.equal(loads.get(b)!.schema.fromDatabase, false);
+      assert.equal(loads.get(b)!.schema.table('users'), undefined);
+    } finally {
+      rmSync(a, { recursive: true, force: true });
+      rmSync(b, { recursive: true, force: true });
+    }
   });
 
   it('fichiers qui alimentent le schéma', () => {

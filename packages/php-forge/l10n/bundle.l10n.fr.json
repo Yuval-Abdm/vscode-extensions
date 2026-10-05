@@ -109,5 +109,6 @@
   "Password of {0} (kept in VS Code secret storage)": "Mot de passe de {0} (gardé dans le stockage sécurisé de VS Code)",
   "PHP Forge: reading the SQL schema of {0}…": "PHP Forge : lecture du schéma SQL de {0}…",
   "SQL schema refreshed: {0} tables from {1}.": "Schéma SQL mis à jour : {0} tables de {1}.",
-  "Could not read the SQL schema: {0}. The previous schema is kept.": "Impossible de lire le schéma SQL : {0}. L'ancien schéma est conservé."
+  "Could not read the SQL schema: {0}. The previous schema is kept.": "Impossible de lire le schéma SQL : {0}. L'ancien schéma est conservé.",
+  "Project whose database schema to read": "Projet dont lire le schéma de la base"
 }

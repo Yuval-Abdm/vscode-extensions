@@ -30,7 +30,7 @@ describe('projet de référence SQL', async () => {
     rules: {},
     library: () => false,
     baseline: () => undefined,
-    schema,
+    schema: () => schema,
   };
 
   it('schéma : deux fichiers, factures partielle', () => {

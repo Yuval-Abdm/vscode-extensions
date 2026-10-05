@@ -29,7 +29,7 @@ import { SourceCache } from './refactor/sourceCache.ts';
 import { formatEdits, formatOptions, onTypeRange, onTypeWindow } from './format/format.ts';
 import { sqlCompletionList, sqlDefinitionAt, sqlHoverAt } from './sql/lsp.ts';
 import { Schema } from './sql/schema.ts';
-import { isSchemaSource, loadSchema, type SchemaSources } from './sql/sources.ts';
+import { isSchemaSource, loadSchemas, type SchemaSources } from './sql/sources.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
 import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { organizeUses } from './imports/uses.ts';
@@ -91,8 +91,9 @@ const semanticCache = new Map<string, Diagnostic[]>();
 const hiddenByUri = new Map<string, number>();
 const baselines = new Map<string, Baseline>();
 let composerDirs: string[] = [];
-/** Schéma SQL du workspace (fichiers .sql et cache de la base) */
-let sqlSchema = new Schema();
+/** Schéma SQL de chaque dossier du workspace (fichiers .sql et cache de la base) */
+let sqlSchemas = new Map<string, Schema>();
+const NO_SCHEMA = new Schema();
 let schemaTimer: ReturnType<typeof setTimeout> | undefined;
 const SCHEMA_RELOAD_DELAY = 300;
 const workspaceDiagnostics = new WorkspaceDiagnostics();
@@ -241,7 +242,7 @@ const rootOf = (fsPath: string) => folders.find((folder) => fsPath.startsWith(fo
 
 function collectEnv(): CollectEnv {
   return {
-    schema: sqlSchema,
+    schema: schemaAt,
     parser,
     resolver,
     analysis,
@@ -285,12 +286,21 @@ const sources = new SourceCache(200, (uri) => {
 
 const schemaSources = (): SchemaSources => ({ folders, globs: settings.sql.schema, exclude: settings.exclude });
 
-/** Relit le schéma SQL et recalcule les diagnostics (démarrage, .sql ou cache modifiés, réglage changé). */
+/** Schéma du dossier d'un fichier ; document hors des dossiers (sans titre) : celui du premier dossier. */
+function schemaAt(fsPath: string): Schema {
+  return sqlSchemas.get(rootOf(fsPath) ?? folders[0] ?? '') ?? NO_SCHEMA;
+}
+
+const schemaOf = (uri: string) => schemaAt(URI.parse(uri).fsPath);
+
+/** Relit les schémas SQL et recalcule les diagnostics (démarrage, .sql ou cache modifiés, réglage changé). */
 function reloadSchema(): void {
-  const load = loadSchema(schemaSources());
-  sqlSchema = load.schema;
-  for (const error of load.errors) connection.console.warn(`SQL schema: ${error}`);
-  connection.console.info(`SQL schema: ${load.schema.tables.length} tables from ${load.files} files`);
+  const loads = loadSchemas(schemaSources());
+  sqlSchemas = new Map([...loads].map(([folder, load]) => [folder, load.schema]));
+  for (const [folder, load] of loads) {
+    for (const error of load.errors) connection.console.warn(`SQL schema: ${error}`);
+    connection.console.info(`SQL schema of ${folder}: ${load.schema.tables.length} tables from ${load.files} files`);
+  }
   for (const doc of documents.all()) {
     updateSemantic(doc);
     publish(doc);
@@ -536,7 +546,7 @@ connection.onDefinition(
   safe([], ({ textDocument, position }) => {
     const doc = docAt(textDocument.uri);
     if (!doc) return [];
-    const sql = sqlDefinitionAt(doc.tree, doc.doc, position, sqlSchema);
+    const sql = sqlDefinitionAt(doc.tree, doc.doc, position, schemaOf(doc.uri));
     if (sql) return sql;
     const target = analysis ? includeDefinition(analysis.graph, doc.symbols, position) : [];
     return target.length ? target : definition(lookup, doc.symbols, doc.tree, position, resolver);
@@ -547,7 +557,7 @@ connection.onHover(
   safe(null, ({ textDocument, position }) => {
     const doc = docAt(textDocument.uri);
     if (!doc) return null;
-    const value = sqlHoverAt(doc.tree, doc.doc, position, sqlSchema) ?? hover(lookup, doc.symbols, doc.tree, position, resolver);
+    const value = sqlHoverAt(doc.tree, doc.doc, position, schemaOf(doc.uri)) ?? hover(lookup, doc.symbols, doc.tree, position, resolver);
     return withProblems(value, problemsMarkdown(doc.uri, doc.doc.version, published.get(doc.uri) ?? [], position.line));
   }),
 );
@@ -556,7 +566,7 @@ connection.onCompletion(
   safe(null, ({ textDocument, position, context }) => {
     const doc = docAt(textDocument.uri);
     if (!doc) return null;
-    const sql = sqlCompletionList(doc.tree, doc.doc, position, sqlSchema);
+    const sql = sqlCompletionList(doc.tree, doc.doc, position, schemaOf(doc.uri));
     if (sql) return sql;
     // « . » ne sert qu'au SQL (alias.colonne) : jamais la liste PHP sur une concaténation
     if (context?.triggerCharacter === '.') return null;
