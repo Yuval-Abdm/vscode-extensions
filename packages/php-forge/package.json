@@ -404,6 +404,15 @@
           "name": "%phpForge.includeTree.name%"
         }
       ]
-    }
+    },
+    "grammars": [
+      {
+        "scopeName": "php-forge.sql-injection",
+        "path": "./syntaxes/php-sql.injection.json",
+        "injectTo": [
+          "source.php"
+        ]
+      }
+    ]
   }
 }
