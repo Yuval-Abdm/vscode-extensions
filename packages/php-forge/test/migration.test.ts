@@ -138,3 +138,20 @@ describe('rapport de migration', () => {
     assert.match(migrationReport([], '7.3', '8.0'), /No problem found/);
   });
 });
+
+describe('collecte du rapport de migration', () => {
+  it('rend la main au serveur pendant le parcours du workspace', async () => {
+    const { collectReport } = await import('../src/server/migration/report.ts');
+    const order: string[] = [];
+    const uris = Array.from({ length: 25 }, (_, i) => `file:///p/f${i}.php`);
+    const files = await collectReport(uris, (uri) => {
+      order.push('file');
+      return uri.endsWith('f3.php') ? { path: 'f3.php', problems: [{ line: 0, code: 'migration-syntax', message: 'x' }] } : undefined;
+    }, async () => {
+      order.push('pause');
+    }, 10);
+    assert.deepEqual(files.map((f) => f.path), ['f3.php']);
+    assert.deepEqual(order.filter((o) => o === 'pause').length, 2);
+    assert.equal(order.indexOf('pause'), 10);
+  });
+});

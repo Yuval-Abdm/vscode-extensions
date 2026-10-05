@@ -28,7 +28,7 @@ import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { SourceCache } from './refactor/sourceCache.ts';
 import { formatEdits, formatOptions, onTypeRange, onTypeWindow } from './format/format.ts';
 import { sqlCompletionList, sqlDefinitionAt, sqlHoverAt } from './sql/lsp.ts';
-import { migrationReport, type ReportFile } from './migration/report.ts';
+import { collectReport, migrationReport, type ReportFile } from './migration/report.ts';
 import { REQUEST_NAMES, returnsData, type TaintEnv } from './security/taint.ts';
 import { Schema } from './sql/schema.ts';
 import { isSchemaSource, loadSchemas, type SchemaSources } from './sql/sources.ts';
@@ -392,11 +392,10 @@ function updateSemantic(doc: OpenDocument): void {
 const BACKGROUND_SEMANTIC_MAX = 200_000;
 
 /** Diagnostics d'un fichier du disque (passe du workspace, baseline) ; undefined : ignoré. */
-function diskDiagnostics(uri: string, background = false): { raw: Diagnostic[]; diagnostics: Diagnostic[]; text: string } | undefined {
+function diskDiagnostics(uri: string, background = false, env: CollectEnv = collectEnv()): { raw: Diagnostic[]; diagnostics: Diagnostic[]; text: string } | undefined {
   const symbols = workspace.get(uri);
   if (!symbols?.flow) return undefined;
   const fsPath = URI.parse(uri).fsPath;
-  const env = collectEnv();
   if (env.library(fsPath)) return undefined;
   let bytes: Buffer;
   try {
@@ -756,17 +755,18 @@ connection.onRequest(
     const target = targetResolver?.phpVersion;
     if (!target) return undefined;
     await indexing;
-    const files: ReportFile[] = [];
-    for (const file of workspace.files()) {
-      if (!file.uri.startsWith('file:')) continue;
-      const fsPath = URI.parse(file.uri).fsPath;
+    // Sans la propagation (inutile au rapport, coûteuse) ; le serveur reprend la main régulièrement
+    const env = { ...collectEnv(), security: undefined };
+    const uris = [...workspace.files()].map((f) => f.uri).filter((uri) => uri.startsWith('file:'));
+    const files = await collectReport(uris, (uri): ReportFile | undefined => {
+      const fsPath = URI.parse(uri).fsPath;
       const root = rootOf(fsPath);
-      if (!root) continue;
-      const doc = documents.get(file.uri);
-      const raw = doc ? collectDiagnostics(inputOf(doc), collectEnv(), semanticCache.get(doc.uri) ?? []).raw : diskDiagnostics(file.uri)?.raw;
+      if (!root) return undefined;
+      const doc = documents.get(uri);
+      const raw = doc ? collectDiagnostics(inputOf(doc), env, semanticCache.get(doc.uri) ?? []).raw : diskDiagnostics(uri, false, env)?.raw;
       const problems = (raw ?? []).filter((d) => String(d.code).startsWith('migration-')).map((d) => ({ line: d.range.start.line, code: String(d.code), message: String(d.message) }));
-      if (problems.length) files.push({ path: path.relative(root, fsPath).split(path.sep).join('/'), problems });
-    }
+      return { path: path.relative(root, fsPath).split(path.sep).join('/'), problems };
+    }, () => new Promise((resolve) => setImmediate(resolve)));
     return migrationReport(files, resolver.phpVersion, target);
   }),
 );

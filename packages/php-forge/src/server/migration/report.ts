@@ -31,3 +31,19 @@ export function migrationReport(files: ReportFile[], from: string | undefined, t
   }
   return `${out.join('\n')}\n`;
 }
+
+/**
+ * Problèmes de chaque fichier du workspace, en rendant la main au serveur tous les `every` fichiers (complétion,
+ * survol et diagnostics continuent pendant un rapport sur des milliers de fichiers).
+ */
+export async function collectReport(uris: Iterable<string>, problems: (uri: string) => ReportFile | undefined, pause: () => Promise<void>, every = 20): Promise<ReportFile[]> {
+  const out: ReportFile[] = [];
+  let count = 0;
+  for (const uri of uris) {
+    if (count > 0 && count % every === 0) await pause();
+    count++;
+    const file = problems(uri);
+    if (file?.problems.length) out.push(file);
+  }
+  return out;
+}
