@@ -3,11 +3,12 @@
 // phpdoc. La documentation est chargée à la demande (completionItem/resolve).
 import { readdirSync, type Dirent } from 'node:fs';
 import path from 'node:path';
-import { CompletionItemKind, CompletionItemTag, InsertTextFormat, type CompletionItem, type CompletionList } from 'vscode-languageserver/node';
+import { CompletionItemKind, CompletionItemTag, InsertTextFormat, type CompletionItem, type CompletionList, type TextEdit } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import type { NameScope, PhpSymbol, Position, Range, SymbolKind, TypeExpr } from '../../shared/types.ts';
 import type { OpenDocument } from '../documents.ts';
 import { hoverMarkdown } from '../features/hover.ts';
+import { addUse, useConflict } from '../imports/uses.ts';
 import { matchScore } from '../features/workspaceSymbols.ts';
 import { enclosingClass, FUNCTION_NODES } from '../model/context.ts';
 import { resolveClassName, resolveFunctionOrConstant, scopeAt } from '../model/names.ts';
@@ -301,10 +302,22 @@ class Completion {
     const fqn = symbol.fqn!;
     const kind: ItemData['kind'] = CLASS_LIKE.has(symbol.kind) ? 'class' : symbol.kind === 'function' ? 'function' : 'constant';
     let text: string;
+    let imported: TextEdit | undefined;
     if (mode === 'use') text = fqn;
     else if (prefix.includes('\\')) text = `\\${fqn}`;
-    else if (kind === 'class') text = same(resolveClassName(symbol.name, scope) ?? '', fqn) ? symbol.name : `\\${fqn}`;
-    else text = resolveFunctionOrConstant(symbol.name, kind, scope).some((c) => same(c, fqn)) ? symbol.name : `\\${fqn}`;
+    else {
+      const reachable = kind === 'class'
+        ? same(resolveClassName(symbol.name, scope) ?? '', fqn)
+        : resolveFunctionOrConstant(symbol.name, kind, scope).some((c) => same(c, fqn));
+      text = symbol.name;
+      if (!reachable) {
+        // Import automatique : `use` ajouté à sa place, sauf conflit de nom court (nom complet alors)
+        const useKind = kind === 'class' ? 'class' : kind === 'function' ? 'function' : 'const';
+        const tree = this.#doc.tree;
+        if (fqn.includes('\\') && !useConflict(tree, fqn, useKind)) imported = addUse(tree, this.#text(), fqn, useKind);
+        if (!imported) text = `\\${fqn}`;
+      }
+    }
     const data: ItemData = { kind, fqn };
     const item: CompletionItem = {
       label: symbol.name,
@@ -317,7 +330,15 @@ class Completion {
     if (namespace) item.labelDetails = { description: namespace };
     if (symbol.deprecated) item.tags = [CompletionItemTag.Deprecated];
     if (kind === 'function') callSnippet(item, text, (symbol.params?.length ?? 0) > 0, range);
+    if (imported) item.additionalTextEdits = [imported];
     return item;
+  }
+
+  #fullText: string | undefined;
+
+  /** Texte du document, lu une fois par complétion. */
+  #text(): string {
+    return (this.#fullText ??= this.#doc.doc.getText());
   }
 
   #includes(prefix: string): void {

@@ -121,9 +121,11 @@ describe('complétion des noms', () => {
     assert.ok((await labels('<?php str_con|', { version: '8.0' })).includes('str_contains'));
   });
 
-  it('classes : nom court si importé, sinon nom complet ; new sans les abstraites', async () => {
+  it('classes : nom court, importée sinon (use ajouté) ; new sans les abstraites', async () => {
     assert.equal(newText(await item('<?php namespace App; use Lib\\User; new Us|', 'User')), 'User');
-    assert.equal(newText(await item('<?php namespace App; new Addr|', 'Address')), '\\Lib\\Address');
+    const address = await item('<?php namespace App; new Addr|', 'Address');
+    assert.equal(newText(address), 'Address');
+    assert.match(address?.additionalTextEdits?.[0].newText ?? '', /^use Lib\\Address;/);
     assert.ok(!(await labels('<?php new Bas|')).includes('Base'));
   });
 
