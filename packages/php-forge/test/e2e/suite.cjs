@@ -250,6 +250,22 @@ test('sécurité : donnée de la requête affichée ; commande Migration report'
   assert.ok((await vscode.commands.getCommands(true)).includes('phpForge.migrationReport'));
 });
 
+test('vue Impact : fichier modifié non enregistré et ses pages', async () => {
+  const doc = await vscode.workspace.openTextDocument(ws('includes/footer.php'));
+  const editor = await vscode.window.showTextDocument(doc);
+  await editor.edit((e) => e.insert(new vscode.Position(doc.lineCount, 0), '\n// modification\n'));
+  try {
+    const entries = await waitFor(async () => {
+      const list = await vscode.commands.executeCommand('phpForge.impactEntries');
+      return list && list.some((e) => e.label === 'includes/footer.php') ? list : false;
+    }, 'impact');
+    const footer = entries.find((e) => e.label === 'includes/footer.php');
+    assert.deepStrictEqual(footer.pages.map((p) => p.label), ['pages/about.php', 'pages/home.php']);
+  } finally {
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+  }
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {

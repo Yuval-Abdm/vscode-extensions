@@ -3,10 +3,11 @@
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
 import type { Level } from '../server/diagnostics/policy.ts';
+import { deployChanged, ImpactProvider } from './impactView.ts';
 import { IncludeTreeProvider } from './includeTree.ts';
 import { mysqlDriver } from './mysql.ts';
 import { connectionKey, fetchSchema, isAccessDenied, missingFields, type ConnectionSettings } from './sqlSchema.ts';
-import { BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, MIGRATION_REPORT_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type BaselineResult, type BaselineStatus, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
+import { BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, IMPACT_REQUEST, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, MIGRATION_REPORT_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type BaselineResult, type BaselineStatus, type ImpactEntry, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
 
 /** Extensions PHP dont la complétion et les diagnostics feraient doublon. */
 const COMPETITORS = ['bmewburn.vscode-intelephense-client', 'DEVSENSE.phptools-vscode'];
@@ -75,6 +76,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   followEditor(vscode.window.activeTextEditor);
 
+  // Vue « Impact » : pages à vérifier pour les fichiers modifiés ; déploiement si FTP SFTP Deploy est installée
+  const impact = new ImpactProvider((uris) => client!.sendRequest<ImpactEntry[]>(IMPACT_REQUEST, { uris }));
+  const impactView = vscode.window.createTreeView('phpForge.impact', { treeDataProvider: impact, showCollapseAll: true });
+  impact.onTotal = (total) => {
+    impactView.badge = total ? { value: total, tooltip: vscode.l10n.t('{0} changed PHP files', total) } : undefined;
+  };
+  const deployAvailable = () => vscode.commands.executeCommand('setContext', 'phpForge.deployAvailable', !!vscode.extensions.getExtension('yuval-abdm.ftp-sftp-deploy'));
+  void deployAvailable();
+
   context.subscriptions.push(
     status,
     baselineStatus,
@@ -88,6 +98,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('phpForge.restartServer', () => client?.restart()),
     vscode.commands.registerCommand('phpForge.refreshSqlSchema', () => refreshSqlSchema(context)),
     vscode.commands.registerCommand('phpForge.migrationReport', () => showMigrationReport()),
+    impactView,
+    vscode.extensions.onDidChange(() => void deployAvailable()),
+    vscode.commands.registerCommand('phpForge.refreshImpact', () => impact.refresh()),
+    vscode.commands.registerCommand('phpForge.showImpact', () => vscode.commands.executeCommand('phpForge.impact.focus')),
+    vscode.commands.registerCommand('phpForge.deployChanged', () => deployChanged(impact)),
+    // Pour les tests de bout en bout : entrées affichées par la vue
+    vscode.commands.registerCommand('phpForge.impactEntries', () => impact.entries),
     vscode.commands.registerCommand('phpForge.reindex', () => client?.sendRequest(REINDEX_REQUEST)),
     vscode.commands.registerCommand('phpForge.showOutput', () => client?.outputChannel.show()),
     vscode.commands.registerCommand('phpForge.applyFix', (args: ApplyFixArgs) => applyFix(args)),
@@ -103,6 +120,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
   await client.start();
+  context.subscriptions.push(...(await impact.start()));
   void warnAboutCompetitors(context);
 }
 

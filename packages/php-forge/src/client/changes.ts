@@ -1,0 +1,41 @@
+// Fichiers modifiés (API git intégrée de VS Code, documents non enregistrés) et contrôle avant déploiement : sans
+// `vscode`, testable par `node --test`.
+
+/** Changement de l'API git intégrée (extensions/git/src/api/git.d.ts) : seulement ce qui est lu ici. */
+export interface GitChange {
+  uri: { toString(): string; fsPath: string };
+  status: number;
+}
+
+export interface GitState {
+  mergeChanges?: GitChange[];
+  indexChanges: GitChange[];
+  workingTreeChanges: GitChange[];
+  untrackedChanges?: GitChange[];
+}
+
+/** Statuts « supprimé » de l'API git : rien à vérifier ni à déployer */
+const DELETED = new Set([2, 6]);
+const PHP = /\.(php\d?|phtml|inc|ctp)$/i;
+
+/** Fichiers modifiés (index, arbre de travail, non suivis, conflits) des dépôts, sans les suppressions ni doublon. */
+export function changedFiles(states: GitState[], dirty: string[] = []): string[] {
+  const out = new Set<string>();
+  for (const s of states) {
+    for (const list of [s.mergeChanges, s.indexChanges, s.workingTreeChanges, s.untrackedChanges]) {
+      for (const c of list ?? []) if (!DELETED.has(c.status)) out.add(c.uri.toString());
+    }
+  }
+  for (const uri of dirty) out.add(uri);
+  return [...out].sort();
+}
+
+export const isPhp = (uri: string) => PHP.test(uri);
+
+/** Message d'avertissement avant déploiement : fichiers avec des erreurs (au plus 5 nommés). */
+export function errorSummary(files: { label: string; errors: number }[]): { count: number; names: string } | undefined {
+  const withErrors = files.filter((f) => f.errors > 0);
+  if (!withErrors.length) return undefined;
+  const names = withErrors.slice(0, 5).map((f) => f.label).join(', ') + (withErrors.length > 5 ? ', …' : '');
+  return { count: withErrors.length, names };
+}

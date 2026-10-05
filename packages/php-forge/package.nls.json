@@ -42,5 +42,10 @@
   "phpForge.migrationReport.title": "Migration report",
   "phpForge.security.enabled.description": "Follow request data (`$_GET`, `$_POST`, `extract($_POST)`…) to SQL queries, HTML output, shell commands, includes, `unserialize`, redirects and file writes, and report what is not escaped (`security-*` warnings).",
   "phpForge.security.sanitizers.description": "Your own escaping functions, considered safe for every sink: `rp_clean`, `Html::escape`.",
-  "phpForge.migration.targetVersion.description": "PHP version you are migrating to (e.g. `8.2`). Everything that breaks or becomes deprecated between `phpForge.phpVersion` and this version is reported (`migration-*`), with quick fixes when the change is safe; **Migration report** lists it by rule and by file."
+  "phpForge.migration.targetVersion.description": "PHP version you are migrating to (e.g. `8.2`). Everything that breaks or becomes deprecated between `phpForge.phpVersion` and this version is reported (`migration-*`), with quick fixes when the change is safe; **Migration report** lists it by rule and by file.",
+  "phpForge.showImpact.title": "Show impact of changed files",
+  "phpForge.refreshImpact.title": "Refresh impact",
+  "phpForge.deployChanged.title": "Deploy changed files",
+  "phpForge.impact.name": "PHP Impact",
+  "phpForge.deploy.checkErrors.description": "Before **Deploy changed files**, warn when a file to deploy has errors in the Problems view."
 }

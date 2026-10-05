@@ -132,5 +132,19 @@
   "Files": "Fichiers",
   "By file": "Par fichier",
   "line {0}": "ligne {0}",
-  "Set phpForge.migration.targetVersion to the PHP version you are migrating to.": "Renseigner phpForge.migration.targetVersion avec la version de PHP visée."
+  "Set phpForge.migration.targetVersion to the PHP version you are migrating to.": "Renseigner phpForge.migration.targetVersion avec la version de PHP visée.",
+  "page": "page",
+  "1 page": "1 page",
+  "{0} pages": "{0} pages",
+  "Included through a dynamic path: some pages may be missing": "Inclus par un chemin dynamique : des pages peuvent manquer",
+  "(included through a dynamic path: some pages may be missing)": "(inclus par un chemin dynamique : des pages peuvent manquer)",
+  "Install FTP SFTP Deploy": "Installer FTP SFTP Deploy",
+  "Deploying needs the FTP SFTP Deploy extension.": "Le déploiement demande l'extension FTP SFTP Deploy.",
+  "No FTP SFTP Deploy profile in this workspace: create .vscode/deploy.json first.": "Aucun profil FTP SFTP Deploy dans ce workspace : créer d'abord .vscode/deploy.json.",
+  "No changed file to deploy.": "Aucun fichier modifié à déployer.",
+  "Save and deploy": "Enregistrer et déployer",
+  "{0} changed files are not saved.": "{0} fichiers modifiés ne sont pas enregistrés.",
+  "Deploy anyway": "Déployer quand même",
+  "{0} files to deploy have errors: {1}": "{0} fichiers à déployer ont des erreurs : {1}",
+  "{0} changed PHP files": "{0} fichiers PHP modifiés"
 }

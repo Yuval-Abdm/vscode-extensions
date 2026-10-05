@@ -42,5 +42,10 @@
   "phpForge.migrationReport.title": "Rapport de migration",
   "phpForge.security.enabled.description": "Suivre les données de la requête (`$_GET`, `$_POST`, `extract($_POST)`…) jusqu'aux requêtes SQL, à la sortie HTML, aux commandes, aux inclusions, à `unserialize`, aux redirections et aux écritures de fichier, et signaler ce qui n'est pas échappé (avertissements `security-*`).",
   "phpForge.security.sanitizers.description": "Vos propres fonctions d'échappement, considérées sûres pour tous les points sensibles : `rp_clean`, `Html::escape`.",
-  "phpForge.migration.targetVersion.description": "Version de PHP visée par la migration (par exemple `8.2`). Tout ce qui casse ou devient déprécié entre `phpForge.phpVersion` et cette version est signalé (`migration-*`), avec une correction rapide quand le changement est sûr ; **Rapport de migration** le liste par règle et par fichier."
+  "phpForge.migration.targetVersion.description": "Version de PHP visée par la migration (par exemple `8.2`). Tout ce qui casse ou devient déprécié entre `phpForge.phpVersion` et cette version est signalé (`migration-*`), avec une correction rapide quand le changement est sûr ; **Rapport de migration** le liste par règle et par fichier.",
+  "phpForge.showImpact.title": "Afficher l'impact des fichiers modifiés",
+  "phpForge.refreshImpact.title": "Actualiser l'impact",
+  "phpForge.deployChanged.title": "Déployer les fichiers modifiés",
+  "phpForge.impact.name": "Impact PHP",
+  "phpForge.deploy.checkErrors.description": "Avant **Déployer les fichiers modifiés**, avertir quand un fichier à déployer a des erreurs dans la vue Problèmes."
 }

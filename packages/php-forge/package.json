@@ -128,6 +128,28 @@
         "command": "phpForge.migrationReport",
         "title": "%phpForge.migrationReport.title%",
         "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showImpact",
+        "title": "%phpForge.showImpact.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.refreshImpact",
+        "title": "%phpForge.refreshImpact.title%",
+        "category": "PHP Forge",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "phpForge.deployChanged",
+        "title": "%phpForge.deployChanged.title%",
+        "category": "PHP Forge",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "phpForge.impactEntries",
+        "title": "Impact entries (tests)",
+        "category": "PHP Forge"
       }
     ],
     "configuration": {
@@ -406,6 +428,11 @@
           "default": "",
           "pattern": "^(\\d+\\.\\d+)?$",
           "markdownDescription": "%phpForge.migration.targetVersion.description%"
+        },
+        "phpForge.deploy.checkErrors": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.deploy.checkErrors.description%"
         }
       }
     },
@@ -418,6 +445,26 @@
         {
           "command": "phpForge.showReferences",
           "when": "false"
+        },
+        {
+          "command": "phpForge.impactEntries",
+          "when": "false"
+        },
+        {
+          "command": "phpForge.deployChanged",
+          "when": "phpForge.deployAvailable"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "phpForge.refreshImpact",
+          "when": "view == phpForge.impact",
+          "group": "navigation@1"
+        },
+        {
+          "command": "phpForge.deployChanged",
+          "when": "view == phpForge.impact && phpForge.deployAvailable",
+          "group": "navigation@2"
         }
       ]
     },
@@ -426,6 +473,10 @@
         {
           "id": "phpForge.includeTree",
           "name": "%phpForge.includeTree.name%"
+        },
+        {
+          "id": "phpForge.impact",
+          "name": "%phpForge.impact.name%"
         }
       ]
     },
