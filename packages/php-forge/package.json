@@ -299,6 +299,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "%phpForge.codeLens.implementations.description%"
+        },
+        "phpForge.organizeUsesOnSave": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%phpForge.organizeUsesOnSave.description%"
         }
       }
     },

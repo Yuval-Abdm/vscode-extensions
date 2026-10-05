@@ -27,5 +27,6 @@
   "phpForge.clearBaseline.title": "Supprimer la baseline",
   "phpForge.codeLens.references.description": "Afficher le nombre de références au-dessus des classes, fonctions et méthodes.",
   "phpForge.codeLens.implementations.description": "Afficher le nombre d'implémentations au-dessus des interfaces, des classes abstraites et de leurs méthodes.",
-  "phpForge.showReferences.title": "Afficher les références"
+  "phpForge.showReferences.title": "Afficher les références",
+  "phpForge.organizeUsesOnSave.description": "Trier les use et retirer les inutilisés à l'enregistrement d'un fichier PHP."
 }

@@ -24,7 +24,7 @@ export function codeDiagnostics(tree: Tree): Diagnostic[] {
 }
 
 /** Premiers segments des noms utilisés (hors déclarations use et namespace) et identifiants des commentaires phpdoc. */
-function usedNames(tree: Tree): { names: Set<string>; docs: Set<string> } {
+export function usedNames(tree: Tree): { names: Set<string>; docs: Set<string> } {
   const names = new Set<string>();
   const docs = new Set<string>();
   const visit = (node: Node): void => {

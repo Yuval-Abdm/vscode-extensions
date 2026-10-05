@@ -81,5 +81,6 @@
   "1 reference": "1 référence",
   "{0} references": "{0} références",
   "1 implementation": "1 implémentation",
-  "{0} implementations": "{0} implémentations"
+  "{0} implementations": "{0} implémentations",
+  "Organize use statements": "Organiser les use"
 }

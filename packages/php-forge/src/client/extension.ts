@@ -134,6 +134,7 @@ function readSettings(): Partial<Settings> {
       scope: config.get<'openFiles' | 'workspace'>('diagnostics.scope') ?? 'workspace',
     },
     libraryPaths: config.get<string[]>('libraryPaths') ?? ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
+    organizeUsesOnSave: config.get<boolean>('organizeUsesOnSave', false),
     codeLens: { references: config.get<boolean>('codeLens.references', true), implementations: config.get<boolean>('codeLens.implementations', true) },
   };
   const exclude = config.get<string[]>('exclude');

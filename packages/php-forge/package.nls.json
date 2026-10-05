@@ -27,5 +27,6 @@
   "phpForge.clearBaseline.title": "Clear Baseline",
   "phpForge.codeLens.references.description": "Show the number of references above classes, functions and methods.",
   "phpForge.codeLens.implementations.description": "Show the number of implementations above interfaces, abstract classes and their methods.",
-  "phpForge.showReferences.title": "Show References"
+  "phpForge.showReferences.title": "Show References",
+  "phpForge.organizeUsesOnSave.description": "Sort use statements and remove unused ones when saving a PHP file."
 }

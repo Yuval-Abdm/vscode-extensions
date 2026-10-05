@@ -4,7 +4,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import * as l10n from '@vscode/l10n';
-import { CodeActionKind, createConnection, ErrorCodes, ResponseError, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
+import { CodeActionKind, createConnection, type CodeAction, ErrorCodes, ResponseError, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
   BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
@@ -27,6 +27,7 @@ import { findReferences, targetAt, type RefEnv, type SourceFile } from './refact
 import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
 import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
+import { organizeUses } from './imports/uses.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
@@ -122,7 +123,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
   await applyEnvironment();
   return {
     capabilities: {
-      textDocumentSync: { openClose: true, change: TextDocumentSyncKind.Incremental },
+      textDocumentSync: { openClose: true, change: TextDocumentSyncKind.Incremental, willSaveWaitUntil: true },
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
       definitionProvider: true,
@@ -137,7 +138,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       selectionRangeProvider: true,
       inlayHintProvider: true,
       codeLensProvider: { resolveProvider: true },
-      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
+      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.SourceOrganizeImports] },
       semanticTokensProvider: { legend: { tokenTypes: [...TOKEN_TYPES], tokenModifiers: [...TOKEN_MODIFIERS] }, full: true },
     },
     serverInfo: { name: 'PHP Forge' },
@@ -544,7 +545,30 @@ connection.onDocumentHighlight(
   }),
 );
 
-connection.onCodeAction(safe([], ({ textDocument, context }) => quickFixes(textDocument.uri, context.diagnostics, docAt(textDocument.uri)?.doc.getText())));
+/** Sorte d'action demandée (`context.only` absent : toutes). */
+const wanted = (only: string[] | undefined, kind: string) => !only || only.some((k) => kind === k || kind.startsWith(`${k}.`));
+
+connection.onCodeAction(
+  safe([], ({ textDocument, context }) => {
+    const uri = textDocument.uri;
+    const doc = docAt(uri);
+    const actions: CodeAction[] = quickFixes(uri, context.diagnostics, doc?.doc.getText());
+    if (!doc) return actions;
+    const text = doc.doc.getText();
+    if (wanted(context.only, CodeActionKind.SourceOrganizeImports)) {
+      const edits = organizeUses(doc.tree, text);
+      if (edits.length) actions.push({ title: l10n.t('Organize use statements'), kind: CodeActionKind.SourceOrganizeImports, edit: { changes: { [uri]: edits } } });
+    }
+    return actions;
+  }),
+);
+
+connection.onWillSaveTextDocumentWaitUntil(
+  safe([], ({ textDocument }) => {
+    const doc = docAt(textDocument.uri);
+    return doc && settings.organizeUsesOnSave ? organizeUses(doc.tree, doc.doc.getText()) : [];
+  }),
+);
 
 connection.onFoldingRanges(
   safe([], ({ textDocument }) => {

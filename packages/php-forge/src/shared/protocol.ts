@@ -33,6 +33,8 @@ export interface Settings {
   libraryPaths: string[];
   /** CodeLens du nombre de références et d'implémentations */
   codeLens: { references: boolean; implementations: boolean };
+  /** Trier les use et retirer les inutilisés à l'enregistrement */
+  organizeUsesOnSave: boolean;
 }
 
 export const DEFAULT_STUBS = [
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   diagnostics: { rules: {}, scope: 'workspace' },
   libraryPaths: ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
   codeLens: { references: true, implementations: true },
+  organizeUsesOnSave: false,
 };
 
 /** Réglages complets à partir de valeurs partielles (options d'initialisation, changement de configuration). */
