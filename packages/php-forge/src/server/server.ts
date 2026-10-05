@@ -27,6 +27,8 @@ import { findReferences, targetAt, type RefEnv, type SourceFile } from './refact
 import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { SourceCache } from './refactor/sourceCache.ts';
 import { formatEdits, formatOptions, onTypeRange, onTypeWindow } from './format/format.ts';
+import { Schema } from './sql/schema.ts';
+import { isSchemaSource, loadSchema, type SchemaSources } from './sql/sources.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
 import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { organizeUses } from './imports/uses.ts';
@@ -88,6 +90,8 @@ const semanticCache = new Map<string, Diagnostic[]>();
 const hiddenByUri = new Map<string, number>();
 const baselines = new Map<string, Baseline>();
 let composerDirs: string[] = [];
+/** Schéma SQL du workspace (fichiers .sql et cache de la base) */
+let sqlSchema = new Schema();
 const workspaceDiagnostics = new WorkspaceDiagnostics();
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -159,6 +163,7 @@ connection.onInitialized(() => {
   indexing = reindex();
   scheduleAnalysis(0);
   loadBaselines();
+  reloadSchema();
   void Promise.all(folders.map(findComposerDirs)).then((dirs) => {
     composerDirs = dirs.flat();
   });
@@ -183,6 +188,7 @@ connection.onDidChangeConfiguration(
       for (const doc of documents.all()) publish(doc);
       startWorkspaceDiagnostics();
     }
+    if (next.sql.schema.join() !== previous.sql.schema.join()) reloadSchema();
     void connection.languages.inlayHint.refresh();
   }),
 );
@@ -232,6 +238,7 @@ const rootOf = (fsPath: string) => folders.find((folder) => fsPath.startsWith(fo
 
 function collectEnv(): CollectEnv {
   return {
+    schema: sqlSchema,
     parser,
     resolver,
     analysis,
@@ -272,6 +279,21 @@ const sources = new SourceCache(200, (uri) => {
   const text = decode(bytes);
   return { text, tree: parsePhp(parser, text) };
 });
+
+const schemaSources = (): SchemaSources => ({ folders, globs: settings.sql.schema, exclude: settings.exclude });
+
+/** Relit le schéma SQL et recalcule les diagnostics (démarrage, .sql ou cache modifiés, réglage changé). */
+function reloadSchema(): void {
+  const load = loadSchema(schemaSources());
+  sqlSchema = load.schema;
+  for (const error of load.errors) connection.console.warn(`SQL schema: ${error}`);
+  connection.console.info(`SQL schema: ${load.schema.tables.length} tables from ${load.files} files`);
+  for (const doc of documents.all()) {
+    updateSemantic(doc);
+    publish(doc);
+  }
+  startWorkspaceDiagnostics();
+}
 
 function refEnv(): RefEnv {
   return { lookup, resolver, files: () => [...workspace.files()], source: sourceOf, graph: analysis?.graph };
@@ -479,6 +501,7 @@ connection.onDidCloseTextDocument(
 
 connection.onDidChangeWatchedFiles(
   safe(undefined, async ({ changes }) => {
+    if (changes.some((c) => c.uri.startsWith('file:') && isSchemaSource(URI.parse(c.uri).fsPath, schemaSources()))) reloadSchema();
     await indexing;
     await applyFileChanges(workspace, changes, {
       folders,

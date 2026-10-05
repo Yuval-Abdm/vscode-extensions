@@ -1,7 +1,7 @@
 // Serveur complet lancé comme par VS Code (stdio) sur le projet de test : indexation, cache, requêtes, robustesse.
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -304,6 +304,21 @@ describe('serveur LSP', () => {
     const typed = (await server.connection.sendRequest('textDocument/onTypeFormatting', { textDocument: { uri: uri('fmt.php') }, position: { line: 2, character: 9 }, ch: ';', options })) as { range: { start: { line: number } } }[];
     assert.ok(typed.length > 0 && typed.every((e) => e.range.start.line === 2 || e.range.start.line === 1), JSON.stringify(typed));
     await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('fmt.php') } });
+  });
+
+  it('SQL : colonne inconnue selon sql/schema.sql, puis schéma de la base (cache observé)', async () => {
+    await open(server, 'clients.php', '<?php\n$r = mysqli_query($db, "SELECT nom, prenom FROM clients");\n$s = mysqli_query($db, "SELECT * FROM inconnue");\n');
+    const sqlCodes = () => server.diagnostics.get(uri('clients.php'))?.filter((d) => d.code.startsWith('sql-')).map((d) => `${d.range.start.line}:${d.code}`);
+    assert.deepEqual(await waitFor(() => (sqlCodes()?.length ? sqlCodes() : undefined), 'colonne inconnue'), ['1:sql-unknown-column']);
+    mkdirSync(path.join(fixture, '.vscode'), { recursive: true });
+    const cache = { database: 'crm', refreshed: '', tables: [{ name: 'clients', columns: ['id', 'nom', 'solde', 'prenom'].map((name) => ({ name, type: 'int', nullable: true })) }] };
+    writeFileSync(path.join(fixture, '.vscode/php-forge-schema.json'), JSON.stringify(cache));
+    await server.connection.sendNotification('workspace/didChangeWatchedFiles', { changes: [{ uri: uri('.vscode/php-forge-schema.json'), type: 1 }] });
+    assert.deepEqual(await waitFor(() => (sqlCodes()?.join() === '2:sql-unknown-table' ? sqlCodes() : undefined), 'table inconnue'), ['2:sql-unknown-table']);
+    rmSync(path.join(fixture, '.vscode/php-forge-schema.json'));
+    await server.connection.sendNotification('workspace/didChangeWatchedFiles', { changes: [{ uri: uri('.vscode/php-forge-schema.json'), type: 3 }] });
+    await waitFor(() => (sqlCodes()?.join() === '1:sql-unknown-column' ? true : undefined), 'cache supprimé');
+    await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('clients.php') } });
   });
 
   it('second démarrage : tout vient du cache', async () => {

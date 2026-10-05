@@ -6,7 +6,9 @@ import type { FileSymbols } from '../../shared/types.ts';
 import type { IncludeAnalysis } from '../includes/analysis.ts';
 import { callerLabel, includeDiagnostics } from '../includes/diagnostics.ts';
 import type { Parser, Tree } from '../parser/parser.ts';
+import { sqlDiagnostics } from '../sql/diagnostics.ts';
 import { mixedQuoteDiagnostics, sqlQuoteDiagnostics } from '../sql/quotes.ts';
+import type { Schema } from '../sql/schema.ts';
 import type { TypeResolver } from '../types/expand.ts';
 import type { Baseline } from './baseline.ts';
 import { codeDiagnostics } from './code.ts';
@@ -33,17 +35,20 @@ export interface CollectEnv {
   baseline: (fsPath: string) => { baseline: Baseline; rel: string } | undefined;
   /** Diagnostics d'inclusion fournis par l'appelant (documents ouverts : décalés au fil de la frappe) */
   includes?: (input: CollectInput) => Diagnostic[] | undefined;
+  /** Schéma SQL du workspace (colonnes et tables inconnues) */
+  schema?: Schema;
 }
 
 const byPosition = (a: Diagnostic, b: Diagnostic) => a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character;
 
-/** Règles sémantiques, code mort et syntaxe dépréciée. */
+/** Règles sémantiques, code mort, syntaxe dépréciée et requêtes SQL. */
 export function semanticPart(input: CollectInput, env: CollectEnv): Diagnostic[] {
   if (env.library(input.fsPath)) return [];
   return [
     ...semanticDiagnostics(input.symbols, input.tree, env.resolver),
     ...codeDiagnostics(input.tree),
     ...deprecatedSyntax(input.tree, input.text, env.resolver.phpVersion),
+    ...sqlDiagnostics(input.tree, input.text, env.schema),
   ];
 }
 

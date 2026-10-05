@@ -28,6 +28,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.workspace.createFileSystemWatcher('**/*.{php,php4,php5,phtml,ctp}'),
         // Dossiers créés, renommés ou supprimés : l'éditeur ne signale que le dossier, pas ses fichiers
         vscode.workspace.createFileSystemWatcher('**/*', false, true, false),
+        // Schéma SQL : fichiers .sql et cache de la base
+        vscode.workspace.createFileSystemWatcher('**/*.sql'),
+        vscode.workspace.createFileSystemWatcher('**/.vscode/php-forge-schema.json'),
       ],
     },
     // Liens « Appliquer » du survol des problèmes : seule cette commande est autorisée
@@ -144,6 +147,7 @@ function readSettings(): Partial<Settings> {
       trailingCommas: config.get<boolean>('format.trailingCommas', false),
       lineLength: config.get<number>('format.lineLength', 120),
     },
+    sql: { schema: config.get<string[]>('sql.schema') ?? ['sql/**/*.sql', 'migrations/**/*.sql', 'database/**/*.sql'] },
     codeLens: { references: config.get<boolean>('codeLens.references', true), implementations: config.get<boolean>('codeLens.implementations', true) },
   };
   const exclude = config.get<string[]>('exclude');

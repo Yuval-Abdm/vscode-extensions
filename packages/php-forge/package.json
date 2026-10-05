@@ -343,6 +343,18 @@
           "type": "number",
           "default": 120,
           "markdownDescription": "%phpForge.format.lineLength.description%"
+        },
+        "phpForge.sql.schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "sql/**/*.sql",
+            "migrations/**/*.sql",
+            "database/**/*.sql"
+          ],
+          "markdownDescription": "%phpForge.sql.schema.description%"
         }
       }
     },

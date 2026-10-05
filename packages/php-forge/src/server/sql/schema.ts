@@ -164,12 +164,14 @@ export class Schema {
         continue;
       }
       for (const c of table.columns) if (!existing.columns.some((e) => e.name.toLowerCase() === c.name.toLowerCase())) existing.columns.push(c);
+      // Position de la déclaration : celle du CREATE TABLE plutôt que celle d'un ALTER TABLE lu avant
+      if (table.uri && (!existing.uri || (table.complete && !existing.complete))) Object.assign(existing, { uri: table.uri, line: table.line, character: table.character });
       existing.complete ||= table.complete;
-      if (!existing.uri && table.uri) Object.assign(existing, { uri: table.uri, line: table.line, character: table.character });
     }
   }
 
   addCache(cache: SchemaCache, uri: string): void {
+    if (!Array.isArray(cache?.tables) || !cache.tables.every((t) => typeof t?.name === 'string' && Array.isArray(t.columns))) throw new Error('not a PHP Forge schema cache');
     this.add(cache.tables.map((t) => ({ ...t, complete: true, uri })));
     this.#fromDatabase = true;
   }

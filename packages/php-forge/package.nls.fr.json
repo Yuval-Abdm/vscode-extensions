@@ -35,5 +35,6 @@
   "phpForge.format.alignArrows.description": "Aligner les `=>` des éléments consécutifs d'un tableau.",
   "phpForge.format.alignAssignments.description": "Aligner les `=` d'affectations consécutives.",
   "phpForge.format.trailingCommas.description": "Ajouter une virgule finale aux tableaux écrits sur plusieurs lignes.",
-  "phpForge.format.lineLength.description": "Longueur de ligne indicative : pas d'alignement s'il rendait une ligne plus longue."
+  "phpForge.format.lineLength.description": "Longueur de ligne indicative : pas d'alignement s'il rendait une ligne plus longue.",
+  "phpForge.sql.schema.description": "Globs des fichiers `.sql` (`CREATE TABLE`, `ALTER TABLE … ADD`) qui décrivent la base, relatifs à chaque dossier du workspace. Le schéma lu dans la base par **Mettre à jour le schéma SQL** (`.vscode/php-forge-schema.json`) est toujours utilisé et fait foi : garder les fichiers `.sql` à jour ou le mettre à jour."
 }
