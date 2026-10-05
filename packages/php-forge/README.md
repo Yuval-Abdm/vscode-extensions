@@ -2,7 +2,7 @@
 
 **Free PHP language server for VS Code — built for real-world projects, from modern Composer apps to legacy code held together by `include`.**
 
-> Preview (0.7). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
+> Preview (0.8). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
 
 ## Features
 
@@ -15,6 +15,8 @@
 - **Outline / breadcrumbs**, **workspace symbol search** (Ctrl+T) and **live syntax errors** (a forgotten `;` is pointed out on its own line, with an "Add `;`" quick fix). In HTML, `<?php $x ?>` without `echo` and short `<?` tags are flagged, with quick fixes.
 - **SQL in PHP strings**: highlighting of the whole query (every part of a concatenation, `$sql .= …` additions, query function arguments, strings marked `/** @sql */`); completion of tables, of columns according to the `FROM` aliases and of SQL functions; column hover (type, NULL, default); Go to Definition to the `CREATE TABLE`; checks for SQL syntax slips, unknown columns and unknown tables, from the project's `.sql` files or the real database (see **SQL schema** below). `$row = mysqli_fetch_assoc($res)` and PDO `fetch()` rows know the columns of the `SELECT`.
 - **Mixed quotes**: SQL queries and other string concatenations that mix `'…'` and `"…"` parts are flagged, with a quick fix.
+- **Security**: request data followed to SQL queries, HTML output, shell commands, includes, `unserialize`, redirects and file writes — also through `extract($_POST)` in an including file and through your own functions — with the propagation path in the message.
+- **PHP version migration**: set `phpForge.migration.targetVersion` to list what breaks between your PHP version and the target, with safe quick fixes and a **Migration report**.
 - **Diagnostics** for the whole project, in the background: undefined functions, classes, constants, methods and properties (only on known types), argument count, unused `use`, unreachable code, APIs removed or added after your PHP version, deprecated syntax, functions declared twice in an include chain. Level per rule, `// @php-forge-ignore`, and a **baseline** to hide the existing problems of a legacy project.
 - **Problems on hover**: hover a line with an error or warning to see the problem, the proposed fix and an **Apply** link.
 - **Native PHP functions and classes** from JetBrains phpstorm-stubs, for the PHP version of your project (shown in the status bar).
@@ -78,7 +80,7 @@ Completion in strings: VS Code does not suggest inside strings by default; press
 | 0.5 ✓ | Rename, references, auto-import and suggested imports (`use` and `include`), code generation |
 | 0.6 ✓ | Formatter (PSR-12, mixed HTML/PHP) |
 | 0.7 ✓ | SQL in PHP strings: schema from `.sql` files or the database, completion, hover, checks |
-| 0.8 | Security (taint analysis) and PHP version migration |
+| 0.8 ✓ | Security (taint analysis) and PHP version migration |
 | 0.9 | FTP SFTP Deploy integration: impacted pages, deploy in one click |
 
 ## Settings
@@ -111,6 +113,9 @@ Completion in strings: VS Code does not suggest inside strings by default; press
 | `phpForge.format.lineLength` | `120` | Indicative line length (alignment is skipped beyond it) |
 | `phpForge.sql.schema` | `["sql/**/*.sql", "migrations/**/*.sql", "database/**/*.sql"]` | `.sql` files that describe the database, relative to each workspace folder |
 | `phpForge.sql.connection` | `{}` | MySQL / MariaDB database read by **Refresh SQL schema** (`host`, `port`, `user`, `database`; password in secret storage) |
+| `phpForge.security.enabled` | `true` | Follow request data to SQL, HTML output, commands, includes, `unserialize`, redirects and file writes |
+| `phpForge.security.sanitizers` | `[]` | Your own escaping functions (`rp_clean`, `Html::escape`), safe for every sink |
+| `phpForge.migration.targetVersion` | `""` | PHP version you are migrating to; `migration-*` diagnostics and **Migration report** |
 | `phpForge.trace.server` | `off` | Language server trace |
 
 ## Commands
@@ -121,6 +126,7 @@ Completion in strings: VS Code does not suggest inside strings by default; press
 - **PHP Forge: Show Include Tree**
 - **PHP Forge: Create Baseline / Update Baseline / Clear Baseline**
 - **PHP Forge: Refresh SQL schema**
+- **PHP Forge: Migration report**
 
 ## Using it with Intelephense or PHP Tools
 

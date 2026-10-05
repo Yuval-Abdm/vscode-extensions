@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 — preview
+
+- Security: request data (`$_GET`, `$_POST`, `$_REQUEST`, `$_COOKIE`, `$_FILES` names, client-controlled `$_SERVER` keys, `extract($_POST)` — also in a file included after it —, `php://input`) is followed through variables, string building and the project's functions to SQL queries (`security-sql-injection`), HTML output (`security-xss`), shell commands (`security-command-injection`), includes (`security-file-inclusion`), `unserialize` (`security-unsafe-unserialize`), `header('Location: …')` (`security-open-redirect`) and file writes (`security-path-traversal`). The message shows the path: `$_POST['id'] (line 12) → $id → $sql (line 20) → mysqli_query (line 21)`.
+- Escaping is checked per sink: casts and `intval`, `filter_var`, `htmlspecialchars` / `htmlentities` (HTML), `mysqli_real_escape_string` / `addslashes` inside quotes (SQL), prepared statements, `escapeshellarg`, `basename`; `in_array(…, true)` on a literal list, `is_numeric`, `ctype_digit` and early exits narrow a value. Your own escaping functions: `phpForge.security.sanitizers`; everything can be turned off with `phpForge.security.enabled`.
+- PHP version migration: set `phpForge.migration.targetVersion` (e.g. `8.2`) to see everything that breaks or becomes deprecated between `phpForge.phpVersion` and the target — removed and deprecated functions (`mysql_*`, `each`, `create_function`, `ereg`, `utf8_encode`…), syntax (`$s{0}`, `(real)`, `${var}`, PHP 4 constructors, nested ternaries, implicitly nullable parameters), number / string comparisons (8.0) and dynamic properties (8.2). Quick fixes: `while (list($k, $v) = each($a))` → `foreach`, `create_function` → closure, and the existing syntax fixes.
+- **Migration report** command: every `migration-*` problem of the workspace, by rule and by file, in a Markdown document.
+
 ## 0.7.0 — preview
 
 - SQL schema from the project's `.sql` files (`CREATE TABLE`, `ALTER TABLE … ADD`; `phpForge.sql.schema`, default `sql/**/*.sql`, `migrations/**/*.sql`, `database/**/*.sql`) or from the database: **Refresh SQL schema** reads `INFORMATION_SCHEMA` of a MySQL / MariaDB database (`phpForge.sql.connection`, read-only session, password kept in VS Code secret storage) into `.vscode/php-forge-schema.json`.

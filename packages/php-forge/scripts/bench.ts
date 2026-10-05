@@ -21,7 +21,7 @@ import { loadSchema } from '../src/server/sql/sources.ts';
 import { loadStubs } from '../src/server/stubs/stubs.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
 import { SymbolIndex } from '../src/server/index/symbolIndex.ts';
-import { createParser, initParser, parsePhp } from '../src/server/parser/parser.ts';
+import { createParser, initParser, parsePhp, type Node, type Tree } from '../src/server/parser/parser.ts';
 import { DEFAULT_SETTINGS, DEFAULT_STUBS } from '../src/shared/protocol.ts';
 
 interface Result {
@@ -129,7 +129,24 @@ for (const root of corpus) {
     rules: {},
     library: (fsPath) => isLibrary(fsPath, [root], libraryPaths, []),
     baseline: () => undefined,
+    // Propagation comme dans le serveur : fonctions des autres fichiers relues, variables venues des inclusions
+    security: (input) => ({
+      uri: input.uri,
+      request: (name, at) => analysis.variable(input.uri, name.slice(1), at)?.request,
+      requestAtEntry: () => !!analysis.variable(input.uri, '', { line: 0, character: 0 })?.request,
+      loadFunction: (name) => {
+        const hit = index.findFunction(name)[0];
+        if (!hit || hit.uri === input.uri) return undefined;
+        let tree = functionTrees.get(hit.uri);
+        if (!tree) functionTrees.set(hit.uri, (tree = parsePhp(parser, decode(readFileSync(URI.parse(hit.uri).fsPath)))));
+        let node: Node | null = tree.rootNode.descendantForPosition({ row: hit.symbol.selectionRange.start.line, column: hit.symbol.selectionRange.start.character });
+        while (node && node.type !== 'function_definition') node = node.parent;
+        return node ? { uri: hit.uri, node, release: () => undefined } : undefined;
+      },
+    }),
+    ...(process.env.PHP_FORGE_TARGET ? { target: new TypeResolver(new Lookup(index, stubs), process.env.PHP_FORGE_TARGET) } : {}),
   };
+  const functionTrees = new Map<string, Tree>();
   const workspaceStart = performance.now();
   for (const file of index.files()) {
     const fsPath = URI.parse(file.uri).fsPath;
@@ -141,6 +158,7 @@ for (const root of corpus) {
     tree.delete();
   }
   const workspaceDiagnosticsMs = Math.round(performance.now() - workspaceStart);
+  for (const tree of functionTrees.values()) tree.delete();
   // Références : les 20 fonctions du projet présentes dans le plus de fichiers, fichiers relus comme par le serveur
   const refEnv: RefEnv = {
     lookup: env.resolver.lookup,

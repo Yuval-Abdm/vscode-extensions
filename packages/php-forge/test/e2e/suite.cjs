@@ -238,6 +238,18 @@ test('SQL : complétion des colonnes, survol, colonne inconnue', async () => {
   assert.ok((await vscode.commands.getCommands(true)).includes('phpForge.refreshSqlSchema'));
 });
 
+test('sécurité : donnée de la requête affichée ; commande Migration report', async () => {
+  const doc = await vscode.workspace.openTextDocument({ language: 'php', content: '<?php\n$q = $_GET["q"];\necho "<p>" . $q;\n' });
+  await vscode.window.showTextDocument(doc);
+  const found = await waitFor(() => {
+    const list = vscode.languages.getDiagnostics(doc.uri).filter((d) => d.code === 'security-xss');
+    return list.length ? list : false;
+  }, 'security-xss');
+  assert.strictEqual(found[0].range.start.line, 2);
+  assert.match(found[0].message, /\$_GET\["q"\] \(line 2\) → \$q → echo \(line 3\)/);
+  assert.ok((await vscode.commands.getCommands(true)).includes('phpForge.migrationReport'));
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {
