@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 — preview
+
+- SQL schema from the project's `.sql` files (`CREATE TABLE`, `ALTER TABLE … ADD`; `phpForge.sql.schema`, default `sql/**/*.sql`, `migrations/**/*.sql`, `database/**/*.sql`) or from the database: **Refresh SQL schema** reads `INFORMATION_SCHEMA` of a MySQL / MariaDB database (`phpForge.sql.connection`, read-only session, password kept in VS Code secret storage) into `.vscode/php-forge-schema.json`.
+- In SQL queries (also concatenated, built with `.=`, or marked with `/** @sql */`): completion of tables, of columns according to the `FROM` aliases, and of SQL functions; hover of a column (type, NULL, default); Go to Definition to the `CREATE TABLE`.
+- Diagnostics: `sql-syntax` (comma before `FROM` / `WHERE`, `WHERE AND`, unclosed parenthesis or quote), `sql-unknown-column` (tables whose columns are all known), `sql-unknown-table` (with the database schema only).
+- `$row = mysqli_fetch_assoc($res)`, `$res->fetch_assoc()`, `$stmt->fetch(PDO::FETCH_ASSOC)` and `fetchAll()` are typed by the columns of the `SELECT`: `$row['…']` completion, and `extract($row)` defines one variable per column.
+- New rule `mixed-quotes`: string concatenations that mix `'…'` and `"…"` outside SQL, with a quick fix (parts that only hold `"\n"`, quotes or parentheses are tolerated).
+- The rest of a concatenated query (`' WHERE …'`, `' ORDER BY …'`) is colored as soon as the file opens (TextMate injection).
+
 ## 0.6.0 — preview
 
 - Formatter: Format Document, Format Selection, format on type (`;`, `}`) and on save (`editor.formatOnSave`). PSR-12 indentation, spacing and braces; only whitespace between tokens is rewritten, so strings, heredocs, comments and HTML are never changed.

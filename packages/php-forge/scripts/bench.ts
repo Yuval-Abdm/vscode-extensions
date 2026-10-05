@@ -17,6 +17,7 @@ import { decode } from '../src/server/parser/encoding.ts';
 import { DEFAULT_FORMAT, formatText } from '../src/server/format/format.ts';
 import { tokensOf } from '../src/server/format/tokens.ts';
 import { findReferences, type RefEnv } from '../src/server/refactor/references.ts';
+import { loadSchema } from '../src/server/sql/sources.ts';
 import { loadStubs } from '../src/server/stubs/stubs.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
 import { SymbolIndex } from '../src/server/index/symbolIndex.ts';
@@ -45,6 +46,10 @@ interface Result {
   formatMs: number;
   formatMaxMs: number;
   formatFailures: number;
+  /** Schéma SQL : fichiers lus, tables, temps de chargement */
+  sqlFiles: number;
+  sqlTables: number;
+  sqlSchemaMs: number;
   entries: number;
   byCode: Record<string, number>;
 }
@@ -112,7 +117,12 @@ for (const root of corpus) {
   // Passe des diagnostics du workspace (fichiers hors librairie), comme le serveur en arrière-plan
   const byCode: Record<string, number> = {};
   const libraryPaths = ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'];
+  // Schéma SQL du corpus (globs par défaut, cache de la base s'il existe)
+  const schemaStart = performance.now();
+  const { schema, files: sqlFiles } = loadSchema({ folders: [root], globs: DEFAULT_SETTINGS.sql.schema, exclude: DEFAULT_SETTINGS.exclude });
+  const sqlSchemaMs = Math.round(performance.now() - schemaStart);
   const env: CollectEnv = {
+    schema,
     parser,
     resolver: new TypeResolver(new Lookup(index, stubs), process.env.PHP_FORGE_VERSION ?? '7.3'),
     analysis,
@@ -186,7 +196,7 @@ for (const root of corpus) {
     project: path.basename(root), files: stats.files, parsed: stats.parsed, skipped: stats.skipped, syntaxErrors: stats.syntaxErrors,
     symbols, ms: stats.ms, heapMB: Math.round(process.memoryUsage().heapUsed / 1e6),
     completionP50: percentile(timings, 50), completionP95: percentile(timings, 95),
-    analysisMs, entries: graph.entries().length, workspaceDiagnosticsMs, referencesMs, referencesMaxMs, referencesCount, formatMs, formatMaxMs, formatFailures, byCode,
+    analysisMs, entries: graph.entries().length, workspaceDiagnosticsMs, referencesMs, referencesMaxMs, referencesCount, formatMs, formatMaxMs, formatFailures, sqlFiles, sqlTables: schema.tables.length, sqlSchemaMs, byCode,
   });
 }
 console.table(results.map(({ byCode, ...r }) => r));

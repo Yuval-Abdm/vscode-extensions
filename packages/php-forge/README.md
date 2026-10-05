@@ -2,7 +2,7 @@
 
 **Free PHP language server for VS Code — built for real-world projects, from modern Composer apps to legacy code held together by `include`.**
 
-> Preview (0.6). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
+> Preview (0.7). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
 
 ## Features
 
@@ -13,7 +13,8 @@
 - **Hover**: variable types, signature, namespace, phpdoc, PHP version availability, deprecation, php.net links.
 - **Whole-project index** in the background (worker threads), cached on disk: a 19,000-file project is indexed in about 6 s.
 - **Outline / breadcrumbs**, **workspace symbol search** (Ctrl+T) and **live syntax errors** (a forgotten `;` is pointed out on its own line, with an "Add `;`" quick fix). In HTML, `<?php $x ?>` without `echo` and short `<?` tags are flagged, with quick fixes.
-- **SQL highlighting** for the whole query: keywords, functions and numbers in every part of a concatenation, in `$sql .= …` additions and in query function arguments — not only in strings that start with `SELECT`. Queries that mix `'…'` and `"…"` parts are flagged, with a quick fix.
+- **SQL in PHP strings**: highlighting of the whole query (every part of a concatenation, `$sql .= …` additions, query function arguments, strings marked `/** @sql */`); completion of tables, of columns according to the `FROM` aliases and of SQL functions; column hover (type, NULL, default); Go to Definition to the `CREATE TABLE`; checks for SQL syntax slips, unknown columns and unknown tables, from the project's `.sql` files or the real database (see **SQL schema** below). `$row = mysqli_fetch_assoc($res)` and PDO `fetch()` rows know the columns of the `SELECT`.
+- **Mixed quotes**: SQL queries and other string concatenations that mix `'…'` and `"…"` parts are flagged, with a quick fix.
 - **Diagnostics** for the whole project, in the background: undefined functions, classes, constants, methods and properties (only on known types), argument count, unused `use`, unreachable code, APIs removed or added after your PHP version, deprecated syntax, functions declared twice in an include chain. Level per rule, `// @php-forge-ignore`, and a **baseline** to hide the existing problems of a legacy project.
 - **Problems on hover**: hover a line with an error or warning to see the problem, the proposed fix and an **Apply** link.
 - **Native PHP functions and classes** from JetBrains phpstorm-stubs, for the PHP version of your project (shown in the status bar).
@@ -61,6 +62,12 @@ Variables created in included files keep their type and origin (hover, completio
 - **Mixed HTML / PHP**: only `<?php … ?>` blocks are formatted, indented from the line of their `<?php` tag; `<?= … ?>` is only normalized to `<?= $x ?>`. The line break after `?>` is never touched.
 - Options: braces (`psr12` or `keep`), alignment of `=>` and `=`, trailing commas in multi-line arrays, indicative line length. A file with a syntax error is left as is.
 
+### SQL schema
+
+PHP Forge reads the tables of the project's `.sql` files (`phpForge.sql.schema`: `CREATE TABLE`, `ALTER TABLE … ADD`). To use the real database instead, set `phpForge.sql.connection` (`host`, `port`, `user`, `database`) and run **PHP Forge: Refresh SQL schema**: the password is asked once and kept in VS Code secret storage, only `INFORMATION_SCHEMA` is read in a read-only session, and the result is written to `.vscode/php-forge-schema.json` (add it to `.gitignore` if the schema is private). The database schema is the reference: unknown tables are reported only when it is loaded, and old `.sql` dumps can report columns that were added since — refresh it.
+
+Completion in strings: VS Code does not suggest inside strings by default; press `Ctrl+Space`, or set `"editor.quickSuggestions": { "strings": "on" }` for `[php]`.
+
 ## Roadmap to 1.0
 
 | Version | Content |
@@ -70,7 +77,7 @@ Variables created in included files keep their type and origin (hover, completio
 | 0.4 ✓ | Diagnostics (undefined variables per caller, unknown symbols, PHP version), baseline |
 | 0.5 ✓ | Rename, references, auto-import and suggested imports (`use` and `include`), code generation |
 | 0.6 ✓ | Formatter (PSR-12, mixed HTML/PHP) |
-| 0.7 | SQL in PHP strings: highlighting, schema-aware completion and checks |
+| 0.7 ✓ | SQL in PHP strings: schema from `.sql` files or the database, completion, hover, checks |
 | 0.8 | Security (taint analysis) and PHP version migration |
 | 0.9 | FTP SFTP Deploy integration: impacted pages, deploy in one click |
 
@@ -102,6 +109,8 @@ Variables created in included files keep their type and origin (hover, completio
 | `phpForge.format.alignAssignments` | `false` | Align the `=` of consecutive assignments |
 | `phpForge.format.trailingCommas` | `false` | Trailing comma in multi-line arrays |
 | `phpForge.format.lineLength` | `120` | Indicative line length (alignment is skipped beyond it) |
+| `phpForge.sql.schema` | `["sql/**/*.sql", "migrations/**/*.sql", "database/**/*.sql"]` | `.sql` files that describe the database, relative to each workspace folder |
+| `phpForge.sql.connection` | `{}` | MySQL / MariaDB database read by **Refresh SQL schema** (`host`, `port`, `user`, `database`; password in secret storage) |
 | `phpForge.trace.server` | `off` | Language server trace |
 
 ## Commands
@@ -111,6 +120,7 @@ Variables created in included files keep their type and origin (hover, completio
 - **PHP Forge: Show Output**
 - **PHP Forge: Show Include Tree**
 - **PHP Forge: Create Baseline / Update Baseline / Clear Baseline**
+- **PHP Forge: Refresh SQL schema**
 
 ## Using it with Intelephense or PHP Tools
 

@@ -1,0 +1,2 @@
+ALTER TABLE clients ADD COLUMN email varchar(255) DEFAULT NULL;
+ALTER TABLE factures ADD COLUMN total decimal(10,2) DEFAULT NULL;

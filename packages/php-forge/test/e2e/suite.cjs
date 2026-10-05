@@ -215,6 +215,29 @@ test('mise en forme du document', async () => {
   assert.strictEqual(doc.getText(), '<?php\nif ($a) {\n    foo(1);\n}\n');
 });
 
+test('SQL : complétion des colonnes, survol, colonne inconnue', async () => {
+  const doc = await vscode.workspace.openTextDocument({ language: 'php', content: '<?php\n$r = mysqli_query($db, "SELECT c.solde, c.prenom FROM clients c");\n' });
+  await vscode.window.showTextDocument(doc);
+  const at = new vscode.Position(1, doc.lineAt(1).text.indexOf('c.solde') + 2);
+  const list = await waitFor(async () => {
+    const result = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, at);
+    return result && result.items.some((i) => (i.label.label ?? i.label) === 'solde') ? result : false;
+  }, 'complétion SQL');
+  assert.ok(list.items.some((i) => (i.label.label ?? i.label) === 'nom'));
+  const hover = await waitFor(async () => {
+    const hovers = await vscode.commands.executeCommand('vscode.executeHoverProvider', doc.uri, new vscode.Position(1, at.character + 2));
+    const value = (hovers ?? []).flatMap((h) => h.contents.map((c) => c.value ?? String(c))).join('\n');
+    return value.includes('decimal(10,2)') ? value : false;
+  }, 'survol SQL');
+  assert.match(hover, /NOT NULL/);
+  const diagnostics = await waitFor(() => {
+    const found = vscode.languages.getDiagnostics(doc.uri).filter((d) => d.code === 'sql-unknown-column');
+    return found.length ? found : false;
+  }, 'colonne inconnue');
+  assert.strictEqual(diagnostics[0].range.start.line, 1);
+  assert.ok((await vscode.commands.getCommands(true)).includes('phpForge.refreshSqlSchema'));
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {
