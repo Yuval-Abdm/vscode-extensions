@@ -30,6 +30,7 @@ import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { organizeUses } from './imports/uses.ts';
 import { importAllMissing, importFixes } from './imports/fixes.ts';
 import { generateActions } from './refactor/generate.ts';
+import { diagnosticFixes } from './refactor/fixes.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
@@ -559,7 +560,7 @@ connection.onCodeAction(
     const text = doc.doc.getText();
     const input = { uri, fsPath: URI.parse(uri).fsPath, text, tree: doc.tree, symbols: doc.symbols };
     const fixEnv = { lookup, graph: analysis?.graph };
-    if (wanted(context.only, CodeActionKind.QuickFix)) actions.push(...importFixes(input, context.diagnostics, fixEnv));
+    if (wanted(context.only, CodeActionKind.QuickFix)) actions.push(...importFixes(input, context.diagnostics, fixEnv), ...diagnosticFixes(uri, text, doc.tree, context.diagnostics));
     if (wanted(context.only, 'source.addMissingImports')) {
       const all = importAllMissing(input, published.get(uri) ?? [], fixEnv);
       if (all) actions.push(all);

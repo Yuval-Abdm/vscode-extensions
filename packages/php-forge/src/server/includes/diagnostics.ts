@@ -30,9 +30,9 @@ export function includeDiagnostics(report: FileReport, file: FileSymbols, label:
   for (const read of report.reads) {
     const suffix = callers(read.via, read.others, label);
     if (read.kind === 'undefined') {
-      out.push(diagnostic(rangeAt(read.at, read.end), 'undefined-variable', DiagnosticSeverity.Warning, l10n.t('{0} is not defined', `$${read.name}`) + suffix));
+      out.push({ ...diagnostic(rangeAt(read.at, read.end), 'undefined-variable', DiagnosticSeverity.Warning, l10n.t('{0} is not defined', `$${read.name}`) + suffix), data: { variable: read.name } });
     } else {
-      out.push(diagnostic(rangeAt(read.at, read.end), 'maybe-undefined-variable', DiagnosticSeverity.Information, l10n.t('{0} might not be defined', `$${read.name}`) + suffix));
+      out.push({ ...diagnostic(rangeAt(read.at, read.end), 'maybe-undefined-variable', DiagnosticSeverity.Information, l10n.t('{0} might not be defined', `$${read.name}`) + suffix), data: { variable: read.name } });
     }
   }
   for (const unresolved of report.unresolved) {

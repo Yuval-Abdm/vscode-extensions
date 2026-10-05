@@ -43,6 +43,12 @@ function diagnostic(range: Range, code: string, severity: DiagnosticSeverity, me
   return { range, code, severity, message, source: 'PHP Forge' };
 }
 
+/** Modèle de remplacement des stubs (fonctions) : correction « Replace with … ». */
+function withReplacement(d: Diagnostic, symbol: PhpSymbol): Diagnostic {
+  if (symbol.kind === 'function' && symbol.replacement) d.data = { ...(d.data as object | undefined), replacement: symbol.replacement };
+  return d;
+}
+
 /** Nom inconnu porté par le diagnostic : imports proposés (« Import Lib\User », « Add include »). */
 function withSymbol(d: Diagnostic, kind: 'class' | 'function' | 'constant', name: string): Diagnostic {
   d.data = { ...(d.data as object | undefined), symbol: { kind, name } };
@@ -261,13 +267,13 @@ class Checker {
         this.out.push(diagnostic(range, 'undefined-function', DiagnosticSeverity.Error, l10n.t('{0} is not available in PHP {1} (added in PHP {2})', label, version, symbol.since)));
       } else {
         const removed = symbol.removed ?? symbol.until;
-        this.out.push(diagnostic(range, 'removed-api', DiagnosticSeverity.Error, l10n.t('{0} was removed in PHP {1}', label, removed ?? version ?? '')));
+        this.out.push(withReplacement(diagnostic(range, 'removed-api', DiagnosticSeverity.Error, l10n.t('{0} was removed in PHP {1}', label, removed ?? version ?? '')), symbol));
       }
       return symbol;
     }
     const symbol = available.symbol;
     if (symbol.deprecated && symbol.deprecatedSince && version && compareVersions(version, symbol.deprecatedSince) >= 0) {
-      this.out.push(diagnostic(range, 'deprecated-api', DiagnosticSeverity.Warning, l10n.t('{0} is deprecated since PHP {1}', label, symbol.deprecatedSince)));
+      this.out.push(withReplacement(diagnostic(range, 'deprecated-api', DiagnosticSeverity.Warning, l10n.t('{0} is deprecated since PHP {1}', label, symbol.deprecatedSince)), symbol));
     }
     return symbol;
   }

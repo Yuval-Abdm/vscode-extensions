@@ -91,5 +91,6 @@
   "Generate constructor": "Générer le constructeur",
   "Implement {0} missing methods": "Implémenter les {0} méthodes manquantes",
   "Generate PHPDoc": "Générer la PHPDoc",
-  "Add @var": "Ajouter @var"
+  "Add @var": "Ajouter @var",
+  "Declare {0}": "Déclarer {0}"
 }
