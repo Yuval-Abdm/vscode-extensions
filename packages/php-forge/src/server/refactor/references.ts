@@ -221,9 +221,10 @@ export function referencesIn(env: RefEnv, file: SourceFile, target: Target, incl
 function mayReference(text: string, target: Target): boolean {
   const name = escape(target.name);
   const flags = target.kind === 'constant' ? '' : 'i';
-  // Fonction : appel ou déclaration (« nom( »), chaîne (callable), `use function` — un mot courant (« type ») dans
+  // Fonction : appel ou déclaration (« nom( »), chaîne (callable), « function [Ns\\]nom » (déclaration, `use function`,
+  // `use Ns\\{function nom as alias}`) — un mot courant (« type ») dans
   // un commentaire ou du HTML ne suffit pas
-  if (target.kind === 'function') return new RegExp(`(?<![\\w$])(?<!->)(?<!::)${name}\\s*\\(|['"\\\\]${name}['"]|\\buse\\s+function\\b[^;]*\\b${name}\\b`, flags).test(text);
+  if (target.kind === 'function') return new RegExp(`(?<![\\w$])(?<!->)(?<!::)${name}\\s*\\(|['"\\\\]${name}['"]|\\bfunction\\s+(?:[\\w\\\\]*\\\\)?${name}\\b`, flags).test(text);
   if (target.kind === 'constant') return new RegExp(`(?<![\\w$])(?<!->)(?<!::)${name}(?!\\w)`, flags).test(text);
   if (target.kind === 'class') return new RegExp(`(?<![\\w$])(?<!->)${name}(?!\\w)`, flags).test(text);
   return true;

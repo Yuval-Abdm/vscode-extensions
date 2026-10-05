@@ -69,6 +69,11 @@ describe('références', () => {
     assert.ok(!seen.includes('html.php'), seen.join());
   });
 
+  it('fonction importée par un use groupé avec alias : référence gardée par le filtre', async () => {
+    const { env, file } = await refEnv({ 'lib.php': '<?php\nnamespace Lib;\nfunction fmt($x) { return $x; }\n', 'u.php': '<?php\nuse Lib\\{function fmt as g};\necho g(1);\n', 'v.php': '<?php\nuse function Lib\\fmt;\necho fmt(2);\n' });
+    assert.deepEqual(where(findReferences(env, targetAt(env, file('lib.php'), { line: 2, character: 10 })!, true)), ['lib.php:2:9', 'u.php:1:18', 'v.php:1:17', 'v.php:2:5']);
+  });
+
   it('membre au nom unique dans le projet : appel sur un objet de type inconnu compté', async () => {
     const { env, file } = await refEnv({
       'a.php': '<?php\nclass Report { public function generatePdf() {} }\n',
