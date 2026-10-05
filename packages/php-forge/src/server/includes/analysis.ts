@@ -41,6 +41,8 @@ export interface SymbolNeed {
   declaredIn: string[];
   at: Loc;
   end: number;
+  /** Fonction qui contient l'utilisation (« f », « Classe::m », « closure ») ; absent : niveau fichier */
+  fn?: string;
 }
 
 export interface UnresolvedInclude {
@@ -98,6 +100,8 @@ interface Deps {
 interface Run extends Collector {
   delta: Delta;
   deps: Deps;
+  /** Fonctions appelées par le fichier et ceux qu'il inclut (noms courts en minuscules) */
+  calls: Set<string>;
 }
 
 interface FileAnalysis {
@@ -127,6 +131,7 @@ interface Ctx {
   base: Layer;
   collector: Collector;
   deps: Deps;
+  calls: Set<string>;
   /** Exécution pour le survol ou la complétion : rien n'est enregistré */
   probe: boolean;
   until?: Loc;
@@ -134,6 +139,7 @@ interface Ctx {
 }
 
 const MAX_DEPTH = 40;
+const shortName = (name: string) => name.slice(name.lastIndexOf('\\') + 1).toLowerCase();
 const before = (a: Loc, b: Loc) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
 
 /** Couche d'état : modifications par rapport à la couche parente. */
@@ -337,10 +343,14 @@ export class IncludeAnalysis {
     const base = this.#base();
     if (this.graph.isDynamicTarget(uri)) base.stop = true;
     this.#pending = [];
-    this.#runFile(uri, base, { entry: this.graph.fsPath(uri), via: '', probe: false, top: true });
-    // Le code des fonctions s'exécute quand elles sont appelées : ce que le script a chargé à la fin compte
+    const run = this.#runFile(uri, base, { entry: this.graph.fsPath(uri), via: '', probe: false, top: true });
+    // Le code d'une fonction ne s'exécute que si elle est appelée : seulement les fonctions appelées par la chaîne
+    // (pas les méthodes ni les closures, dont l'appel n'est pas suivi), avec ce que le script a chargé à la fin
+    const calls = run?.calls ?? new Set<string>();
     if (!base.stop) {
-      for (const { context, needs } of this.#pending) context.missing.push(...needs.filter((need) => !need.declaredIn.some((d) => base.isLoaded(d))));
+      for (const { context, needs } of this.#pending) {
+        context.missing.push(...needs.filter((need) => need.fn && calls.has(need.fn.toLowerCase()) && !need.declaredIn.some((d) => base.isLoaded(d))));
+      }
     }
     this.#pending = undefined;
   }
@@ -446,7 +456,7 @@ export class IncludeAnalysis {
   }
 
   #ctx(uri: string, file: FileSymbols, call: { entry?: string; via: string; probe: boolean; top: boolean; base: Layer }): Ctx {
-    return { uri, file, fsPath: this.graph.fsPath(uri), entry: call.entry, via: call.via, top: call.top, base: call.base, probe: call.probe, collector: { reads: [], unresolved: [], needs: [] }, deps: { once: new Set(), constants: new Map() } };
+    return { uri, file, fsPath: this.graph.fsPath(uri), entry: call.entry, via: call.via, top: call.top, base: call.base, probe: call.probe, collector: { reads: [], unresolved: [], needs: [] }, deps: { once: new Set(), constants: new Map() }, calls: new Set() };
   }
 
   /** Exécute le fichier `uri` par-dessus `layer` (modifiée : effet du fichier sur l'appelant). */
@@ -474,7 +484,7 @@ export class IncludeAnalysis {
         this.#stack.pop();
       }
       if (child.exit === 'return') child.exit = undefined;
-      run = { ...ctx.collector, delta: child.delta(), deps: ctx.deps };
+      run = { ...ctx.collector, delta: child.delta(), deps: ctx.deps, calls: ctx.calls };
       if (!state.entry && !call.probe) state.entry = layer.flatten();
       if (!call.probe) {
         if (state.stored < this.#options.maxContexts) {
@@ -522,7 +532,7 @@ export class IncludeAnalysis {
       for (const need of run.needs) needs.set(`${need.at[0]}:${need.at[1]}`, need);
       for (const u of run.unresolved) unresolved.set(u.index, u);
     }
-    return { reads: [...reads.values()], needs: [...needs.values()], unresolved: [...unresolved.values()], delta: runs[0].delta, deps: { once: new Set(), constants: new Map() } };
+    return { reads: [...reads.values()], needs: [...needs.values()], unresolved: [...unresolved.values()], delta: runs[0].delta, deps: { once: new Set(), constants: new Map() }, calls: new Set(runs.flatMap((r) => [...r.calls])) };
   }
 
   /** Cibles des includes situés dans les fonctions du fichier. */
@@ -564,7 +574,9 @@ export class IncludeAnalysis {
       const layer = this.#functionLayer(uri, fn);
       const ctx = this.#ctx(uri, file!, { via: 'function', probe: true, top: false, base: layer });
       ctx.collector = collector;
+      const before = collector.needs.length;
       this.#exec(fn.body, layer, ctx);
+      for (const need of collector.needs.slice(before)) need.fn = fn.name;
     }
     return collector;
   }
@@ -704,9 +716,11 @@ export class IncludeAnalysis {
     // Dépendances du fichier inclus qui ne sont pas satisfaites par ce fichier-ci : remontées à l'appelant
     for (const once of run?.deps.once ?? []) if (!layer.isLoaded(once, ctx.base.parent)) ctx.deps.once.add(once);
     for (const [name, value] of run?.deps.constants ?? []) if (!layer.ownConstant(name, ctx.base.parent)) ctx.deps.constants.set(name, value);
+    for (const name of run?.calls ?? []) ctx.calls.add(name);
   }
 
   #use(op: Extract<FlowOp, { op: 'use' }>, layer: Layer, ctx: Ctx): void {
+    if (op.kind === 'function') ctx.calls.add(shortName(op.names[0] ?? ''));
     // Contexte inconnu (include non résolu, gabarit dynamique, code dynamique) : le symbole a pu être chargé
     if (layer.stop || (op.kind === 'class' && layer.autoload)) return;
     const declared = this.#declaredIn(op.kind, op.names);

@@ -274,4 +274,13 @@ describe('analyse des inclusions', () => {
     const stopped = new IncludeAnalysis(index, lookup, graph, { maxContexts: 64, externalGlobals: [] });
     assert.equal(await stopped.runAsync(() => ++calls > 1, 1), false);
   });
+
+  it('symboles dans une fonction : vérifiés seulement si la chaîne appelle la fonction ; jamais dans les méthodes', async () => {
+    const analysis = await analyse({
+      'consts.php': "<?php define('CONST_A', 1); define('CONST_B', 2); define('CONST_C', 3);",
+      'lib.php': '<?php function used() { return CONST_A; } function unused() { return CONST_B; } class K { function m() { return CONST_C; } }',
+      'page.php': "<?php include 'lib.php'; used();",
+    });
+    assert.deepEqual(analysis.report(uriOf('lib.php'))!.symbols.map((s) => s.need.name), ['CONST_A']);
+  });
 });
