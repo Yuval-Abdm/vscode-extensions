@@ -4,7 +4,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { CACHE_VERSION, cacheFileFor } from '../src/server/index/cache.ts';
+import { CACHE_VERSION, cacheFileFor, loadCache, saveCache } from '../src/server/index/cache.ts';
 import { indexFolder, type IndexerOptions } from '../src/server/index/indexer.ts';
 import { indexInWorkers } from '../src/server/index/pool.ts';
 import { isIndexable, listPhpFiles } from '../src/server/index/scan.ts';
@@ -120,6 +120,28 @@ describe('indexFolder', () => {
     const lines = gunzipSync(readFileSync(cacheFile)).toString('utf8').trimEnd().split('\n');
     assert.deepEqual(JSON.parse(lines[0]), { version: CACHE_VERSION });
     assert.deepEqual(lines.slice(1).map((l) => path.relative(root, JSON.parse(l)[0])).sort(), ['a.php', 'latin1.php', 'sub/b.php']);
+  });
+
+  it('écriture du cache impossible (disque plein, dossier en lecture seule) : erreur rendue, pas d’arrêt du processus', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'php-forge-cache-'));
+    const cacheFile = path.join(dir, 'index.json.gz');
+    // Fichier temporaire impossible à ouvrir : un dossier porte son nom
+    mkdirSync(`${cacheFile}.${process.pid}.tmp`);
+    const file = { uri: 'file:///p/a.php', symbols: [], includes: [], scopes: [], syntaxError: false, names: ['x'.repeat(200)] };
+    const entries = new Map(Array.from({ length: 20_000 }, (_, i) => [`/p/f${i}.php`, { size: 1, mtimeMs: 1, file }] as [string, never]));
+    await assert.rejects(saveCache(cacheFile, entries));
+    await new Promise((r) => setTimeout(r, 50));
+  });
+
+  it('ligne démesurée (ancien cache de plusieurs centaines de Mo sur une ligne) : rejetée sans la lire en entier', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'php-forge-cache-'));
+    const cacheFile = path.join(dir, 'index.json.gz');
+    const entry = JSON.stringify(['/p/a.php', { size: 1, mtimeMs: 1, file: { uri: 'file:///p/a.php', symbols: [], includes: [], scopes: [], syntaxError: false, names: ['x'.repeat(5000)] } }]);
+    writeFileSync(cacheFile, gzipSync(`${JSON.stringify({ version: CACHE_VERSION })}\n${entry}\n`));
+    assert.equal((await loadCache(cacheFile, { maxLine: 1000 })).size, 0);
+    // En-tête qui ne tient pas sur une ligne courte : ancien format, rejeté dès les premiers octets
+    writeFileSync(cacheFile, gzipSync(JSON.stringify({ version: CACHE_VERSION, entries: [['/p/a.php', 'x'.repeat(5000)]] })));
+    assert.equal((await loadCache(cacheFile)).size, 0);
   });
 
   it('cache de l’ancien format (un seul document JSON) : reconstruit', async () => {
