@@ -9,6 +9,7 @@
 - Hover shows variable types and php.net links.
 - Missing `;` detected on the right line (instead of an "unexpected" error on the next one), with an "Add `;`" quick fix.
 - PHP tags in HTML: a value alone in `<?php $x ?>` / `<?$x?>` is never printed (warning, fixes: `<?=` or `<?php echo`); short open tag `<?` flagged (fix: `<?php`).
+- SQL in strings highlighted across the whole query: concatenations (`'SELECT …'.$id.' GROUP BY …'`, even when the next part starts on another line), `$sql .= ' AND …'` and query function arguments (`rp_query`, `->query`, `mysqli_query`…).
 - PHP version (`phpForge.phpVersion`, detected from `composer.json` or the `php` executable) shown in the status bar; `phpForge.stubs` selects PHP extensions.
 
 ## 0.1.0 — preview

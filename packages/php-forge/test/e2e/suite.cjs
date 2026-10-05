@@ -108,6 +108,27 @@ test('indications inline', async () => {
   assert.ok(hints.includes('amount:'));
 });
 
+test('SQL coloré dans la suite d’une requête concaténée', async () => {
+  const doc = await vscode.workspace.openTextDocument(ws('sql.php'));
+  await vscode.window.showTextDocument(doc);
+  const legend = await vscode.commands.executeCommand('vscode.provideDocumentSemanticTokensLegend', doc.uri);
+  const words = await waitFor(async () => {
+    const tokens = await vscode.commands.executeCommand('vscode.provideDocumentSemanticTokens', doc.uri);
+    if (!tokens) return false;
+    const out = [];
+    let line = 0;
+    let character = 0;
+    for (let i = 0; i < tokens.data.length; i += 5) {
+      line += tokens.data[i];
+      character = tokens.data[i] === 0 ? character + tokens.data[i + 1] : tokens.data[i + 1];
+      if (legend.tokenTypes[tokens.data[i + 3]] === 'keyword') out.push(`${line}:${doc.lineAt(line).text.slice(character, character + tokens.data[i + 2])}`);
+    }
+    return out.length ? out : false;
+  }, 'tokens sémantiques');
+  // « GROUP BY … ORDER BY » commence sur la ligne qui suit l'ouverture de la chaîne
+  assert.deepStrictEqual(words, ['1:SELECT', '2:FROM', '3:WHERE', '4:GROUP', '4:BY', '4:ORDER', '4:BY']);
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {

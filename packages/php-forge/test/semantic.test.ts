@@ -15,6 +15,7 @@ const CODE = [
   'class Shop extends Base {',
   '  const LIMIT = 1;',
   "  public static function make(int $qty) { old(); strlen('x'); return static::LIMIT + $qty; }",
+  "  public function find($id) { return rp_query('SELECT COUNT(*) FROM t WHERE id = '.$id.' LIMIT 1'); }",
   '}',
 ].join('\n');
 
@@ -65,5 +66,13 @@ describe('tokens sémantiques', async () => {
     assert.deepEqual(find(7, 'LIMIT'), { type: 'property', modifiers: ['readonly', 'static'] });
     assert.deepEqual(find(7, '$qty', 0), { type: 'parameter', modifiers: ['declaration'] });
     assert.deepEqual(find(7, '$qty', 1), { type: 'parameter', modifiers: [] });
+  });
+
+  it('SQL dans les chaînes : mots-clés, fonctions, nombres, autour des autres jetons', () => {
+    assert.deepEqual(find(8, 'SELECT'), { type: 'keyword', modifiers: [] });
+    assert.deepEqual(find(8, 'COUNT'), { type: 'function', modifiers: [] });
+    assert.deepEqual(find(8, 'LIMIT'), { type: 'keyword', modifiers: [] });
+    assert.deepEqual(find(8, '1'), { type: 'number', modifiers: [] });
+    assert.deepEqual(find(8, '$id', 1), { type: 'parameter', modifiers: [] });
   });
 });

@@ -1,6 +1,6 @@
 // Tokens sémantiques : namespaces, classes / interfaces / enums / traits, fonctions, méthodes, propriétés,
 // constantes et paramètres, avec les modificateurs declaration, static, readonly, deprecated, abstract et
-// defaultLibrary (fonctions et classes natives de PHP).
+// defaultLibrary (fonctions et classes natives de PHP) ; mots-clés, fonctions et nombres du SQL dans les chaînes.
 import type { FileSymbols } from '../../shared/types.ts';
 import type { Lookup } from '../index/lookup.ts';
 import type { IndexedSymbol } from '../index/symbolIndex.ts';
@@ -8,10 +8,11 @@ import { CLASS_DECLARATIONS, FUNCTION_NODES } from '../model/context.ts';
 import { resolveClassName, resolveFunctionOrConstant, scopeAt } from '../model/names.ts';
 import { rangeOf } from '../model/ranges.ts';
 import type { Node, Tree } from '../parser/parser.ts';
+import { sqlTokens } from '../sql/tokens.ts';
 import { scopeRoot } from '../types/flow.ts';
 import { nameAt } from './nameAt.ts';
 
-export const TOKEN_TYPES = ['namespace', 'class', 'interface', 'enum', 'type', 'parameter', 'variable', 'property', 'enumMember', 'function', 'method'] as const;
+export const TOKEN_TYPES = ['namespace', 'class', 'interface', 'enum', 'type', 'parameter', 'variable', 'property', 'enumMember', 'function', 'method', 'keyword', 'number'] as const;
 export const TOKEN_MODIFIERS = ['declaration', 'static', 'readonly', 'deprecated', 'abstract', 'defaultLibrary'] as const;
 type TokenType = (typeof TOKEN_TYPES)[number];
 type TokenModifier = (typeof TOKEN_MODIFIERS)[number];
@@ -141,6 +142,7 @@ export function semanticTokens(lookup: Lookup, file: FileSymbols, tree: Tree): n
     if (done) break;
   }
   cursor.delete();
+  for (const token of sqlTokens(tree)) tokens.push({ ...token, modifiers: [] });
 
   tokens.sort((a, b) => a.line - b.line || a.character - b.character);
   const data: number[] = [];

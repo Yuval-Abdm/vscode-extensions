@@ -77,7 +77,7 @@ describe('serveur LSP', () => {
   after(async () => stopServer(server));
 
   it('indexe le projet et écrit le cache', () => {
-    assert.deepEqual({ ...server.indexed.stats, ms: 0 }, { files: 4, parsed: 4, fromCache: 0, skipped: 0, syntaxErrors: 1, ms: 0 });
+    assert.deepEqual({ ...server.indexed.stats, ms: 0 }, { files: 5, parsed: 5, fromCache: 0, skipped: 0, syntaxErrors: 1, ms: 0 });
     assert.equal(readdirSync(storage).filter((f) => f.endsWith('.json.gz')).length, 1);
   });
 
@@ -192,7 +192,7 @@ describe('serveur LSP', () => {
   it('second démarrage : tout vient du cache', async () => {
     const second = await startServer(storage);
     try {
-      assert.equal(second.indexed.stats.fromCache, 4);
+      assert.equal(second.indexed.stats.fromCache, 5);
       assert.equal(second.indexed.stats.parsed, 0);
     } finally {
       await stopServer(second);
