@@ -1,4 +1,4 @@
-# PHP Forge — note de reprise (2026-10-05, mise à jour après 0.9)
+# PHP Forge — note de reprise (2026-10-05, mise à jour après 1.0)
 
 Note pour reprendre le travail dans une nouvelle session Claude Code (autre compte possible). Demande en cours de
 l'utilisateur : **« enchaîne tout jusqu'à 1.0 »** — enchaîner les jalons 0.3 → 1.0 sans merge, sans push, sans
@@ -41,6 +41,7 @@ cd packages/php-forge && PHP_FORGE_CORPUS=$HOME/dev/retraite-plus/CRM-FR node sc
 | `feat/php-forge-0.7` | 0.7 SQL — terminée, revue faite et corrigée (plan `docs/superpowers/plans/2026-10-05-php-forge-0.7-sql.md`) ; contient la règle `mixed-quotes` demandée |
 | `feat/php-forge-0.8` | 0.8 Sécurité et migration — terminée, revue faite et corrigée (plan `docs/superpowers/plans/2026-10-05-php-forge-0.8-security-migration.md`) |
 | `feat/php-forge-0.9` | 0.9 Intégration FTP SFTP Deploy — terminée, revue faite et corrigée (plan `docs/superpowers/plans/2026-10-05-php-forge-0.9-deploy.md`) |
+| `feat/php-forge-1.0` | 1.0 — terminée, revue faite et corrigée (plan `docs/superpowers/plans/2026-10-05-php-forge-1.0.md`) ; `php-forge-1.0.0.vsix` construit |
 | `wip/php-forge-0.7-sql-draft` | Brouillon repris dans `feat/php-forge-0.7` : peut être supprimée |
 
 Chaque branche part de la précédente. Rien n'est mergé ni poussé. Rulings et mineurs différés de chaque jalon :
@@ -48,9 +49,6 @@ Chaque branche part de la précédente. Rien n'est mergé ni poussé. Rulings et
 
 ## Ensuite
 
-1.0 sur une branche `feat/php-forge-1.0` partie de `feat/php-forge-0.9` : performances (§3) — réouverture avec cache
-6,1 s mesurés contre 3 s visés : `indexFolder` réécrit tout le cache (JSON 260 Mo + gzip, ≈ 3 s) même sans changement,
-à éviter ; références d'une fonction très utilisée 3,0 s contre 2 s ; tas du bench 2 Go (serveur visé < 1,5 Go) —,
-documentation, traduction française complète, empaquetage (publication par l'utilisateur). À la fin : rapport en
-français avec tous les rulings et mineurs différés (`.superpowers/php-forge-decisions.md`), branches, commandes de
-push / merge / publication.
+Tous les jalons jusqu'à 1.0 sont faits. Reste à l'utilisateur : relire, pousser, fusionner (chaque branche contient la
+précédente : fusionner `feat/php-forge-1.0` suffit), publier sur le Marketplace et Open VSX. Rulings et mineurs différés
+de tous les jalons : `.superpowers/php-forge-decisions.md`.
