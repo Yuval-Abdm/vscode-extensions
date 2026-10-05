@@ -23,5 +23,15 @@
   "from settings": "depuis les réglages",
   "from composer.json": "depuis composer.json",
   "from the php executable": "depuis l'exécutable php",
-  "default version": "version par défaut"
+  "default version": "version par défaut",
+  "{0} is not defined": "{0} n'est pas définie",
+  "{0} might not be defined": "{0} n'est peut-être pas définie",
+  " when included from {0}": " quand le fichier est inclus depuis {0}",
+  " when included from {0} (defined in {1} other callers)": " quand le fichier est inclus depuis {0} (définie dans {1} autres appelants)",
+  " when included from {0} (defined in 1 other caller)": " quand le fichier est inclus depuis {0} (définie dans 1 autre appelant)",
+  "{0} and {1} more": "{0} et {1} autres",
+  "Included file not found: {0}": "Fichier inclus introuvable : {0}",
+  "Include path could not be resolved: {0}. Add /** @include path */ on the line above to help.": "Chemin d'inclusion non résolu : {0}. Ajoutez /** @include chemin */ sur la ligne précédente pour l'indiquer.",
+  "{0} is declared in {1}, which is not included here": "{0} est déclaré dans {1}, qui n'est pas inclus ici",
+  "Include analysis is approximate: this file is included in too many different contexts": "Analyse des inclusions approximative : ce fichier est inclus dans trop de contextes différents"
 }
