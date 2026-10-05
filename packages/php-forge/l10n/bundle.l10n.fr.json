@@ -63,5 +63,7 @@
   "An implicitly nullable parameter {0}": "Un paramètre implicitement nullable {0}",
   "A PHP 4 constructor": "Un constructeur PHP 4",
   "A string offset with braces {0}": "Un offset de chaîne entre accolades {0}",
-  "{0} is already declared in {1}": "{0} est déjà déclaré dans {1}"
+  "{0} is already declared in {1}": "{0} est déjà déclaré dans {1}",
+  "Ignore {0} on this line": "Ignorer {0} sur cette ligne",
+  "Ignore {0} in this file": "Ignorer {0} dans ce fichier"
 }
