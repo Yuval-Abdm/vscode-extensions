@@ -114,6 +114,7 @@ export function extractFile(tree: Tree, uri: string, options: { infer?: boolean;
     const { flow, includes } = extractFlow(root, out.scopes, inferrer);
     out.flow = flow;
     out.includes = includes;
+    out.names = [...new Set(root.descendantsOfType('name').map((n) => n.text.toLowerCase()))].sort();
   }
   if (inferrer) inferPending(out, pending, inferrer);
   return out;
@@ -171,6 +172,9 @@ function versionInfo(symbol: PhpSymbol, doc: string | undefined, attributes: str
   if (/^@deprecated\b/m.test(doc ?? '') || /\bDeprecated\b/.test(attributes)) symbol.deprecated = true;
   const deprecatedSince = /\bDeprecated\s*\([^\]]*?\bsince:\s*['"]([\d.]+)/.exec(attributes)?.[1] ?? versionOf(docTag(doc, 'deprecated'));
   if (symbol.deprecated && deprecatedSince) symbol.deprecatedSince = deprecatedSince;
+  const deprecation = attributes.indexOf('Deprecated(');
+  const replacement = deprecation >= 0 ? /replacement:\s*(['"])((?:\\.|(?!\1).)*)\1/.exec(attributes.slice(deprecation))?.[2] : undefined;
+  if (replacement) symbol.replacement = replacement.replace(/\\(['"\\])/g, '$1');
   const available = /PhpStormStubsElementAvailable\s*\(([^)]*)\)/.exec(attributes)?.[1];
   const from = available ? (/from:\s*['"]([\d.]+)/.exec(available)?.[1] ?? /^\s*['"]([\d.]+)/.exec(available)?.[1]) : undefined;
   const to = available ? /to:\s*['"]([\d.]+)/.exec(available)?.[1] : undefined;

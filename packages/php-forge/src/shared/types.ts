@@ -99,6 +99,8 @@ export interface PhpSymbol {
   deprecated?: boolean;
   /** Version de PHP qui déprécie le symbole (stubs : @deprecated 8.4, #[Deprecated(since: '7.4')]) */
   deprecatedSince?: string;
+  /** Modèle de remplacement d'une API dépréciée (stubs : %parameter0%… pour les arguments) */
+  replacement?: string;
   /** Fonction ou classe déclarée dans un bloc (if, fonction) : peut ne pas exister, ou exister deux fois sans erreur */
   conditional?: true;
   /** Propriété créée par `$this->x = …` sans déclaration ; classe qui écrit `$this->$nom` (propriétés quelconques) */
@@ -225,4 +227,6 @@ export interface FileSymbols {
   syntaxError: boolean;
   /** Programmes des variables (moteur d'inclusion) ; absent pour les stubs */
   flow?: FileFlow;
+  /** Identifiants utilisés par le fichier (minuscules, triés) : fichiers candidats d'une recherche de références */
+  names?: string[];
 }

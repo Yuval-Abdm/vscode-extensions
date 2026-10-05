@@ -83,7 +83,7 @@ export class DocumentStore {
     // Types déduits et programme des variables coûtent cher sur les gros fichiers : calculés à la pause de frappe
     // (inferTypes) ; d'ici là, le programme et les includes précédents restent valables à peu près
     const previous = entry.symbols;
-    entry.symbols = { ...extractFile(entry.tree, uri, { infer: false, flow: false }), flow: previous.flow, includes: previous.includes };
+    entry.symbols = { ...extractFile(entry.tree, uri, { infer: false, flow: false }), flow: previous.flow, includes: previous.includes, names: previous.names };
     entry.pendingInference = true;
     return entry;
   }
