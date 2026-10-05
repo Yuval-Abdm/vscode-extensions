@@ -1,6 +1,6 @@
-// Diagnostics de tout le workspace en arrière-plan (phpForge.diagnostics.scope = workspace) : fichiers traités par
-// lots en rendant la main entre deux lots ; une nouvelle passe annule la précédente ; les fichiers qui n'ont plus
-// d'alerte (ou qui ont disparu) sont effacés.
+// Diagnostics de tout le workspace en arrière-plan (phpForge.diagnostics.scope = workspace) : la main est rendue
+// dès que le budget de temps est dépassé ; une nouvelle passe annule la précédente ; un fichier en erreur est
+// sauté ; les fichiers qui n'ont plus d'alerte (ou qui ont disparu) sont effacés.
 import type { Diagnostic } from 'vscode-languageserver/node';
 
 export interface WorkspaceJob {
@@ -9,6 +9,7 @@ export interface WorkspaceJob {
   skip(uri: string): boolean;
   compute(uri: string): Diagnostic[] | undefined;
   publish(uri: string, diagnostics: Diagnostic[]): void;
+  error?(uri: string, err: unknown): void;
 }
 
 export class WorkspaceDiagnostics {
@@ -19,19 +20,28 @@ export class WorkspaceDiagnostics {
     return this.#published;
   }
 
-  async run(job: WorkspaceJob, batch = 20): Promise<void> {
+  /** `budget` : millisecondes de calcul entre deux retours à la boucle d'événements. */
+  async run(job: WorkspaceJob, budget = 25): Promise<void> {
     const generation = ++this.#generation;
     const seen = new Set<string>();
-    let count = 0;
+    let slice = Date.now();
     for (const uri of job.files()) {
       if (generation !== this.#generation) return;
       if (job.skip(uri)) continue;
       seen.add(uri);
-      const diagnostics = job.compute(uri) ?? [];
+      let diagnostics: Diagnostic[];
+      try {
+        diagnostics = job.compute(uri) ?? [];
+      } catch (err) {
+        job.error?.(uri, err);
+        diagnostics = [];
+      }
       if (diagnostics.length || this.#published.has(uri)) job.publish(uri, diagnostics);
-      if (diagnostics.length) this.#published.add(uri);
-      else this.#published.delete(uri);
-      if (++count % batch === 0) await new Promise((resolve) => setImmediate(resolve));
+      this.record(uri, diagnostics.length > 0);
+      if (Date.now() - slice >= budget) {
+        await new Promise((resolve) => setImmediate(resolve));
+        slice = Date.now();
+      }
     }
     if (generation !== this.#generation) return;
     for (const uri of [...this.#published]) {
@@ -39,6 +49,12 @@ export class WorkspaceDiagnostics {
       job.publish(uri, []);
       this.#published.delete(uri);
     }
+  }
+
+  /** Publication faite hors de la passe (document fermé) : la passe saura l'effacer. */
+  record(uri: string, hasDiagnostics: boolean): void {
+    if (hasDiagnostics) this.#published.add(uri);
+    else this.#published.delete(uri);
   }
 
   cancel(): void {

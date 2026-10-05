@@ -50,7 +50,7 @@ export function semanticPart(input: CollectInput, env: CollectEnv): Diagnostic[]
 /** `raw` : après la politique, avant la baseline (pour créer la baseline) ; `hidden` : alertes masquées par elle. */
 export function collectDiagnostics(input: CollectInput, env: CollectEnv, semantic: Diagnostic[]): { diagnostics: Diagnostic[]; raw: Diagnostic[]; hidden: number } {
   if (env.library(input.fsPath)) return { diagnostics: [], raw: [], hidden: 0 };
-  const braces = braceOffsetLines(semantic);
+  const braces = braceOffsetLines(input.tree, input.text);
   const syntax = syntaxDiagnostics(input.tree, 100, { parser: env.parser, text: input.text }).filter((d) => !braces.has(d.range.start.line));
   const all = [...syntax, ...tagDiagnostics(input.tree, input.text), ...sqlQuoteDiagnostics(input.tree), ...semantic];
   const provided = env.includes?.(input);

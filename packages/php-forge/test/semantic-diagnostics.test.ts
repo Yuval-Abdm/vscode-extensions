@@ -69,6 +69,11 @@ describe('symboles introuvables', () => {
     assert.deepEqual(await check("<?php\nif (function_exists('nope')) { nope(); }\nif (class_exists('Missing')) { new Missing(); }\nif (defined('X') && X) {}\nfunction_exists('g') && g();\n"), []);
   });
 
+  it('gardes method_exists / property_exists, condition ternaire', async () => {
+    const code = "<?php\nclass A {}\n$a = new A();\nif (method_exists($a, 'render')) $a->render();\nif (property_exists($a, 'p')) echo $a->p;\n$o = class_exists('X') ? new X() : null;\n$a->other();\n";
+    assert.deepEqual(await check(code, '8.3', { 'g.php': '<?php function method_exists($o, $m) {} function property_exists($o, $p) {}' }), ['6:undefined-method Method A::other() does not exist']);
+  });
+
   it('symboles du workspace, namespaces et use', async () => {
     const code = '<?php\nnamespace App;\nuse Lib\\Tool;\nnew Tool();\nhelper();\nstrlen("x");\n\\strlen("y");\n';
     assert.deepEqual(await check(code, '8.3', { 'lib.php': '<?php\nnamespace Lib;\nclass Tool {}\n', 'h.php': '<?php\nnamespace App;\nfunction helper() {}\n' }), []);
@@ -116,6 +121,22 @@ describe('membres sur un type connu', () => {
       '$x = new X(); $x->f();',
     ].join('\n');
     assert.deepEqual(await check(code, '8.3', { 'f.php': '<?php function get_obj() { return null; }' }), []);
+  });
+
+  it('écritures de propriétés : tableau, opérateur combiné, ++, propriété dynamique, objet hors $this', async () => {
+    const code = [
+      '<?php',
+      'class A { function f() { $this->items[] = 1; $this->data["k"] = 2; $this->total += 1; $this->n++; return [$this->items, $this->data, $this->total, $this->n]; } }',
+      'class Row { function __construct($r) { foreach ($r as $k => $v) $this->$k = $v; } }',
+      '$o = new Row([]); echo $o->nom;',
+      'class U {}',
+      '$u = new U(); $u->extra = 1; echo $u->extra; $u->list[] = 2; echo $u->list[0];',
+    ].join('\n');
+    assert.deepEqual(await check(code), []);
+  });
+
+  it('trait : membres de la classe hôte', async () => {
+    assert.deepEqual(await check('<?php\ntrait T { function helper() { return $this->hostMethod() . $this->hostProp . self::hostStatic(); } }\n'), []);
   });
 
   it('classe parente introuvable : pas d’alerte de membre', async () => {

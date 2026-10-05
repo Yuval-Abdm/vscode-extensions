@@ -66,6 +66,8 @@ const inference = new Map<string, ReturnType<typeof setTimeout>>();
 const INFERENCE_DELAY = 300;
 /** Analyse des inclusions, relancée après l'indexation et les modifications */
 let analysis: IncludeAnalysis | undefined;
+/** Analyse des inclusions à refaire (modification en attente, ou pas encore faite) */
+let analysisPending = true;
 let analysisTimer: ReturnType<typeof setTimeout> | undefined;
 const ANALYSIS_DELAY = 500;
 /** Incrémentée à chaque modification : une analyse en cours devenue obsolète s'interrompt */
@@ -264,8 +266,11 @@ function updateSemantic(doc: OpenDocument): void {
   semanticCache.set(doc.uri, semanticPart(inputOf(doc), collectEnv()));
 }
 
+/** Au-delà, la passe d'arrière-plan saute les règles sémantiques (secondes de calcul) : vues à l'ouverture. */
+const BACKGROUND_SEMANTIC_MAX = 200_000;
+
 /** Diagnostics d'un fichier du disque (passe du workspace, baseline) ; undefined : ignoré. */
-function diskDiagnostics(uri: string): { raw: Diagnostic[]; diagnostics: Diagnostic[]; text: string } | undefined {
+function diskDiagnostics(uri: string, background = false): { raw: Diagnostic[]; diagnostics: Diagnostic[]; text: string } | undefined {
   const symbols = workspace.get(uri);
   if (!symbols?.flow) return undefined;
   const fsPath = URI.parse(uri).fsPath;
@@ -282,7 +287,8 @@ function diskDiagnostics(uri: string): { raw: Diagnostic[]; diagnostics: Diagnos
   const tree = parsePhp(parser, text);
   try {
     const input: CollectInput = { uri, fsPath, symbols, tree, text };
-    const result = collectDiagnostics(input, env, semanticPart(input, env));
+    const semantic = background && text.length > BACKGROUND_SEMANTIC_MAX ? [] : semanticPart(input, env);
+    const result = collectDiagnostics(input, env, semantic);
     setHidden(uri, result.hidden);
     return { raw: result.raw, diagnostics: result.diagnostics, text };
   } finally {
@@ -305,8 +311,9 @@ function startWorkspaceDiagnostics(): void {
   void workspaceDiagnostics.run({
     files: () => [...workspace.files()].map((f) => f.uri).filter((uri) => uri.startsWith('file:')),
     skip: (uri) => documents.get(uri) !== undefined,
-    compute: (uri) => diskDiagnostics(uri)?.diagnostics,
+    compute: (uri) => diskDiagnostics(uri, true)?.diagnostics,
     publish: publishUri,
+    error: (uri, err) => connection.console.error(`${uri}: ${String((err as Error)?.stack ?? err)}`),
   }).catch((err) => connection.console.error(String((err as Error)?.stack ?? err)));
 }
 
@@ -341,23 +348,25 @@ function refresh(doc: OpenDocument): void {
 function scheduleAnalysis(delay = ANALYSIS_DELAY): void {
   clearTimeout(analysisTimer);
   analysisGeneration++;
+  analysisPending = true;
   analysisTimer = setTimeout(() => {
     void indexing.then(safe(undefined, () => runAnalysis()));
   }, delay);
 }
 
 /** Analyse coopérative : rend la main entre les scripts d'entrée, abandonnée si une modification arrive entre-temps. */
-async function runAnalysis(): Promise<void> {
+async function runAnalysis(workspacePass = true): Promise<void> {
   const generation = analysisGeneration;
   const started = Date.now();
   const graph = new IncludeGraph(workspace, { roots: folders, documentRoot: settings.documentRoot, serverRoot: settings.serverRoot });
   const next = new IncludeAnalysis(workspace, lookup, graph, { maxContexts: settings.includes.maxContexts, externalGlobals: settings.externalGlobals });
   if (!(await next.runAsync(() => generation !== analysisGeneration))) return;
   analysis = next;
+  analysisPending = false;
   includeCache.clear();
   connection.console.info(`Include analysis: ${graph.size} files in ${Date.now() - started} ms`);
   for (const doc of documents.all()) publish(doc);
-  startWorkspaceDiagnostics();
+  if (workspacePass) startWorkspaceDiagnostics();
   void connection.sendRequest('workspace/codeLens/refresh').catch(() => undefined);
 }
 
@@ -374,8 +383,12 @@ connection.onDidChangeTextDocument(
   safe(undefined, ({ textDocument, contentChanges }) => {
     const doc = documents.change(textDocument.uri, textDocument.version, contentChanges);
     if (!doc) return;
+    // La passe du workspace rend la main à la frappe ; relancée après la prochaine analyse
+    workspaceDiagnostics.cancel();
     const cached = includeCache.get(doc.uri);
     if (cached) includeCache.set(doc.uri, shiftDiagnostics(cached, contentChanges));
+    const semantic = semanticCache.get(doc.uri);
+    if (semantic) semanticCache.set(doc.uri, shiftDiagnostics(semantic, contentChanges));
     refresh(doc);
     scheduleAnalysis();
     clearTimeout(inference.get(doc.uri));
@@ -419,6 +432,7 @@ connection.onDidCloseTextDocument(
     // Workspace : le fichier fermé garde ses problèmes (version du disque) ; sinon ils disparaissent
     const disk = settings.diagnostics.scope === 'workspace' ? diskDiagnostics(textDocument.uri)?.diagnostics : undefined;
     publishUri(textDocument.uri, disk ?? []);
+    workspaceDiagnostics.record(textDocument.uri, !!disk?.length);
   }),
 );
 
@@ -557,9 +571,18 @@ connection.onRequest(
   BASELINE_REQUEST,
   safe({ files: 0, entries: 0 } as BaselineResult, async ({ action }: BaselineParams): Promise<BaselineResult> => {
     await indexing;
+    // Les alertes des inclusions font partie de la baseline : analyse à jour d'abord
+    if (action !== 'clear' && analysisPending) {
+      clearTimeout(analysisTimer);
+      analysisGeneration++;
+      await runAnalysis(false);
+    }
+    workspaceDiagnostics.cancel();
     if (action === 'clear') {
       for (const folder of folders) Baseline.clear(folder);
       baselines.clear();
+      for (const doc of documents.all()) publish(doc);
+      startWorkspaceDiagnostics();
     } else {
       baselines.clear();
       const byRoot = new Map<string, { rel: string; diagnostics: Diagnostic[]; text: string }[]>();
@@ -583,9 +606,11 @@ connection.onRequest(
       }
       for (const folder of folders) Baseline.from(byRoot.get(folder) ?? []).save(folder);
       loadBaselines();
+      // Tout ce qui vient d'être calculé est dans la baseline : rien à afficher, pas de seconde passe
+      workspaceDiagnostics.clear(publishUri);
+      for (const [root, list] of byRoot) for (const entry of list) setHidden(URI.file(path.join(root, entry.rel)).toString(), entry.diagnostics.length);
+      for (const doc of documents.all()) publish(doc);
     }
-    for (const doc of documents.all()) publish(doc);
-    startWorkspaceDiagnostics();
     let entries = 0;
     for (const baseline of baselines.values()) entries += baseline.size;
     return { files: baselines.size, entries };

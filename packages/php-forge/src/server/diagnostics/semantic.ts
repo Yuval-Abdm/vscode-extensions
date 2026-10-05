@@ -7,6 +7,7 @@ import { DiagnosticSeverity, type Diagnostic } from 'vscode-languageserver/node'
 import type { FileSymbols, PhpSymbol, Range } from '../../shared/types.ts';
 import type { IndexedSymbol } from '../index/symbolIndex.ts';
 import { enclosingClass } from '../model/context.ts';
+import { writeTarget, writtenMember } from '../model/extract.ts';
 import { resolveClassName, resolveFunctionOrConstant, scopeAt } from '../model/names.ts';
 import { rangeOf } from '../model/ranges.ts';
 import type { Node, Tree } from '../parser/parser.ts';
@@ -51,7 +52,13 @@ function guardNames(condition: Node | null | undefined): string[] {
     return op === '&&' || op === 'and' ? [...guardNames(condition.childForFieldName('left')), ...guardNames(condition.childForFieldName('right'))] : [];
   }
   if (condition.type !== 'function_call_expression') return [];
-  const kind = GUARDS[condition.childForFieldName('function')?.text.toLowerCase() ?? ''];
+  const fn = condition.childForFieldName('function')?.text.toLowerCase() ?? '';
+  if (fn === 'method_exists' || fn === 'property_exists') {
+    // method_exists($o, 'm') : le membre m de n'importe quel objet du bloc
+    const member = condition.childForFieldName('arguments')?.namedChildren[1]?.namedChildren[0];
+    return member?.type === 'string' || member?.type === 'encapsed_string' ? [`member:${member.text.slice(1, -1).toLowerCase()}`] : [];
+  }
+  const kind = GUARDS[fn];
   const arg = condition.childForFieldName('arguments')?.namedChildren[0]?.namedChildren[0];
   const value = arg && (arg.type === 'string' || arg.type === 'encapsed_string') ? arg.text.slice(1, -1).replace(/^\\+/, '').replace(/\\\\/g, '\\') : undefined;
   return kind && value ? [`${kind}:${value.toLowerCase()}`] : [];
@@ -63,9 +70,12 @@ class Checker {
   readonly #resolver: TypeResolver;
   readonly #inferrer: Inferrer;
   readonly #known = new Map<string, boolean>();
+  /** Propriétés écrites quelque part dans le fichier (`$u->extra = 1`) : leurs lectures ne sont pas signalées */
+  readonly #written: Set<string>;
 
-  constructor(file: FileSymbols, resolver: TypeResolver) {
+  constructor(file: FileSymbols, resolver: TypeResolver, written: Set<string>) {
     this.#file = file;
+    this.#written = written;
     this.#resolver = resolver;
     this.#inferrer = new Inferrer(file.scopes);
   }
@@ -115,13 +125,23 @@ class Checker {
       case 'scoped_property_access_expression':
         this.#classReference(node.namedChildren[0], guards);
         break;
+      case 'conditional_expression': {
+        // `class_exists('X') ? new X() : null`
+        const condition = node.childForFieldName('condition');
+        if (condition) this.visit(condition, guards);
+        const body = node.childForFieldName('body');
+        if (body) this.visit(body, new Set([...guards, ...guardNames(condition)]));
+        const alternative = node.childForFieldName('alternative');
+        if (alternative) this.visit(alternative, guards);
+        return;
+      }
       case 'member_call_expression':
       case 'nullsafe_member_call_expression':
-        this.#methodCall(node);
+        if (!guards.has(`member:${node.childForFieldName('name')?.text.toLowerCase()}`)) this.#methodCall(node);
         break;
       case 'member_access_expression':
       case 'nullsafe_member_access_expression':
-        this.#propertyRead(node);
+        if (!guards.has(`member:${node.childForFieldName('name')?.text.toLowerCase()}`)) this.#propertyRead(node);
         break;
       case 'assignment_expression':
       case 'augmented_assignment_expression':
@@ -270,6 +290,8 @@ class Checker {
       seen.add(name.toLowerCase());
       const hits = this.#resolver.lookup.findClass(name);
       if (!hits.length || DYNAMIC_CLASSES.has(name.toLowerCase())) known = false;
+      // Trait : `$this` est la classe hôte, inconnue ici
+      if (name === fqn && hits.some((h) => h.symbol.kind === 'trait')) known = false;
       for (const hit of hits) {
         if (hit.symbol.mixins?.length || /AllowDynamicProperties/.test(hit.symbol.signature ?? '')) known = false;
         // Erreur de syntaxe dans le fichier : des membres ont pu être perdus par l'analyse
@@ -292,6 +314,12 @@ class Checker {
     if (!parts.length || parts.some((t) => t.kind === 'mixed')) return [];
     const classes = parts.flatMap((t) => (t.kind === 'class' ? [t.fqn] : []));
     return classes.every((fqn) => this.#knownHierarchy(fqn)) ? classes : [];
+  }
+
+  /** Classe (ou ancêtre) qui écrit `$this->$nom` : propriétés quelconques. */
+  #dynamic(fqn: string): boolean {
+    for (const hit of this.#resolver.lookup.ancestors(fqn)) if (hit.symbol.dynamic) return true;
+    return false;
   }
 
   #methodCall(node: Node): void {
@@ -336,7 +364,7 @@ class Checker {
     const object = node.childForFieldName('object');
     if (!name || name.type !== 'name' || !object) return;
     const classes = this.#classesOf(object);
-    if (!classes.length || classes.some((c) => this.#hasMember(c, '__get', ['method']))) return;
+    if (!classes.length || this.#written.has(name.text) || classes.some((c) => this.#hasMember(c, '__get', ['method']) || this.#dynamic(c))) return;
     if (classes.every((fqn) => !this.#hasMember(fqn, name.text, ['property']))) {
       this.out.push(diagnostic(rangeOf(name), 'undefined-property', DiagnosticSeverity.Warning, l10n.t('Property {0}::${1} does not exist', classes[0], name.text)));
     }
@@ -362,7 +390,19 @@ class Checker {
 }
 
 export function semanticDiagnostics(file: FileSymbols, tree: Tree, resolver: TypeResolver): Diagnostic[] {
-  const checker = new Checker(file, resolver);
+  const checker = new Checker(file, resolver, writtenProperties(tree.rootNode));
   checker.visit(tree.rootNode, new Set());
   return checker.out.sort((a, b) => a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character);
+}
+
+/** Noms des propriétés écrites dans le fichier, sur n'importe quel objet. */
+function writtenProperties(root: Node): Set<string> {
+  const out = new Set<string>();
+  const visit = (node: Node): void => {
+    const name = writtenMember(writeTarget(node))?.childForFieldName('name');
+    if (name?.type === 'name') out.add(name.text);
+    for (const child of node.namedChildren) visit(child);
+  };
+  visit(root);
+  return out;
 }

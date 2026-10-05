@@ -26,7 +26,7 @@ describe('syntaxe dépréciée', () => {
     assert.equal(d.code, 'deprecated-syntax');
     assert.match(String(d.message), /\$s\[0\]/);
     assert.equal(apply(code, d), '<?php\necho $s[0];\n');
-    assert.deepEqual([...braceOffsetLines([d])], [1]);
+    assert.deepEqual([...braceOffsetLines(await parse(code), code)], [1]);
     assert.match(String((await check(code, '8.1'))[0].message), /removed in PHP 8\.0/);
     assert.deepEqual(await check(code, '7.3'), []);
   });
@@ -42,6 +42,14 @@ describe('syntaxe dépréciée', () => {
   it('ternaires imbriqués sans parenthèses', async () => {
     const diagnostics = await check('<?php\necho $a ? 1 : $b ? 2 : 3;\necho $a ? 1 : ($b ? 2 : 3);\n', '7.4');
     assert.deepEqual(diagnostics.map((d) => d.range.start.line), [1]);
+  });
+
+  it('chaîne de ?: : autorisée', async () => {
+    assert.deepEqual(await check('<?php\n$x = $a ?: $b ?: "d";\n', '8.0'), []);
+  });
+
+  it('mixed = null : déjà nullable', async () => {
+    assert.deepEqual(await check('<?php\nfunction f(mixed $x = null, null $y = null) {}\n', '8.4'), []);
   });
 
   it('${var} dans une chaîne (8.2)', async () => {

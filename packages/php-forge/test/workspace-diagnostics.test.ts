@@ -18,9 +18,9 @@ describe('diagnostics du workspace en arrière-plan', () => {
   it('publie les fichiers qui ont des alertes, saute les documents ouverts, efface ceux qui n’en ont plus', async () => {
     const runner = new WorkspaceDiagnostics();
     const published = new Map<string, number>();
-    await runner.run(job(['a', 'b', 'c'], { a: [diag], c: [diag] }, published, new Set(['c'])), 1);
+    await runner.run(job(['a', 'b', 'c'], { a: [diag], c: [diag] }, published, new Set(['c'])), 0);
     assert.deepEqual([...published], [['a', 1]]);
-    await runner.run(job(['a', 'b'], {}, published), 1);
+    await runner.run(job(['a', 'b'], {}, published), 0);
     assert.deepEqual([...published], [['a', 0]]);
     assert.deepEqual([...runner.published], []);
   });
@@ -30,8 +30,8 @@ describe('diagnostics du workspace en arrière-plan', () => {
     const published = new Map<string, number>();
     const files = Array.from({ length: 50 }, (_, i) => `f${i}`);
     const results = Object.fromEntries(files.map((f) => [f, [diag]]));
-    const first = runner.run(job(files, results, published), 5);
-    const second = runner.run(job(['g'], { g: [diag] }, published), 5);
+    const first = runner.run(job(files, results, published), 0);
+    const second = runner.run(job(['g'], { g: [diag] }, published), 0);
     await Promise.all([first, second]);
     assert.ok(published.size < 51);
     assert.equal(published.get('g'), 1);
@@ -40,8 +40,25 @@ describe('diagnostics du workspace en arrière-plan', () => {
   it('effacer : toutes les publications retirées', async () => {
     const runner = new WorkspaceDiagnostics();
     const published = new Map<string, number>();
-    await runner.run(job(['a'], { a: [diag] }, published), 1);
+    await runner.run(job(['a'], { a: [diag] }, published), 0);
     runner.clear((uri) => published.set(uri, 0));
     assert.deepEqual([...published], [['a', 0]]);
+  });
+
+  it('un fichier en erreur n’arrête pas la passe', async () => {
+    const runner = new WorkspaceDiagnostics();
+    const published = new Map<string, number>();
+    const errors: string[] = [];
+    const base = job(['a', 'b', 'c'], { a: [diag], c: [diag] }, published);
+    await runner.run({ ...base, compute: (uri) => { if (uri === 'b') throw new Error('boom'); return base.compute(uri); }, error: (uri) => errors.push(uri) }, 0);
+    assert.deepEqual([[...published.keys()], errors], [['a', 'c'], ['b']]);
+  });
+
+  it('publication faite ailleurs (document fermé) : effacée par la passe suivante', async () => {
+    const runner = new WorkspaceDiagnostics();
+    const published = new Map<string, number>();
+    runner.record('x', true);
+    await runner.run(job(['x'], {}, published), 0);
+    assert.deepEqual([...published], [['x', 0]]);
   });
 });

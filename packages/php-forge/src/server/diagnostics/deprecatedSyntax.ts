@@ -59,7 +59,9 @@ export function deprecatedSyntax(tree: Tree, text: string, version: string | und
       }
       case 'conditional_expression': {
         const condition = node.childForFieldName('condition');
-        if (condition?.type === 'conditional_expression' && applies(RULES.nestedTernary, version)) {
+        // `$a ?: $b ?: $c` (formes courtes) reste autorisé
+        const short = (n: Node) => !n.childForFieldName('body');
+        if (condition?.type === 'conditional_expression' && !(short(node) && short(condition)) && applies(RULES.nestedTernary, version)) {
           out.push(warning(rangeOf(node), message(l10n.t('A nested ternary without parentheses'), RULES.nestedTernary, version, l10n.t('add parentheses'))));
         }
         break;
@@ -111,7 +113,7 @@ function dollarBrace(node: Node, version: string | undefined, out: Diagnostic[])
 function implicitNullable(param: Node, version: string | undefined, out: Diagnostic[]): void {
   const type = param.childForFieldName('type');
   const value = param.childForFieldName('default_value');
-  if (!type || value?.type !== 'null') return;
+  if (!type || value?.type !== 'null' || ['mixed', 'null'].includes(type.text.toLowerCase())) return;
   const range = rangeOf(type);
   const label = `${type.text} ${param.childForFieldName('name')?.text ?? ''}`;
   if (type.type === 'named_type' || type.type === 'primitive_type') {
@@ -134,7 +136,13 @@ function php4Constructor(cls: Node, version: string | undefined, out: Diagnostic
   if (nameNode) out.push(warning(rangeOf(nameNode), message(l10n.t('A PHP 4 constructor'), RULES.php4Constructor, version, l10n.t('use {0}', '__construct()'))));
 }
 
-/** Lignes où un offset entre accolades a été reconnu : leurs erreurs de syntaxe viennent de lui. */
-export function braceOffsetLines(diagnostics: Diagnostic[]): Set<number> {
-  return new Set(diagnostics.filter((d) => (d.data as { braceOffset?: boolean } | undefined)?.braceOffset).map((d) => d.range.start.line));
+/** Lignes d'un offset entre accolades (`$s{0}`) : leurs erreurs de syntaxe viennent de lui, quelle que soit la version. */
+export function braceOffsetLines(tree: Tree, text: string): Set<number> {
+  const out = new Set<number>();
+  if (!tree.rootNode.hasError) return out;
+  text.split('\n').forEach((line, row) => {
+    if (BRACE_OFFSET.test(line)) out.add(row);
+    BRACE_OFFSET.lastIndex = 0;
+  });
+  return out;
 }

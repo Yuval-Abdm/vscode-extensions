@@ -101,7 +101,7 @@ export interface PhpSymbol {
   deprecatedSince?: string;
   /** Fonction ou classe déclarée dans un bloc (if, fonction) : peut ne pas exister, ou exister deux fois sans erreur */
   conditional?: true;
-  /** Propriété créée par `$this->x = …` sans déclaration */
+  /** Propriété créée par `$this->x = …` sans déclaration ; classe qui écrit `$this->$nom` (propriétés quelconques) */
   dynamic?: true;
   /** Fonction ou méthode qui lit ses arguments avec func_get_args() : nombre d'arguments libre */
   variadicBody?: true;

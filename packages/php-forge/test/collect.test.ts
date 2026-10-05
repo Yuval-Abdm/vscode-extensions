@@ -37,6 +37,12 @@ describe('assemblage des diagnostics d’un fichier', () => {
     assert.deepEqual(codes, ['deprecated-syntax']);
   });
 
+  it('offset entre accolades avant PHP 7.4 : ni erreur de syntaxe ni dépréciation', async () => {
+    const { env, input } = await setup('<?php\necho $s{0};\n');
+    env.resolver.phpVersion = '7.3';
+    assert.deepEqual(collectDiagnostics(input, env, semanticPart(input, env)).diagnostics.map((d) => d.code), []);
+  });
+
   it('librairie : rien ; règle désactivée ; baseline', async () => {
     const lib = await setup('<?php\nnope();\n', { library: () => true });
     assert.deepEqual(collectDiagnostics(lib.input, lib.env, semanticPart(lib.input, lib.env)).diagnostics, []);

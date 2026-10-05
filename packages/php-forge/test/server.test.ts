@@ -179,6 +179,18 @@ describe('serveur LSP', () => {
     await waitFor(() => server.diagnostics.get(uri('includes/legacy.php'))?.find((d) => d.code === 'argument-count'), 'baseline supprimée');
   });
 
+  it('diagnostics sémantiques décalés pendant la frappe', async () => {
+    await open(server, 'shift.php', '<?php\nnope_shift();\n');
+    await waitFor(() => server.diagnostics.get(uri('shift.php'))?.find((d) => d.code === 'undefined-function'), 'undefined-function');
+    await server.connection.sendNotification('textDocument/didChange', {
+      textDocument: { uri: uri('shift.php'), version: 2 },
+      contentChanges: [{ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } }, text: '\n' }],
+    });
+    const first = await waitFor(() => server.history.find((h) => h.uri === uri('shift.php') && h.version === 2), 'publication v2');
+    assert.deepEqual(first.diagnostics.filter((d) => d.code === 'undefined-function').map((d) => d.range.start.line), [2]);
+    await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('shift.php') } });
+  });
+
   it('« ; » manquant signalé, avec sa correction rapide', async () => {
     await open(server, 'semicolon.php', '<?php\n$a = 1\n$b = 2;\n');
     const diagnostics = await waitFor(() => server.diagnostics.get(uri('semicolon.php')), 'diagnostics');
@@ -267,6 +279,21 @@ describe('serveur LSP', () => {
   it('changement de réglage : nouvelle version de PHP', async () => {
     await server.connection.sendNotification('workspace/didChangeConfiguration', { settings: { phpForge: { phpVersion: '5.6' } } });
     assert.ok(await waitFor(() => server.statuses.find((s) => s.phpVersion === '5.6'), 'statut 5.6'));
+  });
+
+  it('baseline demandée juste après le démarrage : alertes des inclusions comprises', async () => {
+    const third = await startServer(mkdtempSync(path.join(tmpdir(), 'php-forge-storage-')));
+    try {
+      // Une frappe repousse l'analyse des inclusions : la baseline doit l'attendre
+      await open(third, 'pending.php', '<?php\n');
+      await third.connection.sendNotification('textDocument/didChange', { textDocument: { uri: uri('pending.php'), version: 2 }, contentChanges: [{ text: '<?php\n$a = 1;\n' }] });
+      await third.connection.sendRequest('phpForge/baseline', { action: 'create' });
+      const saved = readFileSync(path.join(fixture, '.vscode/php-forge-baseline.json'), 'utf8');
+      assert.match(saved, /undefined-variable/);
+    } finally {
+      await third.connection.sendRequest('phpForge/baseline', { action: 'clear' });
+      await stopServer(third);
+    }
   });
 
   it('second démarrage : tout vient du cache', async () => {

@@ -169,7 +169,7 @@ const versionOf = (text: string | undefined) => (text ? /\d+(?:\.\d+)*/.exec(tex
 
 function versionInfo(symbol: PhpSymbol, doc: string | undefined, attributes: string): void {
   if (/^@deprecated\b/m.test(doc ?? '') || /\bDeprecated\b/.test(attributes)) symbol.deprecated = true;
-  const deprecatedSince = /\bDeprecated\s*\(([^)]*)\)/.exec(attributes)?.[1].match(/since:\s*['"]([\d.]+)/)?.[1] ?? versionOf(docTag(doc, 'deprecated'));
+  const deprecatedSince = /\bDeprecated\s*\([^\]]*?\bsince:\s*['"]([\d.]+)/.exec(attributes)?.[1] ?? versionOf(docTag(doc, 'deprecated'));
   if (symbol.deprecated && deprecatedSince) symbol.deprecatedSince = deprecatedSince;
   const available = /PhpStormStubsElementAvailable\s*\(([^)]*)\)/.exec(attributes)?.[1];
   const from = available ? (/from:\s*['"]([\d.]+)/.exec(available)?.[1] ?? /^\s*['"]([\d.]+)/.exec(available)?.[1]) : undefined;
@@ -215,7 +215,7 @@ function classSymbol(node: Node, scope: NameScope, pending: Pending[]): PhpSymbo
     else if (member.type === 'enum_case') children.push(enumCaseSymbol(member));
   }
   children.push(...virtualMembers(symbol, scope, templates));
-  children.push(...dynamicProperties(node, children, pending));
+  children.push(...dynamicProperties(node, children, pending, symbol));
   if (traits.length) symbol.uses = traits;
   if (children.length) symbol.children = children;
   return symbol;
@@ -389,18 +389,57 @@ function inferPending(file: FileSymbols, pending: Pending[], inferrer: Inferrer)
   }
 }
 
-/** Propriétés affectées par `$this->x = …` dans les méthodes sans être déclarées (code historique). */
-function dynamicProperties(classNode: Node, children: PhpSymbol[], pending: Pending[]): PhpSymbol[] {
+/**
+ * Propriétés écrites par `$this->x = …`, `$this->x[] = …`, `$this->x += …`, `$this->x++` dans les méthodes sans
+ * être déclarées (code historique). `$this->$nom = …` : la classe crée des propriétés quelconques (`dynamic`).
+ */
+function dynamicProperties(classNode: Node, children: PhpSymbol[], pending: Pending[], owner: PhpSymbol): PhpSymbol[] {
   const declared = new Set(children.filter((c) => c.kind === 'property').map((c) => c.name));
+  const { names, dynamic } = thisWrites(classNode);
+  if (dynamic) owner.dynamic = true;
   const out: PhpSymbol[] = [];
-  for (const [name, values] of thisAssignments(classNode)) {
+  for (const [name, node] of names) {
     if (declared.has(name)) continue;
-    const at = rangeOf(values[0]);
+    const at = rangeOf(node);
     const symbol: PhpSymbol = { kind: 'property', name, range: at, selectionRange: at, signature: `public $${name}`, modifiers: ['public'], dynamic: true };
     pending.push({ symbol, node: classNode, owner: classNode });
     out.push(symbol);
   }
   return out;
+}
+
+/** Cible écrite : le membre sous les indices (`$this->x['k'][] = …` → `$this->x`). */
+export function writtenMember(target: Node | null | undefined): Node | undefined {
+  let node = target;
+  while (node && node.type === 'subscript_expression') node = node.namedChildren[0];
+  return node && (node.type === 'member_access_expression' || node.type === 'nullsafe_member_access_expression') ? node : undefined;
+}
+
+/** Cible d'une écriture : gauche d'une affectation, opérande de ++ / --. */
+export function writeTarget(node: Node): Node | undefined {
+  if (node.type === 'assignment_expression' || node.type === 'augmented_assignment_expression' || node.type === 'reference_assignment_expression') return node.childForFieldName('left') ?? undefined;
+  if (node.type === 'update_expression') return node.namedChildren[0];
+  return undefined;
+}
+
+function thisWrites(owner: Node): { names: Map<string, Node>; dynamic: boolean } {
+  const names = new Map<string, Node>();
+  let dynamic = false;
+  const visit = (node: Node): void => {
+    for (const child of node.namedChildren) {
+      if (child.type === 'class_declaration' || child.type === 'anonymous_class') continue;
+      const member = writtenMember(writeTarget(child));
+      if (member && member.childForFieldName('object')?.text === '$this') {
+        const name = member.childForFieldName('name');
+        if (name?.type === 'name') {
+          if (!names.has(name.text)) names.set(name.text, child);
+        } else if (name) dynamic = true;
+      }
+      visit(child);
+    }
+  };
+  visit(owner.childForFieldName('body') ?? owner);
+  return { names, dynamic };
 }
 
 /** Affectations `$this->nom = valeur` dans les méthodes d'une classe, par nom de propriété. */
