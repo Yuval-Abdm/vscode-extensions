@@ -125,8 +125,76 @@ export type IncludeKind = 'include' | 'include_once' | 'require' | 'require_once
 export interface IncludeRef {
   kind: IncludeKind;
   range: Range;
-  /** Texte de l'expression du chemin (évaluée au jalon 0.3) */
+  /** Texte de l'expression du chemin */
   expression: string;
+  /** Expression du chemin évaluée symboliquement */
+  path: PathExpr;
+  /** Chemin donné par `/** @include chemin *\/` sur la ligne précédente */
+  hint?: boolean;
+}
+
+/**
+ * Chemin d'un include évalué symboliquement (§4.1). `dir` / `file` : dossier et chemin du fichier qui contient
+ * l'expression ; `docroot` : `$_SERVER['DOCUMENT_ROOT']` ; `const` : constante, résolue avec la chaîne
+ * d'inclusion ; `unknown` : valeur inconnue (variable, appel…), gardée dans les concaténations pour le préfixe.
+ */
+export type PathExpr =
+  | { k: 'lit'; v: string }
+  | { k: 'dir' }
+  | { k: 'file' }
+  | { k: 'docroot' }
+  | { k: 'const'; name: string }
+  | { k: 'cat'; parts: PathExpr[] }
+  | { k: 'dirname'; of: PathExpr; levels: number }
+  | { k: 'unknown' };
+
+/** Ligne et colonne, sous forme compacte (cache). */
+export type Loc = [number, number];
+
+/** Variable passée telle quelle à un appel (définie si le paramètre est par référence, lue sinon). */
+export interface FlowArg {
+  index: number;
+  name: string;
+  at: Loc;
+  /** Colonne de fin */
+  end: number;
+}
+
+/**
+ * Opération du programme d'une portée (§4.4). `branch` : alternatives dont une seule s'exécute (`exhaustive` :
+ * l'une d'elles s'exécute toujours, sinon un chemin vide implicite existe) ; `loop` : corps exécuté zéro ou
+ * plusieurs fois ; `assign` avec `guard` : variable garantie par une condition (`isset`, `!empty`).
+ */
+export type FlowOp =
+  | { op: 'assign'; name: string; at: Loc; type?: TypeExpr; guard?: true }
+  | { op: 'read'; name: string; at: Loc; end: number }
+  | { op: 'include'; index: number }
+  | { op: 'unset'; name: string }
+  | { op: 'extract'; source: 'request' | 'other'; from?: string; at: Loc }
+  | { op: 'dynamic'; at: Loc }
+  | { op: 'exit'; ret?: true }
+  | { op: 'define'; name: string; value: PathExpr }
+  | { op: 'call'; names: string[]; method?: string; args: FlowArg[] }
+  | { op: 'use'; kind: 'function' | 'class' | 'constant'; names: string[]; at: Loc; end: number }
+  | { op: 'autoload' }
+  | { op: 'branch'; alts: FlowOp[][]; exhaustive: boolean }
+  | { op: 'loop'; body: FlowOp[] };
+
+/** Programme d'une fonction, d'une méthode ou d'une closure (portée propre). */
+export interface FlowFunction {
+  /** Nom affiché : « f », « Classe::m », « closure » */
+  name: string;
+  /** Variables définies à l'entrée : paramètres, variables de `use`, `this` */
+  params: string[];
+  /** Première et dernière ligne */
+  lines: [number, number];
+  body: FlowOp[];
+}
+
+/** Programmes d'un fichier : niveau fichier et fonctions. */
+export interface FileFlow {
+  main: FlowOp[];
+  functions: FlowFunction[];
 }
 
 /** Portée de noms : namespace et imports `use`. Clés en minuscules pour classes et fonctions, exactes pour les constantes. */
@@ -147,4 +215,6 @@ export interface FileSymbols {
   /** Portées dans l'ordre du fichier ; la première couvre tout le fichier */
   scopes: NameScope[];
   syntaxError: boolean;
+  /** Programmes des variables (moteur d'inclusion) ; absent pour les stubs */
+  flow?: FileFlow;
 }
