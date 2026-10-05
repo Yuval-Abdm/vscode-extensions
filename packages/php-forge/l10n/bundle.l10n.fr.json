@@ -53,5 +53,14 @@
   "Too few arguments to {0}: {1} given, at least {2} expected": "Pas assez d'arguments pour {0} : {1} donnés, au moins {2} attendus",
   "Too many arguments to {0}: {1} given, at most {2} expected": "Trop d'arguments pour {0} : {1} donnés, au plus {2} attendus",
   "Unused use statement: {0}": "Use inutilisé : {0}",
-  "Unreachable code": "Code inatteignable"
+  "Unreachable code": "Code inatteignable",
+  "The {0} cast": "Le cast {0}",
+  "use {0}": "utilisez {0}",
+  "Replace with {0}": "Remplacer par {0}",
+  "A nested ternary without parentheses": "Un ternaire imbriqué sans parenthèses",
+  "add parentheses": "ajoutez des parenthèses",
+  "The {0} string interpolation": "L'interpolation {0} dans une chaîne",
+  "An implicitly nullable parameter {0}": "Un paramètre implicitement nullable {0}",
+  "A PHP 4 constructor": "Un constructeur PHP 4",
+  "A string offset with braces {0}": "Un offset de chaîne entre accolades {0}"
 }
