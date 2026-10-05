@@ -125,8 +125,10 @@ interface FileAnalysis {
   /** Contexte d'entrée par appelant */
   contexts: Map<string, { run: Run; missing: SymbolNeed[] }>;
   approximate: boolean;
-  /** Variables à l'entrée du premier contexte (survol, complétion) */
+  /** Variables à l'entrée du premier contexte (survol, complétion, sécurité) */
   entry?: Map<string, VarInfo>;
+  /** `extract($_POST)` d'un appelant du premier contexte : toute variable inconnue vient de la requête */
+  entryRequest?: { from: string; line: number };
   functions?: Collector;
 }
 
@@ -481,7 +483,9 @@ export class IncludeAnalysis {
 
   #entryLayer(uri: string): Layer {
     const layer = this.#base();
-    for (const [name, info] of this.#files.get(uri)?.entry ?? []) layer.vars.set(name, info);
+    const state = this.#files.get(uri);
+    for (const [name, info] of state?.entry ?? []) layer.vars.set(name, info);
+    layer.request = state?.entryRequest;
     return layer;
   }
 
@@ -532,7 +536,10 @@ export class IncludeAnalysis {
       }
       if (child.exit === 'return') child.exit = undefined;
       run = { ...ctx.collector, delta: child.delta(), deps: ctx.deps, calls: ctx.calls };
-      if (!state.entry && !call.probe) state.entry = layer.flatten();
+      if (!state.entry && !call.probe) {
+        state.entry = layer.flatten();
+        state.entryRequest = layer.request;
+      }
       if (!call.probe) {
         if (state.stored < this.#options.maxContexts) {
           state.runs.set(fp, [...variants, run]);
