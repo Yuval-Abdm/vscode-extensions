@@ -3,13 +3,15 @@
 // installée), après un avertissement si certains ont des erreurs.
 import * as vscode from 'vscode';
 import type { ImpactEntry } from '../shared/protocol.ts';
-import { changedFiles, errorSummary, gitApiOf, isPhp, type GitExtension, type GitState } from './changes.ts';
+import { changedFiles, conflictedFiles, deploySummary, errorSummary, gitApiOf, isPhp, type DeployTarget, type GitExtension, type GitState } from './changes.ts';
 
 const DEPLOY_EXTENSION_ID = 'yuval-abdm.ftp-sftp-deploy';
 
 /** API publique de FTP SFTP Deploy (version 1) : ce qui est utilisé ici. */
 interface DeployApi {
   hasConfig(): boolean;
+  /** Fichiers → cibles du profil actif (hors exclusions) */
+  resolve(uris: vscode.Uri[]): (DeployTarget & { uri: vscode.Uri })[];
   upload(uris: vscode.Uri[]): Promise<unknown>;
 }
 
@@ -63,6 +65,11 @@ export class ImpactProvider implements vscode.TreeDataProvider<Node> {
     }));
     this.refresh();
     return out;
+  }
+
+  /** Fichiers en conflit de fusion des dépôts */
+  conflicts(): string[] {
+    return conflictedFiles((this.#git?.repositories ?? []).map((r) => r.state));
   }
 
   /** Fichiers modifiés de tous les dépôts et documents non enregistrés (tous types). */
@@ -119,7 +126,10 @@ export class ImpactProvider implements vscode.TreeDataProvider<Node> {
   }
 }
 
-/** « Deploy changed files » : enregistrer, avertir des erreurs, envoyer par FTP SFTP Deploy. */
+/**
+ * « Deploy changed files » : enregistrer, avertir des erreurs, confirmer (fichiers et serveur), envoyer par FTP SFTP
+ * Deploy. Les fichiers en conflit de fusion ne sont jamais envoyés.
+ */
 export async function deployChanged(provider: ImpactProvider): Promise<void> {
   const api = await deployApi();
   if (!api) {
@@ -133,7 +143,8 @@ export async function deployChanged(provider: ImpactProvider): Promise<void> {
     void vscode.window.showWarningMessage(vscode.l10n.t('No FTP SFTP Deploy profile in this workspace: create .vscode/deploy.json first.'));
     return;
   }
-  const uris = provider.changed().map((u) => vscode.Uri.parse(u));
+  const conflicts = new Set(provider.conflicts());
+  const uris = provider.changed().filter((u) => !conflicts.has(u)).map((u) => vscode.Uri.parse(u));
   if (!uris.length) {
     void vscode.window.showInformationMessage(vscode.l10n.t('No changed file to deploy.'));
     return;
@@ -141,8 +152,15 @@ export async function deployChanged(provider: ImpactProvider): Promise<void> {
   const dirty = vscode.workspace.textDocuments.filter((d) => d.isDirty && uris.some((u) => u.toString() === d.uri.toString()));
   if (dirty.length) {
     const save = vscode.l10n.t('Save and deploy');
-    if ((await vscode.window.showWarningMessage(vscode.l10n.t('{0} changed files are not saved.', dirty.length), { modal: true }, save)) !== save) return;
-    for (const doc of dirty) await doc.save();
+    const names = dirty.map((d) => vscode.workspace.asRelativePath(d.uri)).join(', ');
+    if ((await vscode.window.showWarningMessage(vscode.l10n.t('{0} changed files are not saved: {1}', dirty.length, names), { modal: true }, save)) !== save) return;
+    for (const doc of dirty) {
+      // Enregistrement refusé : la version du disque partirait sur le serveur
+      if (!(await doc.save())) {
+        void vscode.window.showErrorMessage(vscode.l10n.t('{0} could not be saved: nothing was deployed.', vscode.workspace.asRelativePath(doc.uri)));
+        return;
+      }
+    }
   }
   if (vscode.workspace.getConfiguration('phpForge').get<boolean>('deploy.checkErrors', true)) {
     const summary = errorSummary(uris.map((uri) => ({
@@ -155,5 +173,21 @@ export async function deployChanged(provider: ImpactProvider): Promise<void> {
       if (choice !== deploy) return;
     }
   }
-  await api.upload(uris);
+  // Ce qui part vraiment (profil, exclusions) : nombre, serveur et chemins à confirmer
+  const targets = api.resolve(uris);
+  if (!targets.length) {
+    void vscode.window.showInformationMessage(vscode.l10n.t('None of the changed files belongs to a deploy profile.'));
+    return;
+  }
+  const summary = deploySummary(targets);
+  const lines = [...summary.paths, ...(summary.more ? [vscode.l10n.t('… and {0} more', summary.more)] : [])];
+  if (conflicts.size) lines.push('', vscode.l10n.t('{0} files in merge conflict are not deployed.', conflicts.size));
+  const deploy = vscode.l10n.t('Deploy');
+  const choice = await vscode.window.showWarningMessage(
+    vscode.l10n.t('Upload {0} changed files to {1}?', summary.count, summary.servers.join(', ')),
+    { modal: true, detail: lines.join('\n') },
+    deploy,
+  );
+  if (choice !== deploy) return;
+  await api.upload(targets.map((t) => t.uri));
 }

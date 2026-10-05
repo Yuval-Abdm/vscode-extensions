@@ -3,7 +3,7 @@
 ## 0.9.0 — preview
 
 - **PHP Impact** view (Explorer): the PHP files changed in Git or not saved yet, each with the pages that load it through includes (the scripts nobody includes) — what to check before deploying. Files reached through a dynamic include path are marked as possibly incomplete.
-- **Deploy changed files** (view title bar, with the FTP SFTP Deploy extension): uploads every changed file with the workspace's deploy profile, after offering to save unsaved files and warning when a file has errors (`phpForge.deploy.checkErrors`).
+- **Deploy changed files** (view title bar, with the FTP SFTP Deploy extension): uploads every changed file with the workspace's deploy profile, after offering to save unsaved files, warning when a file has errors (`phpForge.deploy.checkErrors`) and confirming the server and the files to send; files in merge conflict are never sent.
 
 ## 0.8.0 — preview
 

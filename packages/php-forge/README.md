@@ -30,7 +30,7 @@ PHP Forge follows `include` / `require` like PHP does, from every page that nobo
 
 Variables created in included files keep their type and origin (hover, completion, go to definition). The **Include Tree** view (Explorer) and the "Included by N files" CodeLens show who includes what. Include paths written with server paths are mapped with `phpForge.serverRoot` or the `remotePath` of `.vscode/deploy.json`; a dynamic include can be documented with `/** @include path/to/file.php */` on the line above.
 
-The **PHP Impact** view (Explorer) lists the PHP files you changed (Git changes and unsaved files) and, for each one, the pages that load it through includes — the pages to check before going live. With [FTP SFTP Deploy](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.ftp-sftp-deploy) installed, **Deploy changed files** in its title bar uploads every changed file; it first offers to save unsaved ones and warns when a file has errors (`phpForge.deploy.checkErrors`).
+The **PHP Impact** view (Explorer) lists the PHP files you changed (Git changes and unsaved files) and, for each one, the pages that load it through includes — the pages to check before going live. With [FTP SFTP Deploy](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.ftp-sftp-deploy) installed, **Deploy changed files** in its title bar uploads every changed file; it first offers to save unsaved ones, warns when a file has errors (`phpForge.deploy.checkErrors`), never sends files in merge conflict, and asks for confirmation with the server and the files that will be sent.
 
 ### Diagnostics
 

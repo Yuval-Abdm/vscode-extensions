@@ -143,8 +143,14 @@
   "No FTP SFTP Deploy profile in this workspace: create .vscode/deploy.json first.": "Aucun profil FTP SFTP Deploy dans ce workspace : créer d'abord .vscode/deploy.json.",
   "No changed file to deploy.": "Aucun fichier modifié à déployer.",
   "Save and deploy": "Enregistrer et déployer",
-  "{0} changed files are not saved.": "{0} fichiers modifiés ne sont pas enregistrés.",
   "Deploy anyway": "Déployer quand même",
   "{0} files to deploy have errors: {1}": "{0} fichiers à déployer ont des erreurs : {1}",
-  "{0} changed PHP files": "{0} fichiers PHP modifiés"
+  "{0} changed PHP files": "{0} fichiers PHP modifiés",
+  "{0} changed files are not saved: {1}": "{0} fichiers modifiés ne sont pas enregistrés : {1}",
+  "{0} could not be saved: nothing was deployed.": "{0} n'a pas pu être enregistré : rien n'a été déployé.",
+  "None of the changed files belongs to a deploy profile.": "Aucun fichier modifié n'appartient à un profil de déploiement.",
+  "… and {0} more": "… et {0} autres",
+  "{0} files in merge conflict are not deployed.": "{0} fichiers en conflit de fusion ne sont pas déployés.",
+  "Deploy": "Déployer",
+  "Upload {0} changed files to {1}?": "Envoyer {0} fichiers modifiés vers {1} ?"
 }

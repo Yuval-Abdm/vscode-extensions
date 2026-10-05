@@ -36,3 +36,18 @@ describe('API git : désactivée, absente ou en erreur', () => {
     assert.equal(await gitApiOf({ isActive: false, exports: undefined, activate: async () => ({ enabled: true, getAPI: () => api }) }), api);
   });
 });
+
+describe('déploiement : fichiers en conflit, confirmation', () => {
+  it('fichiers en conflit (fusion) relevés à part', async () => {
+    const { conflictedFiles } = await import('../src/client/changes.ts');
+    const states = [{ mergeChanges: [change('/p/style.css', 18)], indexChanges: [change('/p/a.php', 0)], workingTreeChanges: [] }];
+    assert.deepEqual(conflictedFiles(states), ['file:///p/style.css']);
+  });
+
+  it('résumé de confirmation : nombre, profils et serveurs, douze chemins au plus', async () => {
+    const { deploySummary } = await import('../src/client/changes.ts');
+    const targets = Array.from({ length: 14 }, (_, i) => ({ rel: `f${i}.php`, profile: i < 13 ? 'prod' : 'test', host: i < 13 ? 'ftp.example.org' : 'test.example.org' }));
+    assert.deepEqual(deploySummary(targets), { count: 14, servers: ['prod (ftp.example.org)', 'test (test.example.org)'], paths: targets.slice(0, 12).map((t) => t.rel), more: 2 });
+    assert.deepEqual(deploySummary([]), { count: 0, servers: [], paths: [], more: 0 });
+  });
+});

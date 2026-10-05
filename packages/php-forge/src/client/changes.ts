@@ -60,3 +60,21 @@ export async function gitApiOf<T>(ext: GitExtension<T> | undefined): Promise<T |
     return undefined;
   }
 }
+
+/** Fichiers en conflit de fusion : jamais déployés (marqueurs <<<<<<< possibles). */
+export function conflictedFiles(states: GitState[]): string[] {
+  return [...new Set(states.flatMap((s) => (s.mergeChanges ?? []).map((c) => c.uri.toString())))].sort();
+}
+
+/** Cible d'un fichier selon FTP SFTP Deploy (`resolve`) : profil, serveur, chemin relatif. */
+export interface DeployTarget {
+  rel: string;
+  profile: string;
+  host: string;
+}
+
+/** Confirmation avant déploiement : nombre de fichiers, serveurs, premiers chemins. */
+export function deploySummary(targets: DeployTarget[], shown = 12): { count: number; servers: string[]; paths: string[]; more: number } {
+  const servers = [...new Set(targets.map((t) => `${t.profile} (${t.host})`))].sort();
+  return { count: targets.length, servers, paths: targets.slice(0, shown).map((t) => t.rel), more: Math.max(0, targets.length - shown) };
+}
