@@ -161,3 +161,20 @@ export interface BaselineStatus {
   hidden: number;
   active: boolean;
 }
+
+/** Pages qui atteignent les fichiers modifiés par inclusion (vue « Impact »). */
+export const IMPACT_REQUEST = 'phpForge/impact';
+
+export interface ImpactParams {
+  uris: string[];
+}
+
+export interface ImpactEntry {
+  /** Fichier modifié */
+  uri: string;
+  label: string;
+  /** Scripts d'entrée qui l'atteignent (lui-même s'il n'est inclus par personne) */
+  pages: { uri: string; label: string }[];
+  /** Inclus par un chemin dynamique : des pages peuvent manquer */
+  approximate: boolean;
+}

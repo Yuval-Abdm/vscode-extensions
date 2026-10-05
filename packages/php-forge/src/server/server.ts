@@ -7,8 +7,8 @@ import * as l10n from '@vscode/l10n';
 import { CodeActionKind, createConnection, type CodeAction, type Range, type TextEdit, ErrorCodes, ResponseError, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
-  BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, MIGRATION_REPORT_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION,
-  type BaselineParams, type BaselineResult, type IncludeTree, type IndexedParams, type InitOptions, type Settings, type StatusParams,
+  BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, IMPACT_REQUEST, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, MIGRATION_REPORT_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION,
+  type BaselineParams, type BaselineResult, type ImpactEntry, type ImpactParams, type IncludeTree, type IndexedParams, type InitOptions, type Settings, type StatusParams,
 } from '../shared/protocol.ts';
 import { complete, resolveCompletion } from './completion/complete.ts';
 import { Baseline } from './diagnostics/baseline.ts';
@@ -21,6 +21,7 @@ import { DocumentStore, type OpenDocument } from './documents.ts';
 import { IncludeAnalysis } from './includes/analysis.ts';
 import { callerLabel, includeDiagnostics, relativePath } from './includes/diagnostics.ts';
 import { IncludeGraph } from './includes/graph.ts';
+import { impactOf } from './includes/impact.ts';
 import { includeDefinition, includeLinks, includerLinks, includersLens } from './includes/navigation.ts';
 import { quickFixes } from './features/codeActions.ts';
 import { findReferences, targetAt, type RefEnv, type SourceFile } from './refactor/references.ts';
@@ -788,6 +789,16 @@ connection.onRequest(
       return { path: path.relative(root, fsPath).split(path.sep).join('/'), problems };
     }, () => new Promise((resolve) => setImmediate(resolve)));
     return migrationReport(files, resolver.phpVersion, target);
+  }),
+);
+
+connection.onRequest(
+  IMPACT_REQUEST,
+  safe([] as ImpactEntry[], async ({ uris }: ImpactParams): Promise<ImpactEntry[]> => {
+    await indexing;
+    // Graphe de la dernière analyse ; avant la première, un graphe construit sur l'index
+    const graph = analysis?.graph ?? new IncludeGraph(workspace, { roots: folders, documentRoot: settings.documentRoot, serverRoot: settings.serverRoot });
+    return impactOf(graph, uris);
   }),
 );
 

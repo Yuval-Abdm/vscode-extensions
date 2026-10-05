@@ -368,6 +368,11 @@ describe('serveur LSP', () => {
     }
   });
 
+  it('impact : pages qui atteignent un fichier modifié', async () => {
+    const entries = (await server.connection.sendRequest('phpForge/impact', { uris: [uri('includes/footer.php'), uri('style.css')] })) as { label: string; pages: { label: string }[] }[];
+    assert.deepEqual(entries.map((e) => [e.label, e.pages.map((p) => p.label)]), [['includes/footer.php', ['pages/about.php', 'pages/home.php']]]);
+  });
+
   it('second démarrage : tout vient du cache', async () => {
     const second = await startServer(storage);
     try {
