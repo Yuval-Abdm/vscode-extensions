@@ -24,6 +24,7 @@ export async function refEnv(files: Record<string, string>, stubs = '<?php funct
     resolver: new TypeResolver(lookup, '8.3'),
     graph: new IncludeGraph(index, { roots: ['/p'], readFile: () => undefined }),
     files: () => [...index.files()],
+    text: (uri) => sources.get(uri)?.text,
     source: (uri) => {
       const file = sources.get(uri);
       return file && { file, release: () => undefined };

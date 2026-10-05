@@ -46,6 +46,29 @@ describe('références', () => {
     assert.deepEqual(where(findReferences(env, targetAt(env, file('page.php'), { line: 4, character: 30 })!, true)), ['helpers.php:1:9', 'page.php:4:27']);
   });
 
+  it('fichier candidat qui ne nomme la fonction qu’en méthode ou en variable : jamais analysé', async () => {
+    const { env, file } = await refEnv({ ...FILES, 'noise.php': '<?php\n$o->format_price(1);\nX::format_price();\n$format_price = 1;\n', 'call.php': "<?php\necho format_price(2);\ncall_user_func('format_price');\n" });
+    const loaded: string[] = [];
+    const source = env.source;
+    env.source = (uri) => {
+      loaded.push(uri.slice(uri.indexOf('/p/') + 3));
+      return source(uri);
+    };
+    const target = targetAt(env, file('page.php'), { line: 4, character: 30 })!;
+    assert.deepEqual(where(findReferences(env, target, true)), ['call.php:1:5', 'call.php:2:16', 'helpers.php:1:9', 'page.php:4:27']);
+    assert.ok(!loaded.includes('noise.php'), loaded.join());
+    // Fonction au nom de mot courant : le mot dans du HTML ou un commentaire ne suffit pas
+    const words = await refEnv({ 'f.php': '<?php\nfunction type($x) { return $x; }\n', 'html.php': '<?php\n$o->type = 1; // type de contrat\n?>\n<input type="text">\n', 'use.php': '<?php\necho type(1);\n' });
+    const seen: string[] = [];
+    const wordSource = words.env.source;
+    words.env.source = (uri) => {
+      seen.push(uri.slice(uri.indexOf('/p/') + 3));
+      return wordSource(uri);
+    };
+    assert.deepEqual(where(findReferences(words.env, targetAt(words.env, words.file('use.php'), { line: 1, character: 6 })!, true)), ['f.php:1:9', 'use.php:1:5']);
+    assert.ok(!seen.includes('html.php'), seen.join());
+  });
+
   it('membre au nom unique dans le projet : appel sur un objet de type inconnu compté', async () => {
     const { env, file } = await refEnv({
       'a.php': '<?php\nclass Report { public function generatePdf() {} }\n',

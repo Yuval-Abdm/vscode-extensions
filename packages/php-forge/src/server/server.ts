@@ -374,7 +374,20 @@ function securityEnv(input: CollectInput): TaintEnv {
 }
 
 function refEnv(): RefEnv {
-  return { lookup, resolver, files: () => [...workspace.files()], source: sourceOf, graph: analysis?.graph };
+  return { lookup, resolver, files: () => [...workspace.files()], source: sourceOf, text: textOf, graph: analysis?.graph };
+}
+
+/** Texte d'un document ouvert, ou du fichier sur le disque (sans l'analyser) ; undefined : illisible ou trop gros. */
+function textOf(uri: string): string | undefined {
+  const doc = documents.get(uri);
+  if (doc) return doc.doc.getText();
+  try {
+    const fsPath = URI.parse(uri).fsPath;
+    if (statSync(fsPath).size > settings.maxFileSize) return undefined;
+    return decode(readFileSync(fsPath));
+  } catch {
+    return undefined;
+  }
 }
 
 function inputOf(doc: OpenDocument): CollectInput {

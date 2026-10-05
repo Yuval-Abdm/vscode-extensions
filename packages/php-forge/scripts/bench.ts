@@ -175,6 +175,7 @@ for (const root of corpus) {
     lookup: env.resolver.lookup,
     resolver: env.resolver,
     files: () => [...index.files()],
+    text: (uri) => decode(readFileSync(URI.parse(uri).fsPath)),
     source: (uri) => {
       const symbols = index.get(uri);
       if (!symbols) return undefined;

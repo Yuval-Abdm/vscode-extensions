@@ -28,6 +28,8 @@ export interface RefEnv {
   source(uri: string): { file: SourceFile; release(): void } | undefined;
   /** Graphe d'inclusion (variables du niveau fichier partagées par la chaîne) */
   graph?: IncludeGraph;
+  /** Texte d'un fichier sans l'analyser : filtre avant l'analyse (coûteuse) des fichiers candidats */
+  text?(uri: string): string | undefined;
 }
 
 export type TargetKind = 'class' | 'function' | 'constant' | 'method' | 'property' | 'classConstant';
@@ -212,12 +214,30 @@ export function referencesIn(env: RefEnv, file: SourceFile, target: Target, incl
   return out;
 }
 
+/**
+ * Le texte peut-il citer la cible ? Fonction : appel, déclaration, chaîne ou `use function` ; constante : pas après
+ * `->`, `::` ni `$` (membre, variable de même nom) ; classe : pas après `->` ni `$`. Membres : toujours.
+ */
+function mayReference(text: string, target: Target): boolean {
+  const name = escape(target.name);
+  const flags = target.kind === 'constant' ? '' : 'i';
+  // Fonction : appel ou déclaration (« nom( »), chaîne (callable), `use function` — un mot courant (« type ») dans
+  // un commentaire ou du HTML ne suffit pas
+  if (target.kind === 'function') return new RegExp(`(?<![\\w$])(?<!->)(?<!::)${name}\\s*\\(|['"\\\\]${name}['"]|\\buse\\s+function\\b[^;]*\\b${name}\\b`, flags).test(text);
+  if (target.kind === 'constant') return new RegExp(`(?<![\\w$])(?<!->)(?<!::)${name}(?!\\w)`, flags).test(text);
+  if (target.kind === 'class') return new RegExp(`(?<![\\w$])(?<!->)${name}(?!\\w)`, flags).test(text);
+  return true;
+}
+
 /** Références dans tout le projet. */
 export function findReferences(env: RefEnv, target: Target, includeDeclaration: boolean): Location[] {
   const key = target.name.toLowerCase();
   const out: Location[] = [];
   for (const symbols of env.files()) {
     if (symbols.uri.startsWith('phpstub:') || !symbols.names?.includes(key)) continue;
+    // Fichier qui ne nomme la cible qu'en méthode, membre ou variable : pas d'analyse (des milliers de fichiers)
+    const text = env.text?.(symbols.uri);
+    if (text !== undefined && !mayReference(text, target)) continue;
     const source = env.source(symbols.uri);
     if (!source) continue;
     try {
