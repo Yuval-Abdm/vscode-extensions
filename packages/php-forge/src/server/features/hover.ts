@@ -6,6 +6,7 @@ import type { FileSymbols, PhpSymbol, Position } from '../../shared/types.ts';
 import type { Lookup } from '../index/lookup.ts';
 import type { Tree } from '../parser/parser.ts';
 import { bindingAt, TypeResolver } from '../types/expand.ts';
+import { externalFor } from '../types/external.ts';
 import { Inferrer } from '../types/infer.ts';
 import { formatType } from '../types/type.ts';
 import { variableAt } from './nameAt.ts';
@@ -15,7 +16,14 @@ export function hover(lookup: Lookup, file: FileSymbols, tree: Tree, pos: Positi
   const variable = variableAt(tree, pos);
   if (variable) {
     const type = resolver.expand(new Inferrer(file.scopes).expr(variable), bindingAt(variable, file.scopes));
-    return { contents: { kind: 'markdown', value: `\`\`\`php\n<?php\n${formatType(type)} ${variable.text}\n\`\`\`` } };
+    let value = `\`\`\`php\n<?php\n${formatType(type)} ${variable.text}\n\`\`\``;
+    const external = externalFor(file.scopes)?.variable(variable.text.slice(1), pos);
+    if (external?.origin && external.origin.uri !== file.uri) {
+      value += `\n\n${l10n.t('Defined in {0}', `[${external.origin.label}](${external.origin.uri}#L${external.origin.line + 1})`)}`;
+    } else if (external?.request) {
+      value += `\n\n${l10n.t('From {0} via extract (line {1})', external.request.from, external.request.line + 1)}`;
+    }
+    return { contents: { kind: 'markdown', value } };
   }
   const hits = resolveAt(lookup, file, tree, pos, resolver);
   if (!hits.length) return null;

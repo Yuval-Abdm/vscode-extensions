@@ -56,6 +56,8 @@ export function variableType(inf: Inferrer, name: string, at: Node): TypeExpr {
   let type: TypeExpr;
   if (types.length) type = union(...types);
   else if (root.type === 'arrow_function') type = variableType(inf, name, root);
+  // Niveau fichier sans affectation visible : variable venue d'un fichier inclus ou d'un appelant
+  else if (root.type === 'program') type = inf.external?.variable(name, { line: at.startPosition.row, character: at.startPosition.column })?.type ?? MIXED;
   else type = MIXED;
   return narrow(inf, type, name, at, root);
 }

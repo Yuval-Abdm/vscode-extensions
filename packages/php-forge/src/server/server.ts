@@ -15,7 +15,7 @@ import { tagDiagnostics } from './diagnostics/tags.ts';
 import { sqlQuoteDiagnostics } from './sql/quotes.ts';
 import { DocumentStore, type OpenDocument } from './documents.ts';
 import { IncludeAnalysis } from './includes/analysis.ts';
-import { callerLabel, includeDiagnostics } from './includes/diagnostics.ts';
+import { callerLabel, includeDiagnostics, relativePath } from './includes/diagnostics.ts';
 import { IncludeGraph } from './includes/graph.ts';
 import { quickFixes } from './features/codeActions.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
@@ -41,6 +41,7 @@ import { createParser, initParser, type Parser, type WasmPaths } from './parser/
 import { detectPhpVersion } from './settings/phpVersion.ts';
 import { loadStubs } from './stubs/stubs.ts';
 import { TypeResolver } from './types/expand.ts';
+import { registerExternal } from './types/external.ts';
 
 const connection = createConnection(ProposedFeatures.all);
 const wasm: WasmPaths = { treeSitter: path.join(__dirname, 'web-tree-sitter.wasm'), php: path.join(__dirname, 'tree-sitter-php.wasm') };
@@ -191,7 +192,21 @@ function publish(doc: OpenDocument): void {
   void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics });
 }
 
+/** Variables venues des fichiers inclus et des appelants pour un document ouvert (après chaque extraction). */
+function track(doc: OpenDocument): void {
+  registerExternal(doc.symbols.scopes, {
+    variable: (name, at) => {
+      const info = analysis?.variable(doc.uri, name, at);
+      if (!analysis || !info) return undefined;
+      const origin = info.origin && { ...info.origin, label: `${relativePath(analysis.graph, info.origin.uri)}:${info.origin.line + 1}` };
+      return { type: info.type, origin, request: info.request };
+    },
+    names: (at) => analysis?.names(doc.uri, at) ?? [],
+  });
+}
+
 function refresh(doc: OpenDocument): void {
+  track(doc);
   workspace.set(doc.symbols);
   publish(doc);
 }
@@ -232,6 +247,7 @@ connection.onDidChangeTextDocument(
         try {
           const inferred = documents.inferTypes(doc.uri);
           if (inferred) workspace.set(inferred.symbols);
+          if (inferred) track(inferred);
         } catch (err) {
           connection.console.error(String((err as Error)?.stack ?? err));
         }

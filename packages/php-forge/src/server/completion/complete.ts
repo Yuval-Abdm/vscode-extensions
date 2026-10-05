@@ -14,6 +14,7 @@ import { resolveClassName, resolveFunctionOrConstant, scopeAt } from '../model/n
 import type { Node, Parser } from '../parser/parser.ts';
 import { isAvailable } from '../stubs/availability.ts';
 import { bindingAt, type MemberHit, type TypeResolver } from '../types/expand.ts';
+import { externalFor } from '../types/external.ts';
 import { scopeRoot } from '../types/flow.ts';
 import { Inferrer } from '../types/infer.ts';
 import { formatParam, formatType, members } from '../types/type.ts';
@@ -185,6 +186,7 @@ class Completion {
     const names = new Set<string>();
     collectVariables(root, names);
     if (root.type === 'arrow_function') collectVariables(scopeRoot(root), names);
+    if (root.type === 'program') for (const name of externalFor(this.#doc.symbols.scopes)?.names(this.#position) ?? []) names.add(name);
     for (const name of names) if (name.includes(PLACEHOLDER)) names.delete(name);
     if (enclosingClass(at, this.#doc.symbols.scopes) && root.type !== 'program' && !inStaticMethod(at)) names.add('this');
     for (const name of SUPERGLOBALS) names.add(name);

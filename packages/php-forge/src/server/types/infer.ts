@@ -1,6 +1,7 @@
 // Type d'une expression depuis l'arbre du fichier, sans l'index : ce qui dépend d'autres déclarations
 // (retour de fonction ou de méthode, propriété, constante) devient un type différé (`ref`) que
 // TypeResolver résout ensuite. Une instance par requête (cache par nœud).
+import { externalFor, type ExternalVariables } from './external.ts';
 import type { NameScope, TypeExpr } from '../../shared/types.ts';
 import { containsYield, returnStatements } from '../model/context.ts';
 import { resolveClassName, resolveFunctionOrConstant, scopeAt } from '../model/names.ts';
@@ -34,6 +35,8 @@ export function literalKey(node: Node | null | undefined): string | undefined {
 
 export class Inferrer {
   readonly scopes: NameScope[];
+  /** Variables venues d'autres fichiers (moteur d'inclusion) */
+  readonly external: ExternalVariables | undefined;
   /** Définitions des variables par portée (fonction ou fichier), calculées une fois par requête */
   readonly definitions = new Map<number, Map<string, Definition[]>>();
   /** Appels assert(…) par bloc, calculés une fois par requête */
@@ -43,6 +46,7 @@ export class Inferrer {
 
   constructor(scopes: NameScope[]) {
     this.scopes = scopes;
+    this.external = externalFor(scopes);
   }
 
   scopeOf(node: Node): NameScope {
