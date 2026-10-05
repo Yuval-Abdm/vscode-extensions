@@ -152,5 +152,6 @@
   "… and {0} more": "… et {0} autres",
   "{0} files in merge conflict are not deployed.": "{0} fichiers en conflit de fusion ne sont pas déployés.",
   "Deploy": "Déployer",
-  "Upload {0} changed files to {1}?": "Envoyer {0} fichiers modifiés vers {1} ?"
+  "Upload {0} changed files to {1}?": "Envoyer {0} fichiers modifiés vers {1} ?",
+  "{0} columns": "{0} colonnes"
 }

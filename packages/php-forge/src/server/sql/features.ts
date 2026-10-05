@@ -1,5 +1,6 @@
 // SQL sous le curseur : complétion des tables, des colonnes (selon les alias du FROM) et des fonctions SQL,
 // survol d'une table ou d'une colonne (type, NULL, défaut), aller à la définition (CREATE TABLE d'un fichier .sql).
+import * as l10n from '@vscode/l10n';
 import type { Tree } from '../parser/parser.ts';
 import { analyzeSql, contextAt, lex, type Lexeme, type SqlAnalysis } from './analyze.ts';
 import type { Schema, SqlColumn, SqlTable } from './schema.ts';
@@ -54,7 +55,7 @@ export function sqlCompletion(site: SqlSite, schema: Schema): SqlCompletion | un
   const context = contextAt(sql.text, offset);
   if (context.kind === 'none') return undefined;
   if (context.kind === 'table') {
-    return { from, items: schema.tables.map((t) => ({ label: t.name, kind: 'table' as const, detail: `${t.columns.length} columns` })) };
+    return { from, items: schema.tables.map((t) => ({ label: t.name, kind: 'table' as const, detail: l10n.t('{0} columns', t.columns.length) })) };
   }
   const analysis = analyzeSql(sql.text);
   const byName = tablesByName(analysis);
@@ -122,5 +123,5 @@ export function sqlHover(target: SqlTarget): string {
   }
   const columns = table.columns.slice(0, 30).map((c) => `- \`${c.name}\` ${c.type}${c.nullable ? '' : ' NOT NULL'}`).join('\n');
   const more = table.columns.length > 30 ? `\n- … (${table.columns.length - 30})` : '';
-  return `**${table.name}** (${table.columns.length} columns)\n\n${columns}${more}`;
+  return `**${table.name}** (${l10n.t('{0} columns', table.columns.length)})\n\n${columns}${more}`;
 }

@@ -25,6 +25,7 @@ describe('SQL : complétion, survol, définition', () => {
   it('tables après FROM, colonnes d’un alias, colonnes et fonctions dans WHERE', async () => {
     const tables = sqlCompletion((await site('<?php\n$q = "SELECT * FROM cl|";\n')).at, schema())!;
     assert.deepEqual(tables.items.map((i) => i.label), ['clients', 'contrats']);
+    assert.equal(tables.items[0].detail, '3 columns');
     const { text, at, index } = await site('<?php\n$q = "SELECT c.| FROM clients c";\n');
     const columns = sqlCompletion(at, schema())!;
     assert.deepEqual(columns.items.map((i) => i.label), ['id', 'nom', 'solde']);
