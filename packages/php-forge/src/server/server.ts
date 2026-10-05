@@ -27,6 +27,7 @@ import { findReferences, targetAt, type RefEnv, type SourceFile } from './refact
 import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { SourceCache } from './refactor/sourceCache.ts';
 import { formatEdits, formatOptions, onTypeRange, onTypeWindow } from './format/format.ts';
+import { sqlCompletionList, sqlDefinitionAt, sqlHoverAt } from './sql/lsp.ts';
 import { Schema } from './sql/schema.ts';
 import { isSchemaSource, loadSchema, type SchemaSources } from './sql/sources.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
@@ -137,7 +138,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       workspaceSymbolProvider: true,
       definitionProvider: true,
       hoverProvider: true,
-      completionProvider: { triggerCharacters: ['$', '>', ':', '\\', '/', "'", '"', '@'], resolveProvider: true },
+      completionProvider: { triggerCharacters: ['$', '>', ':', '\\', '/', "'", '"', '@', '.'], resolveProvider: true },
       signatureHelpProvider: { triggerCharacters: ['(', ','], retriggerCharacters: [','] },
       implementationProvider: true,
       referencesProvider: true,
@@ -529,6 +530,8 @@ connection.onDefinition(
   safe([], ({ textDocument, position }) => {
     const doc = docAt(textDocument.uri);
     if (!doc) return [];
+    const sql = sqlDefinitionAt(doc.tree, doc.doc, position, sqlSchema);
+    if (sql) return sql;
     const target = analysis ? includeDefinition(analysis.graph, doc.symbols, position) : [];
     return target.length ? target : definition(lookup, doc.symbols, doc.tree, position, resolver);
   }),
@@ -538,14 +541,20 @@ connection.onHover(
   safe(null, ({ textDocument, position }) => {
     const doc = docAt(textDocument.uri);
     if (!doc) return null;
-    return withProblems(hover(lookup, doc.symbols, doc.tree, position, resolver), problemsMarkdown(doc.uri, doc.doc.version, published.get(doc.uri) ?? [], position.line));
+    const value = sqlHoverAt(doc.tree, doc.doc, position, sqlSchema) ?? hover(lookup, doc.symbols, doc.tree, position, resolver);
+    return withProblems(value, problemsMarkdown(doc.uri, doc.doc.version, published.get(doc.uri) ?? [], position.line));
   }),
 );
 
 connection.onCompletion(
-  safe(null, ({ textDocument, position }) => {
+  safe(null, ({ textDocument, position, context }) => {
     const doc = docAt(textDocument.uri);
-    return doc ? complete({ resolver, parser, folders, autoImport: settings.completion.autoImport }, doc, position) : null;
+    if (!doc) return null;
+    const sql = sqlCompletionList(doc.tree, doc.doc, position, sqlSchema);
+    if (sql) return sql;
+    // « . » ne sert qu'au SQL (alias.colonne) : jamais la liste PHP sur une concaténation
+    if (context?.triggerCharacter === '.') return null;
+    return complete({ resolver, parser, folders, autoImport: settings.completion.autoImport }, doc, position);
   }),
 );
 

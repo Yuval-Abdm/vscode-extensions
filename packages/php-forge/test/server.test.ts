@@ -321,6 +321,19 @@ describe('serveur LSP', () => {
     await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('clients.php') } });
   });
 
+  it('SQL : complétion des colonnes, « . » sans liste PHP hors requête', async () => {
+    await open(server, 'complete.php', '<?php\n$r = mysqli_query($db, "SELECT c. FROM clients c");\n$t = $a.$b;\n');
+    const list = (await server.connection.sendRequest('textDocument/completion', {
+      textDocument: { uri: uri('complete.php') }, position: { line: 1, character: 33 }, context: { triggerKind: 2, triggerCharacter: '.' },
+    })) as { items: { label: string }[] };
+    assert.deepEqual(list.items.map((i) => i.label), ['id', 'nom', 'solde']);
+    const php = await server.connection.sendRequest('textDocument/completion', {
+      textDocument: { uri: uri('complete.php') }, position: { line: 2, character: 8 }, context: { triggerKind: 2, triggerCharacter: '.' },
+    });
+    assert.equal(php, null);
+    await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('complete.php') } });
+  });
+
   it('second démarrage : tout vient du cache', async () => {
     const second = await startServer(storage);
     try {
