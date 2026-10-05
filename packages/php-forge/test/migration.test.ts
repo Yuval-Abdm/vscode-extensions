@@ -68,6 +68,31 @@ describe('migration de version PHP', { skip: !existsSync(STUBS) }, () => {
     assert.deepEqual(quickFixes(URI, diagnostics), []);
   });
 
+  it('déprécié à la version du projet, supprimé à la cible : signalé (7.4 → 8.0)', async () => {
+    const { diagnostics } = await migrate('<?php\n$a = $b ? 1 : $c ? 2 : 3;\n$s = $str{0};\n', '7.4', '8.0');
+    assert.deepEqual(list(diagnostics), ['1:migration-syntax', '2:migration-syntax']);
+    assert.match(String(diagnostics[0].message), /removed in PHP 8\.0/);
+  });
+
+  it('each → foreach en syntaxe alternative : endwhile devient endforeach', async () => {
+    const loop = await migrate('<?php\nwhile (list($k, $v) = each($a)):\n  echo $k;\nendwhile;\n', '7.3', '8.0');
+    assert.equal(apply(loop.code, loop.diagnostics[0]), '<?php\nforeach ($a as $k => $v):\n  echo $k;\nendforeach;\n');
+  });
+
+  it('propriétés dynamiques : trait, attribut ou stdClass d’un ancêtre ne sont pas signalés', async () => {
+    const { diagnostics } = await migrate([
+      '<?php',
+      'trait T { public $x; }',
+      'class A { use T; function f() { $this->x = 1; } }',
+      '#[AllowDynamicProperties] class P {}',
+      'class B extends P { function f() { $this->y = 1; } }',
+      'class Q extends \\stdClass {}',
+      'class C extends Q { function f() { $this->z = 1; } }',
+      'class D { function f() { $this->w = 1; } }',
+    ].join('\n'), '8.1', '8.2');
+    assert.deepEqual(list(diagnostics), ['7:migration-dynamic-property']);
+  });
+
   it('corrections : each → foreach, create_function → closure', async () => {
     const loop = await migrate('<?php\nwhile (list($k, $v) = each($tab)) {\n  echo $k;\n}\nwhile (list(, $w) = each($t2)) {}\n', '7.3', '8.0');
     const [first, second] = loop.diagnostics;

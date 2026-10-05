@@ -6,7 +6,7 @@
 // deprecated-syntax.
 import * as l10n from '@vscode/l10n';
 import { DiagnosticSeverity, type Diagnostic } from 'vscode-languageserver/node';
-import type { FileSymbols, PhpSymbol, Range } from '../../shared/types.ts';
+import type { FileSymbols, Range } from '../../shared/types.ts';
 import { deprecatedSyntax } from '../diagnostics/deprecatedSyntax.ts';
 import type { IndexedSymbol } from '../index/symbolIndex.ts';
 import { resolveClassName, resolveFunctionOrConstant, scopeAt } from '../model/names.ts';
@@ -36,7 +36,8 @@ export interface MigrationInput {
   text: string;
 }
 
-const key = (d: Diagnostic) => `${d.code}:${d.range.start.line}:${d.range.start.character}`;
+/** Même problème déjà signalé : même code, même position, même message (« déprécié » → « supprimé » est nouveau) */
+const key = (d: Diagnostic) => `${d.code}:${d.range.start.line}:${d.range.start.character}:${String(d.message)}`;
 
 /** Le passage de `from` à `to` franchit la version `at`. */
 function crosses(from: string | undefined, to: string, at: string): boolean {
@@ -146,35 +147,31 @@ function maybeText(node: Node): boolean {
   return base?.type === 'variable_name' && REQUEST.test(base.text) && node !== base;
 }
 
-/** Propriétés créées sans déclaration (`$this->x = …`) : dépréciées en PHP 8.2 sauf #[AllowDynamicProperties] ou __set. */
+/**
+ * Propriétés créées sans déclaration (`$this->x = …`) : dépréciées en PHP 8.2, sauf si la classe ou un ancêtre est
+ * marqué #[AllowDynamicProperties], hérite de stdClass ou a un __set, ou si un ancêtre (parent, trait) la déclare.
+ */
 function dynamicProperties(input: MigrationInput, target: TypeResolver): Diagnostic[] {
   const out: Diagnostic[] = [];
-  const classes = input.tree.rootNode.descendantsOfType('class_declaration');
-  const visit = (symbols: PhpSymbol[]) => {
-    for (const cls of symbols) {
-      if (cls.kind !== 'class') continue;
-      const node = classes.find((c) => c.startPosition.row === cls.range.start.line && c.childForFieldName('name')?.text === cls.name);
-      const allowed = node?.namedChildren.some((c) => c.type === 'attribute_list' && /\bAllowDynamicProperties\b/.test(c.text));
-      const fqn = cls.fqn ?? cls.name;
-      const magic = target.lookup.findMembers(fqn, '__set', ['method']).length > 0;
-      const parents = (cls.extends ?? []).some((p) => p.toLowerCase() === 'stdclass');
-      if (allowed || magic || parents) continue;
-      for (const prop of cls.children ?? []) {
-        if (prop.kind !== 'property' || !prop.dynamic) continue;
-        // Déclarée par un parent : pas dynamique
-        const declared = (cls.extends ?? []).some((parent) => target.lookup.findMembers(parent, prop.name, ['property']).some((m) => !m.symbol.dynamic));
-        if (declared) continue;
-        out.push({
-          range: prop.selectionRange,
-          code: MIGRATION_DYNAMIC_PROPERTY,
-          severity: DiagnosticSeverity.Warning,
-          source: 'PHP Forge',
-          message: l10n.t('PHP 8.2: the dynamic property {0}::${1} is deprecated; declare it in the class', cls.name, prop.name),
-        });
-      }
+  const lookup = target.lookup;
+  for (const cls of input.symbols.symbols) {
+    if (cls.kind !== 'class' || !cls.children?.some((c) => c.kind === 'property' && c.dynamic)) continue;
+    const fqn = cls.fqn ?? cls.name;
+    const ancestors = [...lookup.ancestors(fqn)].map((h) => h.symbol);
+    if (cls.allowDynamicProperties || ancestors.some((a) => a.allowDynamicProperties || a.name.toLowerCase() === 'stdclass')) continue;
+    if (lookup.findMembers(fqn, '__set', ['method']).length) continue;
+    for (const prop of cls.children ?? []) {
+      if (prop.kind !== 'property' || !prop.dynamic) continue;
+      if (lookup.findMembers(fqn, prop.name, ['property']).some((m) => !m.symbol.dynamic)) continue;
+      out.push({
+        range: prop.selectionRange,
+        code: MIGRATION_DYNAMIC_PROPERTY,
+        severity: DiagnosticSeverity.Warning,
+        source: 'PHP Forge',
+        message: l10n.t('PHP 8.2: the dynamic property {0}::${1} is deprecated; declare it in the class', cls.name, prop.name),
+      });
     }
-  };
-  visit(input.symbols.symbols);
+  }
   return out;
 }
 
@@ -206,7 +203,12 @@ function eachFix(call: Node): DiagnosticFix[] {
   if (!target || (vars.length === 2 && skipsKey)) return [];
   const header = `foreach (${array.text} as ${target})`;
   const range = { start: rangeOf(loop).start, end: rangeOf(condition).end };
-  return [{ title: l10n.t('Replace with {0}', header), edits: [{ range, newText: header }] }];
+  const edits = [{ range, newText: header }];
+  // Syntaxe alternative : « endwhile » devient « endforeach »
+  const end = loop.children.find((c) => c.type.toLowerCase() === 'endwhile');
+  if (end) edits.push({ range: rangeOf(end), newText: 'endforeach' });
+  else if (loop.childForFieldName('body')?.type === 'colon_block') return [];
+  return [{ title: l10n.t('Replace with {0}', header), edits }];
 }
 
 /** `create_function('$a, $b', 'return $a + $b;')` → `function ($a, $b) { return $a + $b; }` (chaînes simples seulement). */

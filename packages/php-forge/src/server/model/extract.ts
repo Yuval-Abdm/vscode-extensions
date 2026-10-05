@@ -214,6 +214,7 @@ function classSymbol(node: Node, scope: NameScope, pending: Pending[]): PhpSymbo
     .map((name) => resolveClassName(name.replace(/<.*$/, ''), scope))
     .filter((name): name is string => !!name);
   if (mixins.length) symbol.mixins = mixins;
+  if (node.namedChildren.some((c) => c.type === 'attribute_list' && /\bAllowDynamicProperties\b/.test(c.text))) symbol.allowDynamicProperties = true;
 
   const children: PhpSymbol[] = [];
   const traits: string[] = [];

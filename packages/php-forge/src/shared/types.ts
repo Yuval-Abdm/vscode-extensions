@@ -125,6 +125,8 @@ export interface PhpSymbol {
   parentArgs?: Record<string, TypeExpr[]>;
   /** Classes dont les membres sont accessibles (@mixin) */
   mixins?: string[];
+  /** Classe marquée #[AllowDynamicProperties] (PHP 8.2 : propriétés créées sans déclaration permises, aux enfants aussi) */
+  allowDynamicProperties?: true;
   /** Membre déclaré par @property ou @method */
   virtual?: boolean;
   children?: PhpSymbol[];
