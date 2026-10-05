@@ -251,7 +251,7 @@ connection.onHover(
   safe(null, ({ textDocument, position }) => {
     const doc = docAt(textDocument.uri);
     if (!doc) return null;
-    return withProblems(hover(lookup, doc.symbols, doc.tree, position, resolver), problemsMarkdown(doc.uri, published.get(doc.uri) ?? [], position.line));
+    return withProblems(hover(lookup, doc.symbols, doc.tree, position, resolver), problemsMarkdown(doc.uri, doc.doc.version, published.get(doc.uri) ?? [], position.line));
   }),
 );
 

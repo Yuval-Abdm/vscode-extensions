@@ -146,6 +146,9 @@ test('survol d’une ligne en erreur : correction appliquée d’un clic', async
   assert.deepStrictEqual(link.trusted, { enabledCommands: ['phpForge.applyFix'] });
   await vscode.commands.executeCommand('phpForge.applyFix', ...link.args);
   assert.strictEqual(doc.getText(), '<?php\n$a = 1;\n$b = 2;\n');
+  // Second clic sur le même lien : le document a changé, rien n'est appliqué
+  await vscode.commands.executeCommand('phpForge.applyFix', ...link.args);
+  assert.strictEqual(doc.getText(), '<?php\n$a = 1;\n$b = 2;\n');
 });
 
 async function run() {

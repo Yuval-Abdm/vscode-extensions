@@ -1,5 +1,5 @@
 // Requêtes SQL concaténées qui mélangent les guillemets PHP (« 'UPDATE …'.$d." = '"… ») : chaque morceau devrait
-// utiliser les guillemets du premier. Les guillemets à l'intérieur d'un morceau sont du SQL, pas concernés, et un
+// utiliser les mêmes. Les guillemets à l'intérieur d'un morceau sont du SQL, pas concernés, et un
 // morceau qui ne fait qu'entourer une valeur (« "'" », « '"' », « "', '" ») est toléré.
 import * as l10n from '@vscode/l10n';
 import { DiagnosticSeverity, type Diagnostic } from 'vscode-languageserver/node';
@@ -22,22 +22,29 @@ export function sqlQuoteDiagnostics(tree: Tree): Diagnostic[] {
     if (literals.length < 2) continue;
     const reference = literals.find((p) => !WRAPPER.test(contentText(p)));
     if (!reference) continue;
-    const quote = quoteOf(reference)!;
-    const mismatched = literals.filter((p) => quoteOf(p) !== quote);
-    const flagged = mismatched.filter((p) => !WRAPPER.test(contentText(p)));
-    if (flagged.length === 0) continue;
+    const start = quoteOf(reference)!;
+    if (literals.every((p) => quoteOf(p) === start || WRAPPER.test(contentText(p)))) continue;
 
-    const converted = mismatched.map((p) => convert(p, quote));
-    const fixes: DiagnosticFix[] = converted.every((c) => c !== undefined)
+    // Guillemets cibles : ceux qui demandent le moins d'échappements (souvent les doubles, le SQL utilisant
+    // des « ' »), ceux du début à égalité ; sans conversion sûre, ceux du début et pas de correction
+    const plans = ([start, start === "'" ? '"' : "'"] as Quote[])
+      .map((quote) => ({ quote, parts: literals.filter((p) => quoteOf(p) !== quote) }))
+      .map((plan) => ({ ...plan, converted: plan.parts.map((p) => convert(p, plan.quote)) }))
+      .filter((plan) => plan.converted.every((c) => c !== undefined))
+      .map((plan) => ({ ...plan, cost: plan.converted.reduce((n, c, i) => n + backslashes(c!) - backslashes(plan.parts[i].text), 0) }));
+    const best = plans.reduce<(typeof plans)[number] | undefined>((a, b) => (!a || b.cost < a.cost ? b : a), undefined);
+    const quote = best?.quote ?? start;
+    const fixes: DiagnosticFix[] = best
       ? [{
         title: quote === "'" ? l10n.t('Use single quotes throughout the query') : l10n.t('Use double quotes throughout the query'),
-        edits: mismatched.map((p, i) => ({ range: rangeOf(p), newText: converted[i]! })),
+        edits: best.parts.map((p, i) => ({ range: rangeOf(p), newText: best.converted[i]! })),
       }]
       : [];
+    const flagged = literals.filter((p) => quoteOf(p) !== quote && !WRAPPER.test(contentText(p)));
     for (const part of flagged) {
       out.push({
         range: rangeOf(part),
-        message: l10n.t('SQL query mixes PHP quotes: it starts with {0}, use {0} here too', quote),
+        message: l10n.t('SQL query mixes PHP quotes: use {0} throughout the query', quote),
         severity: DiagnosticSeverity.Warning,
         source: 'PHP Forge',
         code: SQL_MIXED_QUOTES,
@@ -75,6 +82,10 @@ function convert(literal: Node, to: Quote): string | undefined {
     }
   }
   return to + out + to;
+}
+
+function backslashes(text: string): number {
+  return text.split('\\').length - 1;
 }
 
 function escape(char: string, to: Quote): string {

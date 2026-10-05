@@ -117,13 +117,20 @@ async function warnAboutCompetitors(context: vscode.ExtensionContext): Promise<v
 
 interface ApplyFixArgs {
   uri: string;
+  version: number;
   edits: { range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }[];
 }
 
-/** Correction proposée dans le survol d'une ligne : appliquée telle quelle au document. */
-async function applyFix({ uri, edits }: ApplyFixArgs): Promise<boolean> {
-  const edit = new vscode.WorkspaceEdit();
+/**
+ * Correction proposée dans le survol d'une ligne : appliquée telle quelle au document, puis le survol est fermé.
+ * Calculée pour une version précise : un second clic (document déjà modifié) ne fait rien.
+ */
+async function applyFix({ uri, version, edits }: ApplyFixArgs): Promise<boolean> {
+  void vscode.commands.executeCommand('editor.action.hideHover');
   const target = vscode.Uri.parse(uri);
+  const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === target.toString());
+  if (!doc || doc.version !== version) return false;
+  const edit = new vscode.WorkspaceEdit();
   for (const e of edits) {
     edit.replace(target, new vscode.Range(e.range.start.line, e.range.start.character, e.range.end.line, e.range.end.character), e.newText);
   }

@@ -24,17 +24,26 @@ function apply(code: string, diagnostic: Diagnostic): string {
 const text = (code: string, d: Diagnostic) => code.split('\n')[d.range.start.line].slice(d.range.start.character, d.range.end.character);
 
 describe('requête SQL : guillemets PHP mélangés', () => {
-  it('commence en simples, continue en doubles (cas du CRM)', async () => {
+  it('commence en simples, continue en doubles (cas du CRM) : tout en doubles, sans échappement', async () => {
     const code = `<?php\n$sql = 'UPDATE villegeo SET d'.$d." = '". addslashes($h) ."' WHERE id_ville = '" . addslashes($s) ."'";`;
     const diagnostics = await check(code);
-    assert.deepEqual(diagnostics.map((d) => text(code, d)), [`" = '"`, `"' WHERE id_ville = '"`]);
+    // Le morceau à convertir est souligné : convertir les doubles demanderait d'échapper tous les « ' » SQL
+    assert.deepEqual(diagnostics.map((d) => text(code, d)), [`'UPDATE villegeo SET d'`]);
     assert.equal(diagnostics[0].code, 'sql-mixed-quotes');
     assert.equal(diagnostics[0].severity, DiagnosticSeverity.Warning);
-    assert.match(String(diagnostics[0].message), /'/);
-    // La correction rend toute la requête homogène, guillemets d'enveloppe compris
-    const fixed = `<?php\n$sql = 'UPDATE villegeo SET d'.$d.' = \\''. addslashes($h) .'\\' WHERE id_ville = \\'' . addslashes($s) .'\\'';`;
+    assert.match(String(diagnostics[0].message), /"/);
+    const fixed = `<?php\n$sql = "UPDATE villegeo SET d".$d." = '". addslashes($h) ."' WHERE id_ville = '" . addslashes($s) ."'";`;
+    assert.equal(quickFixes(URI, [diagnostics[0]])[0].title, 'Use double quotes throughout the query');
     assert.equal(apply(code, diagnostics[0]), fixed);
     assert.deepEqual(await check(fixed), []);
+  });
+
+  it('autant d’échappements dans les deux sens : guillemets du début', async () => {
+    const code = `<?php $s = 'SELECT a FROM t' . " WHERE b = 1";`;
+    const [d, ...rest] = await check(code);
+    assert.equal(rest.length, 0);
+    assert.equal(text(code, d), `" WHERE b = 1"`);
+    assert.equal(apply(code, d), `<?php $s = 'SELECT a FROM t' . ' WHERE b = 1';`);
   });
 
   it('doubles partout, valeurs entourées de guillemets SQL simples : rien', async () => {
@@ -54,8 +63,15 @@ describe('requête SQL : guillemets PHP mélangés', () => {
     assert.equal(apply(code, d), `<?php $s = "SELECT a FROM t" . " WHERE b = '\\$x'";`);
   });
 
-  it('pas de correction si un morceau ne peut pas être converti (interpolation)', async () => {
-    const [d] = await check(`<?php $s = 'SELECT a FROM t' . " WHERE b = $x";`);
+  it('interpolation : la requête passe en doubles', async () => {
+    const code = `<?php $s = 'SELECT a FROM t' . " WHERE b = $x";`;
+    const [d] = await check(code);
+    assert.equal(apply(code, d), `<?php $s = "SELECT a FROM t" . " WHERE b = $x";`);
+  });
+
+  it('pas de correction si aucun sens de conversion n’est sûr', async () => {
+    const code = String.raw`<?php $s = 'SELECT a FROM t WHERE c REGEXP \'\d\'' . " AND b = $x";`;
+    const [d] = await check(code);
     assert.equal(d.code, 'sql-mixed-quotes');
     assert.deepEqual(quickFixes(URI, [d]), []);
   });

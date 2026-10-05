@@ -8,19 +8,30 @@ export const APPLY_FIX_COMMAND = 'phpForge.applyFix';
 
 export interface ApplyFixArgs {
   uri: string;
+  /** Version du document pour laquelle la correction a été calculée : ignorée si le document a changé depuis */
+  version: number;
   edits: TextEdit[];
 }
 
-export function problemsMarkdown(uri: string, diagnostics: Diagnostic[], line: number): string | undefined {
+/** `version` : version du document dont viennent les diagnostics. */
+export function problemsMarkdown(uri: string, version: number, diagnostics: Diagnostic[], line: number): string | undefined {
   const onLine = diagnostics.filter((d) => d.range.start.line <= line && line <= d.range.end.line);
   if (onLine.length === 0) return undefined;
-  return onLine
+  // Un même problème signalé à plusieurs endroits (morceaux d'une requête) : une seule fois
+  const seen = new Set<string>();
+  const unique = onLine.filter((d) => {
+    const key = JSON.stringify([d.message, quickFixes(uri, [d]).map((f) => [f.title, f.edit])]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique
     .map((d) => {
       const icon = d.severity === DiagnosticSeverity.Error ? '❌' : d.severity === DiagnosticSeverity.Warning ? '⚠️' : 'ℹ️';
       const message = typeof d.message === 'string' ? d.message : d.message.value;
       const lines = [`${icon} ${escape(message)}`];
       for (const fix of quickFixes(uri, [d])) {
-        const args: ApplyFixArgs[] = [{ uri, edits: fix.edit?.changes?.[uri] ?? [] }];
+        const args: ApplyFixArgs[] = [{ uri, version, edits: fix.edit?.changes?.[uri] ?? [] }];
         const link = `command:${APPLY_FIX_COMMAND}?${encodeURIComponent(JSON.stringify(args))}`;
         lines.push(`💡 ${escape(fix.title)} — [${l10n.t('Apply')}](${link})`);
       }

@@ -137,7 +137,7 @@ describe('serveur LSP', () => {
   it('requête SQL aux guillemets mélangés', async () => {
     await open(server, 'quotes.php', `<?php\n$sql = 'UPDATE t SET a'.$d." = '". $h ."' WHERE id = 1";\n`);
     const diagnostics = await waitFor(() => server.diagnostics.get(uri('quotes.php')), 'diagnostics');
-    assert.deepEqual(diagnostics.map((d) => d.code), ['sql-mixed-quotes', 'sql-mixed-quotes']);
+    assert.deepEqual(diagnostics.map((d) => d.code), ['sql-mixed-quotes']);
   });
 
   it('valeur non affichée dans du HTML, avec ses corrections rapides', async () => {

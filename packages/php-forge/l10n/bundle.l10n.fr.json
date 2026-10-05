@@ -10,7 +10,7 @@
   "Apply": "Appliquer",
   "Value not displayed: did you mean \"<?=\"?": "Valeur non affichée : vouliez-vous écrire « <?= » ?",
   "Replace with \"{0}\"": "Remplacer par « {0} »",
-  "SQL query mixes PHP quotes: it starts with {0}, use {0} here too": "Requête SQL aux guillemets PHP mélangés : elle commence par {0}, utilisez {0} ici aussi",
+  "SQL query mixes PHP quotes: use {0} throughout the query": "Requête SQL aux guillemets PHP mélangés : utilisez {0} dans toute la requête",
   "Use single quotes throughout the query": "Utiliser des guillemets simples dans toute la requête",
   "Use double quotes throughout the query": "Utiliser des guillemets doubles dans toute la requête",
   "Short open tag \"<?\" only works with short_open_tag enabled: use \"<?php\" or \"<?=\"": "Balise courte « <? » : ne fonctionne qu'avec short_open_tag activé, utilisez « <?php » ou « <?= »",
