@@ -32,3 +32,10 @@ describe('texte SQL des requêtes', () => {
     assert.equal(sqlOffset(q, code.indexOf('";')), q.text.length);
   });
 });
+
+describe('indice /** @sql */', () => {
+  it('chaîne qui ne ressemble pas à du SQL : requête si un commentaire @sql la précède', async () => {
+    const tree = await parse(`<?php\n/** @sql */\n$where = 'id_client = ' . $id . ' AND actif = 1';\n$texte = 'id = ' . $id;\n$w2 = 'x = 1'; // @sql\n`);
+    assert.deepEqual(findQueries(tree).map((q) => q.root.text), [`'id_client = ' . $id . ' AND actif = 1'`, `'x = 1'`]);
+  });
+});

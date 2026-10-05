@@ -2,7 +2,8 @@
 // Une requête est une chaîne ou une concaténation entière (« 'SELECT …'.$x.' GROUP BY …' ») : la suite est
 // colorée même si elle commence sur une autre ligne, ce que la grammaire TextMate de VS Code ne peut pas voir.
 // Sont des requêtes : le texte qui commence comme du SQL, les arguments des fonctions de requête
-// (`rp_query`, `->query`, `mysqli_query`…) et les ajouts `.=` à une variable qui contient une requête.
+// (`rp_query`, `->query`, `mysqli_query`…), les ajouts `.=` à une variable qui contient une requête et les chaînes
+// précédées d'un commentaire `/** @sql */`.
 import type { Node, Tree } from '../parser/parser.ts';
 import { FUNCTION_NODES } from '../model/context.ts';
 
@@ -104,9 +105,12 @@ function scan(tree: Tree): Scan {
   const roots: Root[] = [];
   // Ancêtres : nœud gardé seulement pour les types utiles au contexte
   const stack: { type: string; node?: Node }[] = [];
+  // Lignes de fin des commentaires `@sql` : la chaîne qui commence sur cette ligne ou la suivante est une requête
+  const hints = new Set<number>();
   const cursor = tree.walk();
   for (;;) {
     const type = cursor.nodeType;
+    if (type === 'comment' && cursor.nodeText.includes('@sql')) hints.add(cursor.endPosition.row);
     const isRoot = LITERALS.has(type) || (type === 'binary_expression' && cursor.currentNode.childForFieldName('operator')?.type === '.');
     if (isRoot) {
       const top = stack[stack.length - 1];
@@ -143,7 +147,8 @@ function scan(tree: Tree): Scan {
     if (parts.length > 1) for (const part of parts) if (part.type === 'variable_name') appended.add(`${root.scope}:${part.text}`);
     const target = assignedVariable(root);
     if (target && root.parent?.type === 'augmented_assignment_expression') appended.add(target);
-    if (isSql(parts) || isQueryArgument(root)) {
+    const row = root.node.startPosition.row;
+    if (isSql(parts) || isQueryArgument(root) || hints.has(row) || hints.has(row - 1)) {
       queries.set(root.node.id, { root, parts });
       if (target) sqlVariables.add(target);
     } else if (root.parent?.type === 'augmented_assignment_expression') {
