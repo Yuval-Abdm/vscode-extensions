@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0 — preview
+
+- **PHP Impact** view (Explorer): the PHP files changed in Git or not saved yet, each with the pages that load it through includes (the scripts nobody includes) — what to check before deploying. Files reached through a dynamic include path are marked as possibly incomplete.
+- **Deploy changed files** (view title bar, with the FTP SFTP Deploy extension): uploads every changed file with the workspace's deploy profile, after offering to save unsaved files and warning when a file has errors (`phpForge.deploy.checkErrors`).
+
 ## 0.8.0 — preview
 
 - Security: request data (`$_GET`, `$_POST`, `$_REQUEST`, `$_COOKIE`, `$_FILES` names, client-controlled `$_SERVER` keys, `extract($_POST)` — also in a file included after it —, `php://input`) is followed through variables, string building and the project's functions to SQL queries (`security-sql-injection`), HTML output (`security-xss`), shell commands (`security-command-injection`), includes (`security-file-inclusion`), `unserialize` (`security-unsafe-unserialize`), `header('Location: …')` (`security-open-redirect`) and file writes (`security-path-traversal`). The message shows the path: `$_POST['id'] (line 12) → $id → $sql (line 20) → mysqli_query (line 21)`.

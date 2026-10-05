@@ -2,7 +2,7 @@
 
 **Free PHP language server for VS Code — built for real-world projects, from modern Composer apps to legacy code held together by `include`.**
 
-> Preview (0.8). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
+> Preview (0.9). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
 
 ## Features
 
@@ -29,6 +29,8 @@ PHP Forge follows `include` / `require` like PHP does, from every page that nobo
 > `$title is not defined when included from lp_3/index.php:3 (defined in 2 other callers)`
 
 Variables created in included files keep their type and origin (hover, completion, go to definition). The **Include Tree** view (Explorer) and the "Included by N files" CodeLens show who includes what. Include paths written with server paths are mapped with `phpForge.serverRoot` or the `remotePath` of `.vscode/deploy.json`; a dynamic include can be documented with `/** @include path/to/file.php */` on the line above.
+
+The **PHP Impact** view (Explorer) lists the PHP files you changed (Git changes and unsaved files) and, for each one, the pages that load it through includes — the pages to check before going live. With [FTP SFTP Deploy](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.ftp-sftp-deploy) installed, **Deploy changed files** in its title bar uploads every changed file; it first offers to save unsaved ones and warns when a file has errors (`phpForge.deploy.checkErrors`).
 
 ### Diagnostics
 
@@ -81,7 +83,7 @@ Completion in strings: VS Code does not suggest inside strings by default; press
 | 0.6 ✓ | Formatter (PSR-12, mixed HTML/PHP) |
 | 0.7 ✓ | SQL in PHP strings: schema from `.sql` files or the database, completion, hover, checks |
 | 0.8 ✓ | Security (taint analysis) and PHP version migration |
-| 0.9 | FTP SFTP Deploy integration: impacted pages, deploy in one click |
+| 0.9 ✓ | FTP SFTP Deploy integration: impacted pages, deploy in one click |
 
 ## Settings
 
@@ -116,6 +118,7 @@ Completion in strings: VS Code does not suggest inside strings by default; press
 | `phpForge.security.enabled` | `true` | Follow request data to SQL, HTML output, commands, includes, `unserialize`, redirects and file writes |
 | `phpForge.security.sanitizers` | `[]` | Your own escaping functions (`rp_clean`, `Html::escape`), safe for every sink |
 | `phpForge.migration.targetVersion` | `""` | PHP version you are migrating to; `migration-*` diagnostics and **Migration report** |
+| `phpForge.deploy.checkErrors` | `true` | Warn before **Deploy changed files** when a file to deploy has errors |
 | `phpForge.trace.server` | `off` | Language server trace |
 
 ## Commands
@@ -127,6 +130,7 @@ Completion in strings: VS Code does not suggest inside strings by default; press
 - **PHP Forge: Create Baseline / Update Baseline / Clear Baseline**
 - **PHP Forge: Refresh SQL schema**
 - **PHP Forge: Migration report**
+- **PHP Forge: Show impact of changed files** / **Deploy changed files**
 
 ## Using it with Intelephense or PHP Tools
 
