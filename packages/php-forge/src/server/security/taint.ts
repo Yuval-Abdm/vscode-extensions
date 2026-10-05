@@ -4,6 +4,7 @@
 // code ; les branches sont réunies, les boucles parcourues deux fois. Une fonction du projet appelée avec une donnée
 // de la requête est résumée (paramètres qui atteignent un point sensible ou la valeur renvoyée), à profondeur bornée.
 // Les fonctions inconnues rendent une valeur propre : peu de fausses alertes plutôt que l'exhaustivité.
+import type { TypeExpr } from '../../shared/types.ts';
 import type { Node, Tree } from '../parser/parser.ts';
 
 export type SinkKind = 'sql' | 'xss' | 'command' | 'include' | 'unserialize' | 'redirect' | 'path';
@@ -63,6 +64,8 @@ export interface TaintEnv {
   request?(name: string, at: { line: number; character: number }): { from: string; line: number } | undefined;
   /** Un fichier qui inclut celui-ci a fait `extract($_POST)` : le niveau fichier peut recevoir la requête */
   requestAtEntry?(): boolean;
+  /** Fonction native connue (stubs) : true si elle rend une chaîne ou un tableau (donnée transmise), false sinon */
+  native?(name: string): boolean | undefined;
   /** Neutraliseurs personnalisés (`phpForge.security.sanitizers`), en minuscules : fonctions ou `classe::méthode` */
   sanitizers?: string[];
   /** Profondeur des résumés (appels imbriqués) */
@@ -104,9 +107,11 @@ const PASSTHROUGH = new Set(`
   str_replace str_ireplace preg_replace substr_replace sprintf vsprintf implode join explode str_pad nl2br urldecode
   rawurldecode base64_decode base64_encode stripslashes stripcslashes html_entity_decode htmlspecialchars_decode
   utf8_encode utf8_decode iconv mb_convert_encoding str_repeat strrev wordwrap array_values array_merge array_filter
-  array_unique array_slice array_reverse array_keys current reset end next array_pop array_shift json_decode json_encode
-  serialize unserialize strval var_export print_r strstr stristr strrchr strtok str_split chunk_split quotemeta
-  addcslashes array_map array_combine array_flip array_fill_keys trim nl2br
+  array_unique array_slice array_reverse array_keys current reset end next array_pop array_shift json_decode
+  json_encode serialize unserialize strval var_export print_r strstr stristr strrchr strtok str_split chunk_split
+  quotemeta addcslashes array_map array_combine array_flip array_fill_keys strip_tags strtr array_column preg_split
+  array_pad mb_strimwidth mb_substr_replace array_splice array_chunk array_diff array_intersect array_replace
+  array_merge_recursive mb_str_split preg_replace_callback
 `.split(/\s+/).filter(Boolean));
 
 /** Requêtes : fonctions et index de l'argument requête */
@@ -264,6 +269,11 @@ class Analyzer {
       case 'return_statement': {
         const expr = node.namedChildren[0];
         if (expr) this.#return(this.#eval(expr));
+        return;
+      }
+      case 'exit_statement': {
+        const arg = node.namedChildren[0];
+        if (arg) this.#sink('xss', arg, this.#eval(arg));
         return;
       }
       case 'global_declaration':
@@ -439,7 +449,13 @@ class Analyzer {
       case 'nullsafe_member_access_expression':
         return this.#eval(node.childForFieldName('object'));
       case 'parenthesized_expression':
+      case 'error_suppression_expression':
         return this.#eval(node.namedChildren[0]);
+      case 'match_expression': {
+        this.#eval(node.childForFieldName('condition'));
+        const arms = node.childForFieldName('body')?.namedChildren ?? [];
+        return union(...arms.map((arm) => this.#eval(arm.childForFieldName('return_expression'))));
+      }
       case 'encapsed_string':
       case 'heredoc':
       case 'shell_command_expression': {
@@ -590,6 +606,10 @@ class Analyzer {
       if (nodes[0]) this.#sink('command', nodes[0], taints[0], name);
       return taints[0] && step(taints[0], name, line);
     }
+    if (name === 'die' || name === 'exit') {
+      if (nodes[0]) this.#sink('xss', nodes[0], taints[0], name);
+      return undefined;
+    }
     if (OUTPUT_FUNCTIONS.has(name)) {
       nodes.forEach((n, i) => this.#sink('xss', n, taints[i], name));
       return undefined;
@@ -615,6 +635,8 @@ class Analyzer {
       return value && { ...value, quoted: true, steps: [...value.steps, { label: `${name}()`, line }] };
     }
     if (PASSTHROUGH.has(name)) return step(union(...taints), `${name}()`, line);
+    // Fonction native des stubs (sans déclaration dans le projet) : transmet la donnée si elle rend une chaîne ou un tableau
+    if (!this.#declarations.functions.has(name) && this.#env.native?.(name)) return step(union(...taints), `${name}()`, line);
     return this.#user(name, this.#declarations.functions.get(name), name, nodes, taints, node);
   }
 
@@ -839,6 +861,24 @@ function declarationsOf(tree: Tree): Declarations {
     }
   }
   return { functions, methods, all };
+}
+
+/** Type rendu par une fonction native qui peut contenir la donnée : chaîne, tableau, mixed (non déclaré). */
+export function returnsData(type: TypeExpr | undefined): boolean {
+  if (!type) return true;
+  switch (type.kind) {
+    case 'scalar':
+      return type.name === 'string' || type.name === 'scalar' || type.name === 'array-key';
+    case 'array':
+    case 'mixed':
+    case 'template':
+      return true;
+    case 'union':
+    case 'intersection':
+      return type.types.some(returnsData);
+    default:
+      return false;
+  }
 }
 
 /** Données de la requête qui atteignent un point sensible, dans tout le fichier. */

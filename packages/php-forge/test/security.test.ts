@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { securityDiagnostics } from '../src/server/security/diagnostics.ts';
-import type { TaintEnv } from '../src/server/security/taint.ts';
+import { returnsData, type TaintEnv } from '../src/server/security/taint.ts';
 import { parse } from './helpers.ts';
 
 const URI = 'file:///p/page.php';
@@ -169,5 +169,40 @@ describe('sécurité : propagation jusqu’aux points sensibles', () => {
   it('$_SERVER et $_FILES : seulement les clés que le client choisit', async () => {
     const code = `<?php\necho $_SERVER["DOCUMENT_ROOT"];\necho $_SERVER["HTTP_REFERER"];\necho $_FILES["f"]["tmp_name"];\necho $_FILES["f"]["name"];\n`;
     assert.deepEqual(await found(code), ['2:xss', '4:xss']);
+  });
+});
+
+describe('sécurité : revue 0.8', () => {
+  it('fonctions natives qui transmettent la donnée (liste, puis stubs : chaîne ou tableau rendu)', async () => {
+    const code = [
+      '<?php',
+      'mysql_query("SELECT * FROM t WHERE x = \'" . strip_tags($_GET["x"]) . "\'");',
+      'echo strtr($_GET["a"], "a", "b");',
+      'echo ucwords(strip_tags($_GET["y"]));',
+      'echo array_column($_POST["rows"], "n")[0];',
+      'echo grapheme_substr($_GET["w"], 0, 10);',
+      'echo str_word_count($_GET["c"]);',
+    ].join('\n');
+    const native = (name: string) => (name === 'grapheme_substr' ? true : name === 'str_word_count' ? false : undefined);
+    assert.deepEqual(await found(code, { native }), ['1:sql-injection', '2:xss', '3:xss', '4:xss', '5:xss']);
+  });
+
+  it('type rendu par une native : chaîne, tableau, mixed transmettent ; nombre, booléen, objet non', () => {
+    assert.deepEqual([undefined, { kind: 'scalar', name: 'string' }, { kind: 'array' }, { kind: 'union', types: [{ kind: 'scalar', name: 'string' }, { kind: 'scalar', name: 'false' }] }].map((t) => returnsData(t as never)), [true, true, true, true]);
+    assert.deepEqual([{ kind: 'scalar', name: 'int' }, { kind: 'scalar', name: 'bool' }, { kind: 'class', fqn: 'DateTime' }].map((t) => returnsData(t as never)), [false, false, false]);
+  });
+
+  it('@, match, die / exit', async () => {
+    const code = [
+      '<?php',
+      '$id = @$_GET["id"];',
+      'mysql_query("SELECT * FROM t WHERE id = $id");',
+      'echo @$_GET["x"];',
+      '$m = match ($a) { 1 => $_GET["m"], default => "ok" };',
+      'echo $m;',
+      'die("Erreur : " . $_GET["e"]);',
+      'exit($_GET["f"]);',
+    ].join('\n');
+    assert.deepEqual(await found(code), ['2:sql-injection', '3:xss', '5:xss', '6:xss', '7:xss']);
   });
 });
