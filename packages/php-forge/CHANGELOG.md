@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0
+
+- First stable release: everything planned for 1.0 is in (navigation, include engine, diagnostics, refactoring, formatter, SQL, security, PHP migration, FTP SFTP Deploy integration).
+- Faster reopening: the index cache is only rewritten when a file changed, and is read and written as a stream (one line per file) while the project is listed — about 3 s instead of 6 s on a 19,000-file project, and no memory peak from a single huge document (the language server stays between 1.2 and 1.4 GB).
+- Faster references and rename on common names: files that only mention the name as a method, a property, a variable, in a comment or in HTML are no longer parsed — under 2 s for a function called in 1,000 files.
+- The interface is fully translated into French (follows the VS Code display language).
+
 ## 0.9.0 — preview
 
 - **PHP Impact** view (Explorer): the PHP files changed in Git or not saved yet, each with the pages that load it through includes (the scripts nobody includes) — what to check before deploying. Files reached through a dynamic include path are marked as possibly incomplete.

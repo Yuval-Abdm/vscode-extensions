@@ -2,7 +2,7 @@
 
 **Free PHP language server for VS Code — built for real-world projects, from modern Composer apps to legacy code held together by `include`.**
 
-> Preview (0.9). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
+> 1.0. Interface in English and French (follows the VS Code display language).
 
 ## Features
 
@@ -72,18 +72,17 @@ PHP Forge reads the tables of the project's `.sql` files (`phpForge.sql.schema`:
 
 Completion in strings: VS Code does not suggest inside strings by default; press `Ctrl+Space`, or set `"editor.quickSuggestions": { "strings": "on" }` for `[php]`.
 
-## Roadmap to 1.0
+## Performance
 
-| Version | Content |
+Measured on a real legacy project (19,000 PHP files, 3,200 of them application code) on a development machine:
+
+| | |
 |---|---|
-| 0.2 ✓ | Type inference, completion, signature help, inlay hints, go to implementation |
-| 0.3 ✓ | Include engine: variables, functions and classes followed across `include` / `require` |
-| 0.4 ✓ | Diagnostics (undefined variables per caller, unknown symbols, PHP version), baseline |
-| 0.5 ✓ | Rename, references, auto-import and suggested imports (`use` and `include`), code generation |
-| 0.6 ✓ | Formatter (PSR-12, mixed HTML/PHP) |
-| 0.7 ✓ | SQL in PHP strings: schema from `.sql` files or the database, completion, hover, checks |
-| 0.8 ✓ | Security (taint analysis) and PHP version migration |
-| 0.9 ✓ | FTP SFTP Deploy integration: impacted pages, deploy in one click |
+| First indexing (background; completion in the open file is available at once) | 12 s |
+| Reopening with the cache | 3 s |
+| Completion (95th percentile) | under 100 ms |
+| References of a function called in 1,000 files | under 2 s |
+| Language server memory | 1.2 to 1.4 GB |
 
 ## Settings
 
