@@ -85,5 +85,11 @@
   "Organize use statements": "Organiser les use",
   "Add include '{0}'": "Ajouter l'include '{0}'",
   "Import {0}": "Importer {0}",
-  "Import all missing classes": "Importer toutes les classes manquantes"
+  "Import all missing classes": "Importer toutes les classes manquantes",
+  "Generate getters and setters": "Générer les getters et setters",
+  "Generate getter and setter for {0}": "Générer le getter et le setter de {0}",
+  "Generate constructor": "Générer le constructeur",
+  "Implement {0} missing methods": "Implémenter les {0} méthodes manquantes",
+  "Generate PHPDoc": "Générer la PHPDoc",
+  "Add @var": "Ajouter @var"
 }

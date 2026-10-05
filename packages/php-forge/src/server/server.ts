@@ -29,6 +29,7 @@ import { prepareRename, renameAt } from './refactor/rename.ts';
 import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { organizeUses } from './imports/uses.ts';
 import { importAllMissing, importFixes } from './imports/fixes.ts';
+import { generateActions } from './refactor/generate.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
@@ -139,7 +140,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       selectionRangeProvider: true,
       inlayHintProvider: true,
       codeLensProvider: { resolveProvider: true },
-      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.Source, CodeActionKind.SourceOrganizeImports] },
+      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.Refactor, CodeActionKind.Source, CodeActionKind.SourceOrganizeImports] },
       semanticTokensProvider: { legend: { tokenTypes: [...TOKEN_TYPES], tokenModifiers: [...TOKEN_MODIFIERS] }, full: true },
     },
     serverInfo: { name: 'PHP Forge' },
@@ -550,7 +551,7 @@ connection.onDocumentHighlight(
 const wanted = (only: string[] | undefined, kind: string) => !only || only.some((k) => kind === k || kind.startsWith(`${k}.`));
 
 connection.onCodeAction(
-  safe([], ({ textDocument, context }) => {
+  safe([], ({ textDocument, context, range }) => {
     const uri = textDocument.uri;
     const doc = docAt(uri);
     const actions: CodeAction[] = quickFixes(uri, context.diagnostics, doc?.doc.getText());
@@ -563,6 +564,7 @@ connection.onCodeAction(
       const all = importAllMissing(input, published.get(uri) ?? [], fixEnv);
       if (all) actions.push(all);
     }
+    if (wanted(context.only, CodeActionKind.Refactor)) actions.push(...generateActions({ uri, text, tree: doc.tree, symbols: doc.symbols }, range, { lookup, resolver, phpVersion: resolver.phpVersion }));
     if (wanted(context.only, CodeActionKind.SourceOrganizeImports)) {
       const edits = organizeUses(doc.tree, text);
       if (edits.length) actions.push({ title: l10n.t('Organize use statements'), kind: CodeActionKind.SourceOrganizeImports, edit: { changes: { [uri]: edits } } });
