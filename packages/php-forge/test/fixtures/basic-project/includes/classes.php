@@ -1,6 +1,6 @@
 <?php
 /** Outils d'affichage. */
-class Helper extends BaseHelper
+class Helper extends BaseHelper implements Renderer
 {
     public function render(string $text): string
     {
@@ -14,4 +14,9 @@ abstract class BaseHelper
     {
         return htmlspecialchars($text);
     }
+}
+
+interface Renderer
+{
+    public function render(string $text): string;
 }

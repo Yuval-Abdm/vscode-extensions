@@ -37,7 +37,7 @@ test('plan du fichier', async () => {
     const s = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', doc.uri);
     return s && s.length ? s : false;
   }, 'symboles');
-  assert.deepStrictEqual(symbols.map((s) => s.name), ['Helper', 'BaseHelper']);
+  assert.deepStrictEqual(symbols.map((s) => s.name), ['Helper', 'BaseHelper', 'Renderer']);
 });
 
 test('aller à la définition dans un fichier inclus', async () => {
@@ -173,6 +173,33 @@ test('diagnostics : fichier non ouvert listé, correction « ignorer »', async 
   await vscode.window.showTextDocument(doc);
   const actions = await vscode.commands.executeCommand('vscode.executeCodeActionProvider', legacy, diagnostic.range);
   assert.ok(actions.some((a) => a.title === 'Ignore argument-count on this line'), JSON.stringify(actions.map((a) => a.title)));
+});
+
+test('renommer une fonction dans tout le projet', async () => {
+  const doc = await vscode.workspace.openTextDocument(ws('index.php'));
+  await vscode.window.showTextDocument(doc);
+  const line = doc.getText().split('\n').findIndex((l) => l.includes('format_price('));
+  const position = new vscode.Position(line, doc.lineAt(line).text.indexOf('format_price') + 2);
+  const edit = await waitFor(() => vscode.commands.executeCommand('vscode.executeDocumentRenameProvider', doc.uri, position, 'formatPrice'), 'rename');
+  const files = edit.entries().map(([uri]) => vscode.workspace.asRelativePath(uri)).sort();
+  assert.deepStrictEqual(files, ['includes/functions.php', 'index.php']);
+});
+
+test('références et CodeLens d’implémentations', async () => {
+  const uri = ws('includes/classes.php');
+  const doc = await vscode.workspace.openTextDocument(uri);
+  await vscode.window.showTextDocument(doc);
+  const line = doc.getText().split('\n').findIndex((l) => l.startsWith('class Helper'));
+  const refs = await waitFor(async () => {
+    const result = await vscode.commands.executeCommand('vscode.executeReferenceProvider', uri, new vscode.Position(line, 7));
+    return result && result.length ? result : false;
+  }, 'references');
+  assert.ok(refs.some((r) => r.uri.path.endsWith('/index.php')), JSON.stringify(refs.map((r) => r.uri.path)));
+  const lenses = await waitFor(async () => {
+    const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', uri, 10);
+    return result && result.some((l) => l.command && /implementation/.test(l.command.title)) ? result : false;
+  }, 'codeLens implementations');
+  assert.ok(lenses.some((l) => l.command.title === '1 implementation'), JSON.stringify(lenses.map((l) => l.command && l.command.title)));
 });
 
 async function run() {

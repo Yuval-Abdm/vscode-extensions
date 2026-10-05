@@ -2,7 +2,7 @@
 
 **Free PHP language server for VS Code — built for real-world projects, from modern Composer apps to legacy code held together by `include`.**
 
-> Preview (0.2). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
+> Preview (0.5). PHP Forge is being built milestone by milestone towards 1.0: see the roadmap below.
 
 ## Features
 
@@ -45,6 +45,16 @@ Variables created in included files keep their type and origin (hover, completio
 - **Baseline**: run **PHP Forge: Create Baseline** on a legacy project — existing problems are stored in `.vscode/php-forge-baseline.json` and hidden, only new ones are shown (count in the status bar).
 - Library folders (`phpForge.libraryPaths`, and folders with their own `composer.json`) are indexed but never diagnosed; add third-party code copied into the project there (e.g. `"**/artichow/**"`).
 
+### Refactoring and imports
+
+- **Rename** (F2) and **Find All References** across the project: variables (also across includes, `global` and `$GLOBALS['x']`), parameters (with named arguments), functions, classes (`use`, types, phpdoc), methods, properties, constants and namespaces. `'Class::method'` strings and callables (`[$obj, 'm']`, `[Foo::class, 'm']`) are included when certain; a method called on an untyped object only counts when no other class declares the same name. Native PHP and library symbols cannot be renamed.
+- **"N references" / "N implementations" CodeLens** above classes, functions, methods and interfaces.
+- **Auto-import**: accepting a class, function or constant from another namespace adds the `use`, sorted.
+- **Suggested imports** on unknown names ("Import Lib\User", "Import all missing classes"); for code without namespaces, **"Add include 'includes/fonctions.php'"** written in the file's own style (`ROOT_PATH.'/…'`, `__DIR__ . '/…'`, `$_SERVER['DOCUMENT_ROOT']`, relative).
+- **Organize use statements** (sort, group, remove unused), also on save with `phpForge.organizeUsesOnSave`.
+- **Code generation**: getters and setters, constructor (property promotion from PHP 8.0), missing methods of interfaces and abstract classes, PHPDoc skeleton, `@var` for a variable.
+- **Quick fixes**: declare an undefined variable, replace a deprecated or removed function by its documented replacement.
+
 ## Roadmap to 1.0
 
 | Version | Content |
@@ -52,7 +62,7 @@ Variables created in included files keep their type and origin (hover, completio
 | 0.2 ✓ | Type inference, completion, signature help, inlay hints, go to implementation |
 | 0.3 ✓ | Include engine: variables, functions and classes followed across `include` / `require` |
 | 0.4 ✓ | Diagnostics (undefined variables per caller, unknown symbols, PHP version), baseline |
-| 0.5 | Rename, references, auto-import and suggested imports (`use` and `include`), code generation |
+| 0.5 ✓ | Rename, references, auto-import and suggested imports (`use` and `include`), code generation |
 | 0.6 | Formatter (PSR-12, mixed HTML/PHP) |
 | 0.7 | SQL in PHP strings: highlighting, schema-aware completion and checks |
 | 0.8 | Security (taint analysis) and PHP version migration |
@@ -76,6 +86,9 @@ Variables created in included files keep their type and origin (hover, completio
 | `phpForge.diagnostics.scope` | `"workspace"` | `workspace`: every file analyzed in the background; `openFiles`: open files only |
 | `phpForge.diagnostics.rules` | `{}` | Level per diagnostic code (`error`, `warning`, `information`, `hint`, `off`) |
 | `phpForge.libraryPaths` | `["**/vendor/**", "**/PHPExcel/**", "**/Google/Api/**"]` | Library folders: indexed, never diagnosed |
+| `phpForge.codeLens.references` | `true` | "N references" above classes, functions and methods |
+| `phpForge.codeLens.implementations` | `true` | "N implementations" above interfaces, abstract classes and their methods |
+| `phpForge.organizeUsesOnSave` | `false` | Sort `use` statements and remove unused ones on save |
 | `phpForge.trace.server` | `off` | Language server trace |
 
 ## Commands

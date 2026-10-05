@@ -113,7 +113,7 @@ describe('serveur LSP', () => {
 
   it('plan d’un fichier non ouvert (depuis l’index)', async () => {
     const symbols = (await server.connection.sendRequest('textDocument/documentSymbol', { textDocument: { uri: uri('includes/classes.php') } })) as { name: string }[];
-    assert.deepEqual(symbols.map((s) => s.name), ['Helper', 'BaseHelper']);
+    assert.deepEqual(symbols.map((s) => s.name), ['Helper', 'BaseHelper', 'Renderer']);
   });
 
   it('recherche de symboles dans le workspace', async () => {

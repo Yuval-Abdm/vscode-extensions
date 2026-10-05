@@ -14,6 +14,7 @@ import { IncludeGraph } from '../src/server/includes/graph.ts';
 import { indexFolder } from '../src/server/index/indexer.ts';
 import { Lookup } from '../src/server/index/lookup.ts';
 import { decode } from '../src/server/parser/encoding.ts';
+import { findReferences, type RefEnv } from '../src/server/refactor/references.ts';
 import { loadStubs } from '../src/server/stubs/stubs.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
 import { SymbolIndex } from '../src/server/index/symbolIndex.ts';
@@ -34,6 +35,10 @@ interface Result {
   /** Analyse des inclusions (graphe + exécution), en ms */
   analysisMs: number;
   workspaceDiagnosticsMs: number;
+  /** Références des 20 fonctions les plus utilisées : moyenne et maximum (ms), total trouvé */
+  referencesMs: number;
+  referencesMaxMs: number;
+  referencesCount: number;
   entries: number;
   byCode: Record<string, number>;
 }
@@ -120,11 +125,37 @@ for (const root of corpus) {
     tree.delete();
   }
   const workspaceDiagnosticsMs = Math.round(performance.now() - workspaceStart);
+  // Références : les 20 fonctions du projet présentes dans le plus de fichiers, fichiers relus comme par le serveur
+  const refEnv: RefEnv = {
+    lookup: env.resolver.lookup,
+    resolver: env.resolver,
+    files: () => [...index.files()],
+    source: (uri) => {
+      const symbols = index.get(uri);
+      if (!symbols) return undefined;
+      const text = decode(readFileSync(URI.parse(uri).fsPath));
+      const tree = parsePhp(parser, text);
+      return { file: { uri, text, tree, symbols }, release: () => tree.delete() };
+    },
+  };
+  const usage = new Map<string, number>();
+  for (const file of index.files()) for (const name of file.names ?? []) usage.set(name, (usage.get(name) ?? 0) + 1);
+  const functions = [...index.files()].flatMap((file) => file.symbols.filter((s) => s.kind === 'function').map((symbol) => ({ uri: file.uri, symbol })));
+  const popular = functions.sort((a, b) => (usage.get(b.symbol.name.toLowerCase()) ?? 0) - (usage.get(a.symbol.name.toLowerCase()) ?? 0)).slice(0, 20);
+  const referenceTimes: number[] = [];
+  let referencesCount = 0;
+  for (const declaration of popular) {
+    const start = performance.now();
+    referencesCount += findReferences(refEnv, { kind: 'function', name: declaration.symbol.name, declarations: [declaration] }, false).length;
+    referenceTimes.push(performance.now() - start);
+  }
+  const referencesMs = Math.round(referenceTimes.reduce((a, b) => a + b, 0) / Math.max(1, referenceTimes.length));
+  const referencesMaxMs = Math.round(Math.max(0, ...referenceTimes));
   results.push({
     project: path.basename(root), files: stats.files, parsed: stats.parsed, skipped: stats.skipped, syntaxErrors: stats.syntaxErrors,
     symbols, ms: stats.ms, heapMB: Math.round(process.memoryUsage().heapUsed / 1e6),
     completionP50: percentile(timings, 50), completionP95: percentile(timings, 95),
-    analysisMs, entries: graph.entries().length, workspaceDiagnosticsMs, byCode,
+    analysisMs, entries: graph.entries().length, workspaceDiagnosticsMs, referencesMs, referencesMaxMs, referencesCount, byCode,
   });
 }
 console.table(results.map(({ byCode, ...r }) => r));

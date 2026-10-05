@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — preview
+
+- Rename and Find All References across the project: variables (also across includes and `global`), parameters (with named arguments), functions, classes, methods, properties, constants and namespaces; `'Class::method'` strings and callables (`[$obj, 'm']`, `[Foo::class, 'm']`) when certain. Native and library symbols cannot be renamed.
+- "N references" / "N implementations" CodeLens (`phpForge.codeLens.references`, `phpForge.codeLens.implementations`).
+- Auto-import: accepting a class, function or constant from another namespace adds the sorted `use`.
+- Suggested imports on unknown names ("Import Lib\User", "Import all missing classes"); for code without namespaces, "Add include 'includes/fonctions.php'" written in the file's own style (`ROOT_PATH.'/…'`, `__DIR__ . '/…'`, relative).
+- Organize use statements (sort, group, remove unused), also on save with `phpForge.organizeUsesOnSave`.
+- Code generation: getters and setters, constructor (property promotion from PHP 8.0), missing methods of interfaces and abstract classes, PHPDoc skeleton, `@var` for a variable.
+- Quick fixes: declare an undefined variable, replace a deprecated or removed function by its documented replacement.
+- Fewer false positives on legacy code: properties written as `$this->x[] = …`, `+=`, `++` or `$this->$name = …`, members used inside traits, `method_exists` / `property_exists` guards, `$a ?: $b ?: $c`, `$s{0}` before PHP 7.4.
+
 ## 0.4.0 — preview
 
 - Diagnostics: undefined functions, classes and constants; methods and properties that do not exist on a known type (never on untyped code, classes with `__call` / `__get`, `@mixin` or an unknown parent); argument count of the project's functions and methods; unused `use` and unreachable code (grayed out).
