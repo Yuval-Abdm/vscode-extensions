@@ -220,6 +220,12 @@ const CONTAINERS = new Set(['program', 'compound_statement', 'declaration_list',
 /** Instruction (ou déclaration) qui contient toute la plage : seule partie mise en page à la frappe. */
 export function onTypeWindow(tree: Tree, range: Range): Node | undefined {
   let node: Node | null = tree.rootNode.descendantForPosition({ row: range.end.line, column: Math.max(0, range.end.character - 1) });
+  // Position après la fin de la ligne : on tombe sur le bloc, on redescend vers la dernière instruction de la ligne
+  while (node && CONTAINERS.has(node.type)) {
+    const child: Node | undefined = node.namedChildren.filter((c) => c.startPosition.row <= range.end.line).at(-1);
+    if (!child || child.endPosition.row < range.end.line) break;
+    node = child;
+  }
   while (node && node.parent && !(CONTAINERS.has(node.parent.type) && node.startPosition.row <= range.start.line)) node = node.parent;
   return node && node.type !== 'program' && node.parent ? node : undefined;
 }

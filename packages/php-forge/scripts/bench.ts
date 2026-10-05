@@ -15,6 +15,7 @@ import { indexFolder } from '../src/server/index/indexer.ts';
 import { Lookup } from '../src/server/index/lookup.ts';
 import { decode } from '../src/server/parser/encoding.ts';
 import { DEFAULT_FORMAT, formatText } from '../src/server/format/format.ts';
+import { tokensOf } from '../src/server/format/tokens.ts';
 import { findReferences, type RefEnv } from '../src/server/refactor/references.ts';
 import { loadStubs } from '../src/server/stubs/stubs.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
@@ -172,7 +173,9 @@ for (const root of corpus) {
       formatMs += ms;
       formatMaxMs = Math.max(formatMaxMs, ms);
       const again = parsePhp(parser, out);
-      if (out.replace(/\s+/g, '') !== text.replace(/\s+/g, '') || again.rootNode.hasError || formatText(again, out, DEFAULT_FORMAT) !== out) formatFailures++;
+      // Suite des jetons (type et texte) : `- -$b` collé en `--$b` garde le texte non blanc mais pas les jetons
+      const stream = (t: typeof tree, s: string) => tokensOf(t).map((k) => `${k.type}:${s.slice(k.start, k.end).replace(/\s+/g, ' ')}`).join('\n');
+      if (stream(again, out) !== stream(tree, text) || again.rootNode.hasError || formatText(again, out, DEFAULT_FORMAT) !== out) formatFailures++;
       again.delete();
     }
     tree.delete();

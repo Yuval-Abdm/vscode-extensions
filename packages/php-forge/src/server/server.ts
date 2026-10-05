@@ -26,7 +26,7 @@ import { quickFixes } from './features/codeActions.ts';
 import { findReferences, targetAt, type RefEnv, type SourceFile } from './refactor/references.ts';
 import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { SourceCache } from './refactor/sourceCache.ts';
-import { formatEdits, formatOptions, onTypeRange } from './format/format.ts';
+import { formatEdits, formatOptions, onTypeRange, onTypeWindow } from './format/format.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
 import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { organizeUses } from './imports/uses.ts';
@@ -750,10 +750,12 @@ connection.onPrepareRename(renameHandler((file, { position }) => prepareRename(r
 connection.onRenameRequest(renameHandler((file, { position, newName }) => renameAt(refEnv(), file, position, newName, libraryUri)));
 
 /** Modifications de mise en forme d'un document ouvert (plage : sélection ou lignes touchées par la frappe). */
-function formatDocument(uri: string, editor: { tabSize: number; insertSpaces: boolean }, range?: Range): TextEdit[] {
+/** `onType` : seule l'instruction autour de la plage est mise en page. */
+function formatDocument(uri: string, editor: { tabSize: number; insertSpaces: boolean }, range?: Range, onType = false): TextEdit[] {
   const doc = docAt(uri);
   if (!doc || !settings.format.enable) return [];
-  return formatEdits(doc.tree, doc.doc.getText(), formatOptions(settings.format, editor), range);
+  const window = onType && range ? onTypeWindow(doc.tree, range) : undefined;
+  return formatEdits(doc.tree, doc.doc.getText(), formatOptions(settings.format, editor), range, window);
 }
 
 connection.onDocumentFormatting(safe([], ({ textDocument, options }) => formatDocument(textDocument.uri, options)));
@@ -761,7 +763,7 @@ connection.onDocumentRangeFormatting(safe([], ({ textDocument, options, range })
 connection.onDocumentOnTypeFormatting(
   safe([], ({ textDocument, options, position, ch }) => {
     const doc = docAt(textDocument.uri);
-    return doc ? formatDocument(textDocument.uri, options, onTypeRange(doc.tree, position, ch)) : [];
+    return doc ? formatDocument(textDocument.uri, options, onTypeRange(doc.tree, position, ch), true) : [];
   }),
 );
 
