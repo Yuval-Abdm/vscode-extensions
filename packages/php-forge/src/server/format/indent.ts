@@ -19,6 +19,11 @@ const STRUCTURES = new Set([
   'namespace_definition', 'declare_statement', 'compound_statement', 'text_interpolation', 'case_statement', 'default_statement',
 ]);
 const NOT_PHP = new Set(['text', 'php_tag', 'php_end_tag']);
+/** Structures dont le corps peut être une instruction seule (`if ($a) foo();`, syntaxe `for (…): … endfor;`) */
+const BODY_OWNERS = new Set(['if_statement', 'else_clause', 'else_if_clause', 'while_statement', 'for_statement', 'foreach_statement', 'do_statement', 'declare_statement']);
+
+/** `child` est le corps (instruction) de `owner`, pas sa condition ni une clause. */
+const isBody = (owner: Node, child: Node) => BODY_OWNERS.has(owner.type) && child.type.endsWith('_statement') && child.type !== 'compound_statement';
 
 export interface IndentContext {
   tokens: Token[];
@@ -77,8 +82,21 @@ export class Indenter {
     return value;
   }
 
+  /** Premier jeton du nœud ; -1 : le nœud commence avant les jetons mis en page (formatage d'une partie). */
   #first(node: Node): number {
-    return this.#firstToken.get(node.startIndex) ?? 0;
+    return this.#firstToken.get(node.startIndex) ?? -1;
+  }
+
+  /** Indentation de la ligne où commence le nœud (hors de la partie mise en page : celle du texte). */
+  #lineOfNode(node: Node): string {
+    const i = this.#first(node);
+    return i >= 0 ? this.lineOf(i) : leading(this.#ctx.lines[node.startPosition.row]);
+  }
+
+  /** Le nœud commence sur une ligne antérieure à `line` (du texte formaté). */
+  #before(node: Node, line: number): boolean {
+    const i = this.#first(node);
+    return i < 0 || this.#ctx.outLine[i] < line;
   }
 
   #compute(i: number): string {
@@ -88,21 +106,23 @@ export class Indenter {
     const line = outLine[i];
     // Fermeture d'un bloc : niveau de sa ligne d'ouverture
     if (CLOSING.has(token.type) && node.parent && BLOCKS.has(node.parent.type) && node.parent.lastChild?.id === node.id) {
-      return this.lineOf(this.#first(node.parent));
+      return this.#lineOfNode(node.parent);
     }
+    // endswitch : niveau du switch
+    if (token.type.toLowerCase() === 'endswitch' && node.parent?.parent) return this.#lineOfNode(node.parent.parent);
     // Bloc qui contient la ligne, ouvert sur une ligne précédente
     let block: Node | null = node.parent;
     let child: Node = node;
-    while (block && block.type !== 'program' && !(BLOCKS.has(block.type) && outLine[this.#first(block)] < line)) {
+    while (block && block.type !== 'program' && !((BLOCKS.has(block.type) || isBody(block, child)) && this.#before(block, line))) {
       child = block;
       block = block.parent;
     }
     // Un bloc ouvert avant la balise <?php de la région (il enjambe du HTML) : la région donne la base
     const region = this.#regionTag(i);
-    const inBlock = !!block && block.type !== 'program' && this.#first(block) > region;
-    const base = inBlock ? this.lineOf(this.#first(block!)) + unit : this.#regionBase(region);
+    const inBlock = !!block && block.type !== 'program' && (region < 0 || block.startIndex > tokens[region].start);
+    const base = inBlock ? this.#lineOfNode(block!) + unit : this.#regionBase(region);
     // Suite d'une instruction ou d'une expression commencée plus haut
-    const continued = child.id !== node.id && outLine[this.#first(child)] < line && !STRUCTURES.has(child.type) && !isClause(node);
+    const continued = child.id !== node.id && this.#before(child, line) && !STRUCTURES.has(child.type) && !isClause(node);
     return continued ? base + unit : base;
   }
 

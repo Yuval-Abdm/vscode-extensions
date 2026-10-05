@@ -3,11 +3,11 @@
 // commentaires sont gardés (sauf l'alignement des lignes « * » d'un commentaire /** */ réindenté). Un fichier avec une
 // erreur de syntaxe n'est pas formaté.
 import type { Range, TextEdit } from 'vscode-languageserver/node';
-import type { Tree } from '../parser/parser.ts';
+import type { Node, Tree } from '../parser/parser.ts';
 import { applyOptions } from './align.ts';
 import { Indenter } from './indent.ts';
 import { spacing } from './spacing.ts';
-import { tokensOf, type Token } from './tokens.ts';
+import { atomOf, tokenOf, tokensOf, type Token } from './tokens.ts';
 
 export interface FormatOptions {
   /** Unité d'indentation (« 4 espaces » ou tabulation) */
@@ -62,9 +62,27 @@ function braceKind(token: Token): 'declaration' | 'control' | undefined {
 
 type Decision = { kind: 'keep' } | { kind: 'same'; text: string } | { kind: 'break'; count: number };
 
-export function layout(tree: Tree, text: string, options: FormatOptions): Layout | undefined {
+/**
+ * Jetons d'une partie du fichier (formatage à la frappe) : ceux du nœud, précédés du jeton qui le précède (pour
+ * l'indentation de sa première ligne) et de la balise `<?php` de sa région.
+ */
+function windowTokens(tree: Tree, text: string, window: Node): Token[] {
+  const out = tokensOf(window);
+  let p = window.startIndex - 1;
+  while (p >= 0 && /\s/.test(text[p])) p--;
+  if (p < 0) return out;
+  const leaf = tree.rootNode.descendantForIndex(p, p + 1);
+  if (!leaf) return out;
+  const previous = atomOf(leaf);
+  out.unshift(tokenOf(previous));
+  const tag = tree.rootNode.descendantsOfType('php_tag').filter((t) => t.startIndex < previous.startIndex).at(-1);
+  if (tag) out.unshift(tokenOf(tag));
+  return out;
+}
+
+export function layout(tree: Tree, text: string, options: FormatOptions, window?: Node): Layout | undefined {
   if (tree.rootNode.hasError) return undefined;
-  const tokens = tokensOf(tree);
+  const tokens = window ? windowTokens(tree, text, window) : tokensOf(tree);
   const lines = text.split('\n').map((l) => l.replace(/\r$/, ''));
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
   const current: string[] = [];
@@ -127,8 +145,9 @@ function isOneLiner(brace: Token): boolean {
 }
 
 /** Modifications du document entier. */
-export function formatEdits(tree: Tree, text: string, options: FormatOptions, range?: Range): TextEdit[] {
-  const result = layout(tree, text, options);
+/** `window` : nœud qui contient la plage, seul mis en page (formatage à la frappe sur un gros fichier). */
+export function formatEdits(tree: Tree, text: string, options: FormatOptions, range?: Range, window?: Node): TextEdit[] {
+  const result = layout(tree, text, options, window);
   if (!result) return [];
   const starts = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === '\n') starts.push(i + 1);
@@ -194,4 +213,13 @@ export function onTypeRange(tree: Tree, position: { line: number; character: num
   const brace = tree.rootNode.descendantForPosition({ row: position.line, column: position.character - 1 });
   const block = brace?.type === '}' ? brace.parent : null;
   return block ? { start: { line: block.startPosition.row, character: 0 }, end: line.end } : line;
+}
+
+const CONTAINERS = new Set(['program', 'compound_statement', 'declaration_list', 'colon_block', 'switch_block', 'case_statement', 'default_statement', 'text_interpolation']);
+
+/** Instruction (ou déclaration) qui contient toute la plage : seule partie mise en page à la frappe. */
+export function onTypeWindow(tree: Tree, range: Range): Node | undefined {
+  let node: Node | null = tree.rootNode.descendantForPosition({ row: range.end.line, column: Math.max(0, range.end.character - 1) });
+  while (node && node.parent && !(CONTAINERS.has(node.parent.type) && node.startPosition.row <= range.start.line)) node = node.parent;
+  return node && node.type !== 'program' && node.parent ? node : undefined;
 }

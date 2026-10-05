@@ -58,8 +58,13 @@ export function spacing(left: Token, right: Token, current: string): string {
   }
   // Cast : `(int) $x`
   if (left.type === ')' && parentType(left) === 'cast_expression') return ' ';
-  if (UNARY_PARENTS.has(parentType(left)) && !left.node.isNamed && left.node.parent?.firstChild?.id === left.node.id) return '';
-  if (right.type === '++' || right.type === '--' || ((left.type === '++' || left.type === '--') && parentType(left) === 'update_expression')) return '';
+  const first = (t: Token) => t.node.parent?.firstChild?.id === t.node.id;
+  // `- -$b`, `- --$b`, `+ +$b` : collés, ils deviendraient `--$b` (décrément) ; l'espace reste
+  if ((left.type === '-' || left.type === '+') && right.type.startsWith(left.type) && parentType(left) === 'unary_op_expression') return keep;
+  if (UNARY_PARENTS.has(parentType(left)) && !left.node.isNamed && first(left)) return '';
+  // `++$i` (préfixe) collé à sa variable, `$i++` (suffixe) aussi ; `return ++$i` garde son espace
+  if ((left.type === '++' || left.type === '--') && parentType(left) === 'update_expression' && first(left)) return '';
+  if ((right.type === '++' || right.type === '--') && parentType(right) === 'update_expression' && !first(right)) return '';
   if (left.type === '&' && parentType(left) === 'reference_assignment_expression') return '';
   if (left.type === '...' || left.type === '&' && parentType(left) === 'reference_modifier' || left.type === '?' && parentType(left) === 'optional_type') return '';
   if (parentType(left) === 'declare_directive' || parentType(right) === 'declare_directive') return keep;

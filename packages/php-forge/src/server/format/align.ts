@@ -90,8 +90,13 @@ export function applyOptions(layout: Layout, options: FormatOptions): void {
     tokens.forEach((t, i) => {
       const array = t.node.parent;
       if (!(t.type === ']' || t.type === ')') || array?.type !== 'array_creation_expression' || array.lastChild?.id !== t.node.id) return;
-      if (!startsLine(layout, i) || i === 0 || tokens[i - 1].type === ',' || tokens[i - 1].node.id === array.firstChild?.id) return;
-      layout.wanted[i - 1] = `,${layout.wanted[i - 1]}`;
+      if (!startsLine(layout, i) || i === 0) return;
+      // Dernier élément : avant ses commentaires de fin de ligne ; jamais après un heredoc (PHP < 7.3)
+      let last = i - 1;
+      while (last > 0 && tokens[last].type === 'comment') last--;
+      const token = tokens[last];
+      if (token.type === ',' || token.node.id === array.firstChild?.id || token.type === 'heredoc' || token.type === 'nowdoc') return;
+      layout.wanted[last] = `,${layout.wanted[last]}`;
     });
   }
 }

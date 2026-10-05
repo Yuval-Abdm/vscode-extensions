@@ -25,4 +25,11 @@ describe('options du formateur', () => {
     const code = '<?php\n$a = [\n1,\n2\n];\n$b = array(\n"x"\n);\n$c = [1, 2];\n';
     assert.equal(await fmt(code, { trailingCommas: true }), '<?php\n$a = [\n    1,\n    2,\n];\n$b = array(\n    "x",\n);\n$c = [1, 2];\n');
   });
+
+  it('virgule finale : avant un commentaire de fin de ligne, jamais après un heredoc', async () => {
+    assert.equal(await fmt('<?php\n$a = [\n1,\n2 // deux\n];\n', { trailingCommas: true }), '<?php\n$a = [\n    1,\n    2, // deux\n];\n');
+    assert.equal(await fmt('<?php\n$a = [\n1,\n2 /* deux */\n];\n', { trailingCommas: true }), '<?php\n$a = [\n    1,\n    2, /* deux */\n];\n');
+    const heredoc = '<?php\n$a = [\n<<<EOT\nx\nEOT\n];\n';
+    assert.equal(await fmt(heredoc, { trailingCommas: true }), '<?php\n$a = [\n    <<<EOT\nx\nEOT\n];\n');
+  });
 });

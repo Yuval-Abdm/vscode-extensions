@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { DEFAULT_FORMAT, formatEdits, formatText, type FormatOptions } from '../src/server/format/format.ts';
+import { tokenStream } from './format-helpers.ts';
 import { parse } from './helpers.ts';
 
 async function fmt(code: string, options: Partial<FormatOptions> = {}): Promise<string> {
@@ -8,6 +9,7 @@ async function fmt(code: string, options: Partial<FormatOptions> = {}): Promise<
   const out = formatText(await parse(code), code, opts);
   // Garanties : jetons non blancs inchangés, formater deux fois = formater une fois
   assert.equal(out.replace(/\s+/g, ''), code.replace(/\s+/g, ''), 'jetons modifiés');
+  assert.deepEqual(await tokenStream(out), await tokenStream(code), 'suite de jetons modifiée');
   assert.equal(formatText(await parse(out), out, opts), out, 'non idempotent');
   return out;
 }
@@ -49,5 +51,15 @@ describe('formateur', () => {
     const code = '<?php\n$a=1;\n$b=2;\n';
     const edits = formatEdits(await parse(code), code, DEFAULT_FORMAT, { start: { line: 2, character: 0 }, end: { line: 2, character: 5 } });
     assert.deepEqual(edits.map((e) => e.range.start.line), [2, 2]);
+  });
+
+  it('signes collés : - -$b et + +$b gardent leur espace ; return ++$i aussi', async () => {
+    const code = '<?php\n$x = - -$b;\n$y = + +$b;\n$z = - --$b;\n$w = - -1;\nreturn ++$i;\necho --$j;\nif ($a) ++$k;\n';
+    assert.equal(await fmt(code), code);
+  });
+
+  it('corps sans accolades indentés ; syntaxe for: … endfor; et switch: … endswitch;', async () => {
+    const code = '<?php\nif ($a)\nfoo();\nelse\nbar();\nwhile ($b)\n$i++;\nforeach ($l as $x)\necho $x;\nfor ($i = 0; $i < 3; $i++):\nfoo();\nendfor;\nswitch ($a):\ncase 1:\nfoo();\nendswitch;\n';
+    assert.equal(await fmt(code), '<?php\nif ($a)\n    foo();\nelse\n    bar();\nwhile ($b)\n    $i++;\nforeach ($l as $x)\n    echo $x;\nfor ($i = 0; $i < 3; $i++):\n    foo();\nendfor;\nswitch ($a):\n    case 1:\n        foo();\nendswitch;\n');
   });
 });
