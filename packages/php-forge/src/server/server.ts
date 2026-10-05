@@ -7,7 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { CodeActionKind, createConnection, type CodeAction, type Range, type TextEdit, ErrorCodes, ResponseError, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
-  BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
+  BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, MIGRATION_REPORT_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION,
   type BaselineParams, type BaselineResult, type IncludeTree, type IndexedParams, type InitOptions, type Settings, type StatusParams,
 } from '../shared/protocol.ts';
 import { complete, resolveCompletion } from './completion/complete.ts';
@@ -28,6 +28,8 @@ import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { SourceCache } from './refactor/sourceCache.ts';
 import { formatEdits, formatOptions, onTypeRange, onTypeWindow } from './format/format.ts';
 import { sqlCompletionList, sqlDefinitionAt, sqlHoverAt } from './sql/lsp.ts';
+import { migrationReport, type ReportFile } from './migration/report.ts';
+import type { TaintEnv } from './security/taint.ts';
 import { Schema } from './sql/schema.ts';
 import { isSchemaSource, loadSchemas, type SchemaSources } from './sql/sources.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
@@ -55,7 +57,7 @@ import { Lookup } from './index/lookup.ts';
 import { isIndexable } from './index/scan.ts';
 import { SymbolIndex } from './index/symbolIndex.ts';
 import { applyFileChanges } from './index/updates.ts';
-import { createParser, initParser, parsePhp, type Parser, type WasmPaths } from './parser/parser.ts';
+import { createParser, initParser, parsePhp, type Node, type Parser, type WasmPaths } from './parser/parser.ts';
 import { detectPhpVersion } from './settings/phpVersion.ts';
 import { loadStubs } from './stubs/stubs.ts';
 import { TypeResolver } from './types/expand.ts';
@@ -66,6 +68,8 @@ const wasm: WasmPaths = { treeSitter: path.join(__dirname, 'web-tree-sitter.wasm
 const workspace = new SymbolIndex();
 const lookup = new Lookup(workspace, new SymbolIndex());
 const resolver = new TypeResolver(lookup);
+/** Résolveur à la version cible de la migration (phpForge.migration.targetVersion) */
+let targetResolver: TypeResolver | undefined;
 let parser: Parser;
 let documents: DocumentStore;
 let settings: Settings = mergeSettings(undefined);
@@ -120,6 +124,7 @@ async function applyEnvironment(): Promise<void> {
   resolver.phpVersion = detected.version;
   lookup.stubs = loadStubs(path.join(__dirname, 'stubs.json.gz'), settings.stubs);
   status = { phpVersion: detected.version, source: detected.source };
+  targetResolver = settings.migration.targetVersion ? new TypeResolver(lookup, settings.migration.targetVersion) : undefined;
 }
 
 connection.onInitialize(async (params: InitializeParams): Promise<InitializeResult> => {
@@ -188,8 +193,13 @@ connection.onDidChangeConfiguration(
     if (next.documentRoot !== previous.documentRoot || next.serverRoot !== previous.serverRoot || next.includes.maxContexts !== previous.includes.maxContexts || next.externalGlobals.join() !== previous.externalGlobals.join()) {
       scheduleAnalysis(0);
     }
-    if (JSON.stringify(next.diagnostics) !== JSON.stringify(previous.diagnostics) || next.libraryPaths.join() !== previous.libraryPaths.join()) {
-      for (const doc of documents.all()) publish(doc);
+    const semanticChanged = JSON.stringify(next.security) !== JSON.stringify(previous.security) || next.migration.targetVersion !== previous.migration.targetVersion;
+    if (semanticChanged) targetResolver = next.migration.targetVersion ? new TypeResolver(lookup, next.migration.targetVersion) : undefined;
+    if (semanticChanged || JSON.stringify(next.diagnostics) !== JSON.stringify(previous.diagnostics) || next.libraryPaths.join() !== previous.libraryPaths.join()) {
+      for (const doc of documents.all()) {
+        if (semanticChanged) updateSemantic(doc);
+        publish(doc);
+      }
       startWorkspaceDiagnostics();
     }
     if (next.sql.schema.join() !== previous.sql.schema.join()) reloadSchema();
@@ -243,6 +253,8 @@ const rootOf = (fsPath: string) => folders.find((folder) => fsPath.startsWith(fo
 function collectEnv(): CollectEnv {
   return {
     schema: schemaAt,
+    security: settings.security.enabled ? securityEnv : undefined,
+    target: targetResolver,
     parser,
     resolver,
     analysis,
@@ -306,6 +318,32 @@ function reloadSchema(): void {
     publish(doc);
   }
   startWorkspaceDiagnostics();
+}
+
+/** Propagation : variables venues de la requête par les inclusions, fonctions des autres fichiers. */
+function securityEnv(input: CollectInput): TaintEnv {
+  const current = analysis;
+  return {
+    uri: input.uri,
+    sanitizers: settings.security.sanitizers.map((s) => s.replace(/^\\/, '').toLowerCase()),
+    // Noms du moteur d'inclusion sans « $ » ; un nom vide n'est jamais défini : il ne reste que la couche « requête »
+    request: current ? (name, at) => current.variable(input.uri, name.slice(1), at)?.request : undefined,
+    requestAtEntry: () => !!current?.variable(input.uri, '', { line: 0, character: 0 })?.request,
+    loadFunction: (name) => {
+      const hit = lookup.workspace.findFunction(name)[0];
+      if (!hit || hit.uri === input.uri) return undefined;
+      const source = sourceOf(hit.uri);
+      if (!source) return undefined;
+      const at = hit.symbol.selectionRange.start;
+      let node: Node | null = source.file.tree.rootNode.descendantForPosition({ row: at.line, column: at.character });
+      while (node && node.type !== 'function_definition') node = node.parent;
+      if (!node) {
+        source.release();
+        return undefined;
+      }
+      return { uri: hit.uri, node, release: () => source.release() };
+    },
+  };
 }
 
 function refEnv(): RefEnv {
@@ -698,6 +736,27 @@ connection.onCodeLensResolve((lens) => {
     return lens;
   }
 });
+
+connection.onRequest(
+  MIGRATION_REPORT_REQUEST,
+  safe(undefined as string | undefined, async (): Promise<string | undefined> => {
+    const target = targetResolver?.phpVersion;
+    if (!target) return undefined;
+    await indexing;
+    const files: ReportFile[] = [];
+    for (const file of workspace.files()) {
+      if (!file.uri.startsWith('file:')) continue;
+      const fsPath = URI.parse(file.uri).fsPath;
+      const root = rootOf(fsPath);
+      if (!root) continue;
+      const doc = documents.get(file.uri);
+      const raw = doc ? collectDiagnostics(inputOf(doc), collectEnv(), semanticCache.get(doc.uri) ?? []).raw : diskDiagnostics(file.uri)?.raw;
+      const problems = (raw ?? []).filter((d) => String(d.code).startsWith('migration-')).map((d) => ({ line: d.range.start.line, code: String(d.code), message: String(d.message) }));
+      if (problems.length) files.push({ path: path.relative(root, fsPath).split(path.sep).join('/'), problems });
+    }
+    return migrationReport(files, resolver.phpVersion, target);
+  }),
+);
 
 connection.onRequest(INCLUDERS_REQUEST, safe([], ({ uri }: { uri: string }) => (analysis ? includerLinks(analysis.graph, uri) : [])));
 

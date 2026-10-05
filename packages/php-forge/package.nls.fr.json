@@ -38,5 +38,9 @@
   "phpForge.format.lineLength.description": "Longueur de ligne indicative : pas d'alignement s'il rendait une ligne plus longue.",
   "phpForge.sql.schema.description": "Globs des fichiers `.sql` (`CREATE TABLE`, `ALTER TABLE … ADD`) qui décrivent la base, relatifs à chaque dossier du workspace. Le schéma lu dans la base par **Mettre à jour le schéma SQL** (`.vscode/php-forge-schema.json`) est toujours utilisé et fait foi : garder les fichiers `.sql` à jour ou le mettre à jour.",
   "phpForge.refreshSqlSchema.title": "Mettre à jour le schéma SQL",
-  "phpForge.sql.connection.description": "Base MySQL / MariaDB lue par **Mettre à jour le schéma SQL** (`host`, `port`, `user`, `database`). Le mot de passe est demandé une fois et gardé dans le stockage sécurisé de VS Code. Seul `INFORMATION_SCHEMA` est lu, dans une session en lecture seule."
+  "phpForge.sql.connection.description": "Base MySQL / MariaDB lue par **Mettre à jour le schéma SQL** (`host`, `port`, `user`, `database`). Le mot de passe est demandé une fois et gardé dans le stockage sécurisé de VS Code. Seul `INFORMATION_SCHEMA` est lu, dans une session en lecture seule.",
+  "phpForge.migrationReport.title": "Rapport de migration",
+  "phpForge.security.enabled.description": "Suivre les données de la requête (`$_GET`, `$_POST`, `extract($_POST)`…) jusqu'aux requêtes SQL, à la sortie HTML, aux commandes, aux inclusions, à `unserialize`, aux redirections et aux écritures de fichier, et signaler ce qui n'est pas échappé (avertissements `security-*`).",
+  "phpForge.security.sanitizers.description": "Vos propres fonctions d'échappement, considérées sûres pour tous les points sensibles : `rp_clean`, `Html::escape`.",
+  "phpForge.migration.targetVersion.description": "Version de PHP visée par la migration (par exemple `8.2`). Tout ce qui casse ou devient déprécié entre `phpForge.phpVersion` et cette version est signalé (`migration-*`), avec une correction rapide quand le changement est sûr ; **Rapport de migration** le liste par règle et par fichier."
 }

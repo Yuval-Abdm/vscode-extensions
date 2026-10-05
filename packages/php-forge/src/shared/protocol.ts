@@ -41,6 +41,10 @@ export interface Settings {
   format: FormatSettings;
   /** Schéma SQL : globs des fichiers .sql, relatifs à chaque dossier du workspace */
   sql: { schema: string[] };
+  /** Analyse de propagation (§5.7) ; neutraliseurs personnalisés : fonctions ou `Classe::méthode` */
+  security: { enabled: boolean; sanitizers: string[] };
+  /** Version cible de la migration (§5.8) ; vide : pas de migration */
+  migration: { targetVersion: string };
 }
 
 export const DEFAULT_STUBS = [
@@ -68,6 +72,8 @@ export const DEFAULT_SETTINGS: Settings = {
   completion: { autoImport: true },
   format: { enable: true, braces: 'psr12', alignArrows: false, alignAssignments: false, trailingCommas: false, lineLength: 120 },
   sql: { schema: ['sql/**/*.sql', 'migrations/**/*.sql', 'database/**/*.sql'] },
+  security: { enabled: true, sanitizers: [] },
+  migration: { targetVersion: '' },
 };
 
 /** Réglages complets à partir de valeurs partielles (options d'initialisation, changement de configuration). */
@@ -82,6 +88,8 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
     completion: { ...DEFAULT_SETTINGS.completion, ...partial?.completion },
     format: { ...DEFAULT_SETTINGS.format, ...partial?.format },
     sql: { ...DEFAULT_SETTINGS.sql, ...partial?.sql },
+    security: { ...DEFAULT_SETTINGS.security, ...partial?.security },
+    migration: { ...DEFAULT_SETTINGS.migration, ...partial?.migration },
   };
 }
 
@@ -145,6 +153,9 @@ export interface BaselineResult {
 
 /** Alertes masquées par la baseline (barre d'état). */
 export const BASELINE_STATUS_NOTIFICATION = 'phpForge/baselineStatus';
+
+/** Rapport de migration du workspace (Markdown) ; undefined : pas de version cible. */
+export const MIGRATION_REPORT_REQUEST = 'phpForge/migrationReport';
 
 export interface BaselineStatus {
   hidden: number;

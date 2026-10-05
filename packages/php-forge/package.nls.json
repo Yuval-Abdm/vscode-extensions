@@ -38,5 +38,9 @@
   "phpForge.format.lineLength.description": "Indicative line length: alignment is skipped when it would make a line longer.",
   "phpForge.sql.schema.description": "Globs of the `.sql` files (`CREATE TABLE`, `ALTER TABLE … ADD`) that describe the database, relative to each workspace folder. The schema read from the database by **Refresh SQL schema** (`.vscode/php-forge-schema.json`) is always used and is the reference: keep the `.sql` files up to date or refresh it.",
   "phpForge.refreshSqlSchema.title": "Refresh SQL schema",
-  "phpForge.sql.connection.description": "MySQL / MariaDB database read by **Refresh SQL schema** (`host`, `port`, `user`, `database`). The password is asked once and kept in VS Code secret storage. Only `INFORMATION_SCHEMA` is read, in a read-only session."
+  "phpForge.sql.connection.description": "MySQL / MariaDB database read by **Refresh SQL schema** (`host`, `port`, `user`, `database`). The password is asked once and kept in VS Code secret storage. Only `INFORMATION_SCHEMA` is read, in a read-only session.",
+  "phpForge.migrationReport.title": "Migration report",
+  "phpForge.security.enabled.description": "Follow request data (`$_GET`, `$_POST`, `extract($_POST)`…) to SQL queries, HTML output, shell commands, includes, `unserialize`, redirects and file writes, and report what is not escaped (`security-*` warnings).",
+  "phpForge.security.sanitizers.description": "Your own escaping functions, considered safe for every sink: `rp_clean`, `Html::escape`.",
+  "phpForge.migration.targetVersion.description": "PHP version you are migrating to (e.g. `8.2`). Everything that breaks or becomes deprecated between `phpForge.phpVersion` and this version is reported (`migration-*`), with quick fixes when the change is safe; **Migration report** lists it by rule and by file."
 }

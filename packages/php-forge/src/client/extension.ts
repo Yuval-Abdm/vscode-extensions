@@ -6,7 +6,7 @@ import type { Level } from '../server/diagnostics/policy.ts';
 import { IncludeTreeProvider } from './includeTree.ts';
 import { mysqlDriver } from './mysql.ts';
 import { connectionKey, fetchSchema, isAccessDenied, missingFields, type ConnectionSettings } from './sqlSchema.ts';
-import { BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type BaselineResult, type BaselineStatus, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
+import { BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, MIGRATION_REPORT_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type BaselineResult, type BaselineStatus, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
 
 /** Extensions PHP dont la complétion et les diagnostics feraient doublon. */
 const COMPETITORS = ['bmewburn.vscode-intelephense-client', 'DEVSENSE.phptools-vscode'];
@@ -87,6 +87,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('phpForge.showIncluders', (uri: string) => showIncluders(uri)),
     vscode.commands.registerCommand('phpForge.restartServer', () => client?.restart()),
     vscode.commands.registerCommand('phpForge.refreshSqlSchema', () => refreshSqlSchema(context)),
+    vscode.commands.registerCommand('phpForge.migrationReport', () => showMigrationReport()),
     vscode.commands.registerCommand('phpForge.reindex', () => client?.sendRequest(REINDEX_REQUEST)),
     vscode.commands.registerCommand('phpForge.showOutput', () => client?.outputChannel.show()),
     vscode.commands.registerCommand('phpForge.applyFix', (args: ApplyFixArgs) => applyFix(args)),
@@ -150,6 +151,8 @@ function readSettings(): Partial<Settings> {
       trailingCommas: config.get<boolean>('format.trailingCommas', false),
       lineLength: config.get<number>('format.lineLength', 120),
     },
+    security: { enabled: config.get<boolean>('security.enabled', true), sanitizers: config.get<string[]>('security.sanitizers') ?? [] },
+    migration: { targetVersion: config.get<string>('migration.targetVersion') ?? '' },
     sql: { schema: config.get<string[]>('sql.schema') ?? ['sql/**/*.sql', 'migrations/**/*.sql', 'database/**/*.sql'] },
     codeLens: { references: config.get<boolean>('codeLens.references', true), implementations: config.get<boolean>('codeLens.implementations', true) },
   };
@@ -260,4 +263,21 @@ async function refreshSqlSchema(context: vscode.ExtensionContext): Promise<void>
     if (isAccessDenied(err)) await context.secrets.delete(key);
     void vscode.window.showWarningMessage(vscode.l10n.t('Could not read the SQL schema: {0}. The previous schema is kept.', (err as Error)?.message ?? String(err)));
   }
+}
+
+/** Rapport de migration du workspace (phpForge.migration.targetVersion), ouvert en Markdown. */
+async function showMigrationReport(): Promise<void> {
+  if (!vscode.workspace.getConfiguration('phpForge').get<string>('migration.targetVersion')) {
+    const open = vscode.l10n.t('Open settings');
+    const choice = await vscode.window.showWarningMessage(vscode.l10n.t('Set phpForge.migration.targetVersion to the PHP version you are migrating to.'), open);
+    if (choice === open) await vscode.commands.executeCommand('workbench.action.openSettings', 'phpForge.migration.targetVersion');
+    return;
+  }
+  const report = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('PHP Forge: analyzing the workspace…') },
+    () => client!.sendRequest<string | undefined>(MIGRATION_REPORT_REQUEST),
+  );
+  if (!report) return;
+  const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: report });
+  await vscode.window.showTextDocument(doc);
 }

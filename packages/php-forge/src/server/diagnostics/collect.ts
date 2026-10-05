@@ -6,6 +6,9 @@ import type { FileSymbols } from '../../shared/types.ts';
 import type { IncludeAnalysis } from '../includes/analysis.ts';
 import { callerLabel, includeDiagnostics } from '../includes/diagnostics.ts';
 import type { Parser, Tree } from '../parser/parser.ts';
+import { migrationDiagnostics } from '../migration/migration.ts';
+import { securityDiagnostics } from '../security/diagnostics.ts';
+import type { TaintEnv } from '../security/taint.ts';
 import { sqlDiagnostics } from '../sql/diagnostics.ts';
 import { mixedQuoteDiagnostics, sqlQuoteDiagnostics } from '../sql/quotes.ts';
 import type { Schema } from '../sql/schema.ts';
@@ -37,19 +40,24 @@ export interface CollectEnv {
   includes?: (input: CollectInput) => Diagnostic[] | undefined;
   /** Schéma SQL du dossier d'un fichier (colonnes et tables inconnues) */
   schema?: (fsPath: string) => Schema | undefined;
+  /** Analyse de propagation d'un fichier ; undefined : désactivée */
+  security?: (input: CollectInput) => TaintEnv | undefined;
+  /** Résolveur à la version cible de la migration */
+  target?: TypeResolver;
 }
 
 const byPosition = (a: Diagnostic, b: Diagnostic) => a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character;
 
-/** Règles sémantiques, code mort, syntaxe dépréciée et requêtes SQL. */
+/** Règles sémantiques, code mort, syntaxe dépréciée, requêtes SQL, sécurité et migration. */
 export function semanticPart(input: CollectInput, env: CollectEnv): Diagnostic[] {
   if (env.library(input.fsPath)) return [];
-  return [
-    ...semanticDiagnostics(input.symbols, input.tree, env.resolver),
-    ...codeDiagnostics(input.tree),
-    ...deprecatedSyntax(input.tree, input.text, env.resolver.phpVersion),
-    ...sqlDiagnostics(input.tree, input.text, env.schema?.(input.fsPath)),
-  ];
+  const semantic = semanticDiagnostics(input.symbols, input.tree, env.resolver);
+  const syntax = deprecatedSyntax(input.tree, input.text, env.resolver.phpVersion);
+  const out = [...semantic, ...codeDiagnostics(input.tree), ...syntax, ...sqlDiagnostics(input.tree, input.text, env.schema?.(input.fsPath))];
+  const security = env.security?.(input);
+  if (security) out.push(...securityDiagnostics(input.tree, security));
+  if (env.target) out.push(...migrationDiagnostics(input, [...semantic, ...syntax], env.resolver, env.target));
+  return out;
 }
 
 /** `raw` : après la politique, avant la baseline (pour créer la baseline) ; `hidden` : alertes masquées par elle. */

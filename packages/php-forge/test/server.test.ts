@@ -334,6 +334,24 @@ describe('serveur LSP', () => {
     await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('complete.php') } });
   });
 
+  it('sécurité : donnée de la requête affichée sans échappement', async () => {
+    await open(server, 'sec.php', '<?php\n$nom = $_GET["nom"];\necho "Bonjour " . $nom;\n');
+    const found = await waitFor(() => server.diagnostics.get(uri('sec.php'))?.find((d) => d.code === 'security-xss'), 'security-xss');
+    assert.equal(found.range.start.line, 2);
+    await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('sec.php') } });
+  });
+
+  it('migration : version cible, diagnostics migration-* et rapport', { skip: !hasStubs }, async () => {
+    await server.connection.sendNotification('workspace/didChangeConfiguration', { settings: { phpForge: { phpVersion: '7.3', migration: { targetVersion: '8.0' } } } });
+    await open(server, 'old.php', '<?php\nwhile (list($k, $v) = each($tab)) {}\n');
+    const found = await waitFor(() => server.diagnostics.get(uri('old.php'))?.find((d) => d.code === 'migration-removed-api'), 'migration-removed-api');
+    assert.equal(found.range.start.line, 1);
+    const report = (await server.connection.sendRequest('phpForge/migrationReport')) as string;
+    assert.match(report, /^# Migration report: PHP 7\.3 → PHP 8\.0/);
+    await server.connection.sendNotification('textDocument/didClose', { textDocument: { uri: uri('old.php') } });
+    await server.connection.sendNotification('workspace/didChangeConfiguration', { settings: { phpForge: {} } });
+  });
+
   it('second démarrage : tout vient du cache', async () => {
     const second = await startServer(storage);
     try {

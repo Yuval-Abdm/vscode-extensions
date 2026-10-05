@@ -123,6 +123,11 @@
         "command": "phpForge.refreshSqlSchema",
         "title": "%phpForge.refreshSqlSchema.title%",
         "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.migrationReport",
+        "title": "%phpForge.migrationReport.title%",
+        "category": "PHP Forge"
       }
     ],
     "configuration": {
@@ -382,6 +387,25 @@
           "additionalProperties": false,
           "default": {},
           "markdownDescription": "%phpForge.sql.connection.description%"
+        },
+        "phpForge.security.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.security.enabled.description%"
+        },
+        "phpForge.security.sanitizers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%phpForge.security.sanitizers.description%"
+        },
+        "phpForge.migration.targetVersion": {
+          "type": "string",
+          "default": "",
+          "pattern": "^(\\d+\\.\\d+)?$",
+          "markdownDescription": "%phpForge.migration.targetVersion.description%"
         }
       }
     },
