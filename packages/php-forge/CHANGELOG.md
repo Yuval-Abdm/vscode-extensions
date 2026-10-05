@@ -8,6 +8,7 @@
 - Typed go to definition (closest override), go to implementation, document highlights, folding, smart selection, semantic highlighting.
 - Hover shows variable types and php.net links.
 - Missing `;` detected on the right line (instead of an "unexpected" error on the next one), with an "Add `;`" quick fix.
+- PHP tags in HTML: a value alone in `<?php $x ?>` / `<?$x?>` is never printed (warning, fixes: `<?=` or `<?php echo`); short open tag `<?` flagged (fix: `<?php`).
 - PHP version (`phpForge.phpVersion`, detected from `composer.json` or the `php` executable) shown in the status bar; `phpForge.stubs` selects PHP extensions.
 
 ## 0.1.0 — preview

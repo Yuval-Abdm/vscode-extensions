@@ -125,6 +125,16 @@ describe('serveur LSP', () => {
     assert.equal(actions[0].edit.changes[uri('semicolon.php')][0].newText, ';');
   });
 
+  it('valeur non affichée dans du HTML, avec ses corrections rapides', async () => {
+    await open(server, 'tags.php', '<div><?$nom?></div>\n');
+    const diagnostics = await waitFor(() => server.diagnostics.get(uri('tags.php')), 'diagnostics');
+    assert.equal(diagnostics[0].code, 'useless-output');
+    const actions = (await server.connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: uri('tags.php') }, range: diagnostics[0].range, context: { diagnostics },
+    })) as { edit: { changes: Record<string, { newText: string }[]> } }[];
+    assert.deepEqual(actions.map((a) => a.edit.changes[uri('tags.php')][0].newText), ['<?=', '<?php echo ']);
+  });
+
   it('document non ouvert ou inconnu : réponse vide, le serveur continue', async () => {
     const result = await server.connection.sendRequest('textDocument/definition', { textDocument: { uri: 'file:///inconnu.php' }, position: { line: 0, character: 0 } });
     assert.deepEqual(result, []);

@@ -5,7 +5,7 @@ import { quickFixes } from '../src/server/features/codeActions.ts';
 import { parse, parser } from './helpers.ts';
 
 async function check(code: string) {
-  return syntaxDiagnostics(await parse(code), 100, await parser());
+  return syntaxDiagnostics(await parse(code), 100, { parser: await parser(), text: code });
 }
 
 function only(diagnostics: Awaited<ReturnType<typeof check>>) {
@@ -24,6 +24,7 @@ describe('« ; » manquant', () => {
     ['commentaire en fin de ligne', '<?php\n$a = 1 // note\n$b = 2;\n', 1, 6],
     ['ligne vide et commentaire avant la suite', '<?php\n$a = 1\n\n// c\n$b = 2;\n', 1, 6],
     ['élément MISSING de tree-sitter', '<?php\n$a = 1\nreturn $a;\n', 1, 6],
+    ['fichier commençant par des lignes vides', '\r\n\r\n<p>a</p>\n<?php\n$a = 1\n$b = 2;\n', 4, 6],
     ['dans une fonction', '<?php\nfunction f() {\n  $a = 1\n}\n', 2, 8],
   ] as const) {
     it(label, async () => {

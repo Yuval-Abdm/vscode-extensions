@@ -15,10 +15,11 @@ const MAX_ATTEMPTS = 10;
 /** Fins de ligne après lesquelles un « ; » n'a pas de sens. */
 const NO_SEMICOLON_AFTER = /(?:[;{},([]|<\?(?:php)?)$/i;
 
-export function syntaxDiagnostics(tree: Tree, max = 100, parser?: Parser): Diagnostic[] {
+/** `source` : analyseur et texte du document (pas `rootNode.text`, qui omet les lignes vides du début). */
+export function syntaxDiagnostics(tree: Tree, max = 100, source?: { parser: Parser; text: string }): Diagnostic[] {
   const found = collect(tree, max);
-  if (!parser || found.length === 0) return found;
-  return withMissingSemicolons(tree, parser, found);
+  if (!source || found.length === 0) return found;
+  return withMissingSemicolons(tree, source.parser, source.text, found);
 }
 
 function collect(tree: Tree, max: number): Diagnostic[] {
@@ -41,8 +42,7 @@ function collect(tree: Tree, max: number): Diagnostic[] {
   return out;
 }
 
-function withMissingSemicolons(tree: Tree, parser: Parser, found: Diagnostic[]): Diagnostic[] {
-  const text = tree.rootNode.text;
+function withMissingSemicolons(tree: Tree, parser: Parser, text: string, found: Diagnostic[]): Diagnostic[] {
   const lines = text.split('\n');
   const lineStarts: number[] = [0];
   for (const line of lines) lineStarts.push(lineStarts[lineStarts.length - 1] + line.length + 1);

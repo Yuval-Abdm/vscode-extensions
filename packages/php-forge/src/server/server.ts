@@ -11,6 +11,7 @@ import {
 } from '../shared/protocol.ts';
 import { complete, resolveCompletion } from './completion/complete.ts';
 import { syntaxDiagnostics } from './diagnostics/syntax.ts';
+import { tagDiagnostics } from './diagnostics/tags.ts';
 import { DocumentStore, type OpenDocument } from './documents.ts';
 import { quickFixes } from './features/codeActions.ts';
 import { definition } from './features/definition.ts';
@@ -158,9 +159,14 @@ async function reindex(): Promise<void> {
   for (const doc of documents.all()) workspace.set(doc.symbols);
 }
 
+function diagnosticsOf(doc: OpenDocument) {
+  const text = doc.doc.getText();
+  return [...syntaxDiagnostics(doc.tree, 100, { parser, text }), ...tagDiagnostics(doc.tree, text)];
+}
+
 function refresh(doc: OpenDocument): void {
   workspace.set(doc.symbols);
-  void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics: syntaxDiagnostics(doc.tree, 100, parser) });
+  void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics: diagnosticsOf(doc) });
 }
 
 connection.onDidOpenTextDocument(
