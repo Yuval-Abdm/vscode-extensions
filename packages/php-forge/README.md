@@ -64,7 +64,7 @@ Variables created in included files keep their type and origin (hover, completio
 
 ### SQL schema
 
-PHP Forge reads the tables of the project's `.sql` files (`phpForge.sql.schema`: `CREATE TABLE`, `ALTER TABLE … ADD`). To use the real database instead, set `phpForge.sql.connection` (`host`, `port`, `user`, `database`) and run **PHP Forge: Refresh SQL schema**: the password is asked once and kept in VS Code secret storage, only `INFORMATION_SCHEMA` is read in a read-only session, and the result is written to `.vscode/php-forge-schema.json` (add it to `.gitignore` if the schema is private). The database schema is the reference: unknown tables are reported only when it is loaded, and old `.sql` dumps can report columns that were added since — refresh it.
+PHP Forge reads the tables of the project's `.sql` files (`phpForge.sql.schema`: `CREATE TABLE`, `ALTER TABLE … ADD`). To use the real database instead, set `phpForge.sql.connection` (`host`, `port`, `user`, `database`) and run **PHP Forge: Refresh SQL schema**: the password is asked once and kept in VS Code secret storage, only `INFORMATION_SCHEMA` is read (in a read-only session from MySQL 5.6 / MariaDB 10.0), and the result is written to `.vscode/php-forge-schema.json` of the chosen workspace folder — each folder of a multi-root workspace has its own schema (add it to `.gitignore` if the schema is private). The database schema is the reference: unknown tables are reported only when it is loaded, and old `.sql` dumps can report columns that were added since — refresh it.
 
 Completion in strings: VS Code does not suggest inside strings by default; press `Ctrl+Space`, or set `"editor.quickSuggestions": { "strings": "on" }` for `[php]`.
 

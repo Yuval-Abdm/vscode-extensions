@@ -50,7 +50,10 @@ export function schemaCache(database: string, rows: ColumnRow[], refreshed: stri
 export async function fetchSchema(connect: () => Promise<Driver>, database: string, now: Date): Promise<SchemaCache> {
   const db = await connect();
   try {
-    await db.query('SET SESSION TRANSACTION READ ONLY', []);
+    // Session en lecture seule : MySQL 5.6.5+ et MariaDB 10.0+ ; avant, la seule requête est déjà un SELECT
+    await db.query('SET SESSION TRANSACTION READ ONLY', []).catch((err: unknown) => {
+      if ((err as { code?: string } | undefined)?.code !== 'ER_PARSE_ERROR') throw err;
+    });
     const rows = (await db.query(COLUMNS_QUERY, [database])) as ColumnRow[];
     return schemaCache(database, rows, now.toISOString());
   } finally {

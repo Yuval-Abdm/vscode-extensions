@@ -40,6 +40,17 @@ describe('Refresh SQL schema', () => {
     assert.equal(ended, 2);
   });
 
+  it('MySQL 5.5 / MariaDB 5.5 (pas de READ ONLY) : la lecture continue', async () => {
+    const driver: Driver = {
+      query: async (sql) => {
+        if (sql.startsWith('SET SESSION')) throw Object.assign(new Error('You have an error in your SQL syntax'), { code: 'ER_PARSE_ERROR' });
+        return rows;
+      },
+      end: async () => {},
+    };
+    assert.equal((await fetchSchema(async () => driver, 'crm', new Date())).tables.length, 2);
+  });
+
   it('réglages manquants, clé du secret, refus d’accès', () => {
     assert.deepEqual(missingFields({ host: 'db', user: '' }), ['user', 'database']);
     assert.deepEqual(missingFields({ host: 'db', user: 'u', database: 'crm' }), []);
