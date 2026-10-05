@@ -59,4 +59,15 @@ describe('graphe d’inclusion', () => {
     assert.equal(graph.constant('BASE'), undefined);
     assert.equal(graph.constant('SUB'), '/p/lib/sub');
   });
+
+  it('include dynamique à la racine (routeur) : la racine n’est pas un dossier de gabarits', async () => {
+    const index = await project({
+      'index.php': "<?php include $_SERVER['DOCUMENT_ROOT'] . '/' . $page . '.php'; include __DIR__ . '/' . $m . '.php';",
+      'pages/a.php': '<?php echo $x;',
+      'other.php': '<?php',
+    });
+    const graph = new IncludeGraph(index, { roots: ['/p'], readFile: noFiles });
+    assert.equal(graph.isDynamicTarget(uriOf('pages/a.php')), false);
+    assert.equal(graph.isDynamicTarget(uriOf('other.php')), false);
+  });
 });

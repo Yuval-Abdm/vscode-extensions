@@ -192,4 +192,69 @@ describe('analyse des inclusions', () => {
     const analysis = await analyse({ 'page.php': "<?php\nif (!$ok) { exit; } else { $v = 1; }\necho $v, $ok;" });
     assert.deepEqual(reads(analysis, 'page.php'), ['$ok undefined [seul]', '$ok undefined [seul]']);
   });
+
+  it('mémo : un require_once sauté dans un contexte ne fausse pas l’autre', async () => {
+    const analysis = await analyse({
+      'fonctions.php': '<?php function format_date() {}',
+      'h.php': "<?php require_once 'fonctions.php';",
+      'A.php': "<?php require_once 'fonctions.php'; include 'h.php'; format_date();",
+      'B.php': "<?php include 'h.php'; format_date();",
+    });
+    assert.deepEqual(analysis.report(uriOf('B.php'))!.symbols, []);
+  });
+
+  it('mémo : autoloader et constantes du contexte pris en compte', async () => {
+    const autoload = await analyse({
+      'Autoloader.php': '<?php class Autoloader { static function register() { spl_autoload_register(function ($c) {}); } }',
+      'lib/Thing.php': '<?php class Thing {}',
+      'lib.php': '<?php new Thing();',
+      'A.php': "<?php\n\ninclude 'lib.php';",
+      'B.php': "<?php\ninclude 'Autoloader.php'; Autoloader::register();\n\ninclude 'lib.php';",
+    });
+    assert.deepEqual(autoload.report(uriOf('lib.php'))!.symbols.map((s) => s.via), [[`${uriOf('A.php')}#2`]]);
+    const constants = await analyse({
+      'lang/fr.php': "<?php $hello = 'bonjour';",
+      'lang/en.php': "<?php $hello = 'hello'; $only_en = 1;",
+      'render.php': "<?php include __DIR__ . '/lang/' . LANG . '.php';",
+      'A.php': "<?php define('LANG', 'fr'); include 'render.php'; echo $hello;",
+      'B.php': "<?php define('LANG', 'en'); include 'render.php'; echo $hello, $only_en;",
+    });
+    assert.deepEqual(reads(constants, 'B.php'), []);
+  });
+
+  it('includes dans des fonctions (chargement à la demande) : symboles considérés chargés', async () => {
+    const analysis = await analyse({
+      'db.php': '<?php function db_query($q) {}',
+      'models/Model.php': '<?php class Model {}',
+      'init.php': "<?php function connectDB() { require_once __DIR__ . '/db.php'; } function loadModel($n) { require_once __DIR__ . '/models/' . $n . '.php'; }",
+      'page.php': "<?php include 'init.php'; connectDB(); $x = db_query('x'); $o = new Model();",
+    });
+    assert.deepEqual(analysis.report(uriOf('page.php'))!.symbols, []);
+  });
+
+  it('fichier inclus que le graphe ne résout pas (chemin relatif au script d’entrée) : pas de contexte « seul » en plus', async () => {
+    const analysis = await analyse({
+      'site/inc/b.php': '<?php echo $title;',
+      'site/index.php': "<?php $title = 'x'; include 'inc/a.php';",
+      'site/inc/a.php': "<?php include 'inc/b.php';",
+    });
+    assert.deepEqual(reads(analysis, 'site/inc/b.php'), []);
+  });
+
+  it('au-delà de maxContexts : contextes rattachés à une analyse commune, règle stricte maintenue', async () => {
+    const analysis = await analyse({
+      'p1.php': "<?php $a = 1; include 'h.php';",
+      'p2.php': "<?php $b = 1; include 'h.php';",
+      'p3.php': "<?php $c = 1; include 'h.php';",
+      'h.php': '<?php echo $z;',
+    }, { maxContexts: 1 });
+    const report = analysis.report(uriOf('h.php'))!;
+    assert.equal(report.approximate, true);
+    assert.equal(report.reads[0].via.length, 3);
+  });
+
+  it('elseif après !isset, appel sous @ : pas d’alerte', async () => {
+    const analysis = await analyse({ 'page.php': "<?php\nif (!isset($page)) { $page = 1; } elseif ($page < 1) { $page = 1; }\n@preg_match('/x/', 's', $m); echo $m;" });
+    assert.deepEqual(reads(analysis, 'page.php'), []);
+  });
 });

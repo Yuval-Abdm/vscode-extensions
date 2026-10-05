@@ -298,28 +298,32 @@ class FlowBuilder {
     const condition = node.childForFieldName('condition');
     this.#expr(condition, out);
     const alts: FlowOp[][] = [[...this.#guards(guardsOf(condition, true)), ...this.#block(node.childForFieldName('body'))]];
+    // Une branche n'est atteinte que si les conditions précédentes sont fausses : leurs gardes négatives valent
+    const negatives: Node[] = [...guardsOf(condition, false)];
     let exhaustive = false;
     for (let i = 0; i < node.childCount; i++) {
       if (node.fieldNameForChild(i) !== 'alternative') continue;
       const clause = node.child(i)!;
       if (clause.type === 'else_clause') {
-        alts.push([...this.#guards(guardsOf(condition, false)), ...this.#block(clause.childForFieldName('body'))]);
+        alts.push([...this.#guards(negatives), ...this.#block(clause.childForFieldName('body'))]);
         exhaustive = true;
       } else {
-        // elseif : sa condition n'est évaluée que si les précédentes sont fausses
         const elseCondition = clause.childForFieldName('condition');
+        const before = [...negatives];
         alts.push(this.#ops((ops) => {
+          ops.push(...this.#guards(before));
           this.#expr(elseCondition, ops);
           ops.push(...this.#guards(guardsOf(elseCondition, true)));
           ops.push(...this.#block(clause.childForFieldName('body')));
         }));
+        negatives.push(...guardsOf(elseCondition, false));
       }
     }
-    if (!exhaustive && alts.length === 1) {
-      // Sans else : le chemin où la condition est fausse garantit les variables de `!isset(…)`
-      const negative = this.#guards(guardsOf(condition, false));
-      if (negative.length) {
-        alts.push(negative);
+    if (!exhaustive) {
+      // Sans else : le chemin où toutes les conditions sont fausses garantit leurs variables de `!isset(…)`
+      const implicit = this.#guards(negatives);
+      if (implicit.length) {
+        alts.push(implicit);
         exhaustive = true;
       }
     }
@@ -683,8 +687,10 @@ class FlowBuilder {
       }
       index++;
     }
-    if (!args.length || quiet) return;
-    const call: FlowOp = method ? { op: 'call', names, method, args } : { op: 'call', names, args };
+    if (!args.length) return;
+    const call: Extract<FlowOp, { op: 'call' }> = method ? { op: 'call', names, method, args } : { op: 'call', names, args };
+    // Sous @ ou isset : pas de lecture, mais les paramètres par référence créent toujours la variable
+    if (quiet) call.quiet = true;
     out.push(call);
   }
 

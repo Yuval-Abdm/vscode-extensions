@@ -157,11 +157,17 @@ export class IncludeGraph {
         if (list) list.push(site);
         else this.#includers.set(site.target, [site]);
       } else {
-        for (const dir of dynamicDirs(ref.path, env)) this.#dynamicDirs.add(dir);
+        // Préfixe connu réduit à une racine (routeur `DOCUMENT_ROOT.'/'.$page`) : ce n'est pas un dossier de gabarits
+        for (const dir of dynamicDirs(ref.path, env)) if (!this.#isRootish(dir)) this.#dynamicDirs.add(dir);
       }
       return site;
     });
     this.#sites.set(file.uri, sites);
+  }
+
+  /** Dossier qui est une racine du workspace, la racine web, ou un de leurs parents. */
+  #isRootish(dir: string): boolean {
+    return [...this.roots, this.docroot].some((root) => withSep(root).startsWith(dir));
   }
 
   /** Constantes de chemin (define / const) dont toutes les définitions donnent la même valeur. */

@@ -174,7 +174,7 @@ export type FlowOp =
   | { op: 'dynamic'; at: Loc }
   | { op: 'exit'; ret?: true }
   | { op: 'define'; name: string; value: PathExpr }
-  | { op: 'call'; names: string[]; method?: string; args: FlowArg[] }
+  | { op: 'call'; names: string[]; method?: string; args: FlowArg[]; quiet?: true }
   | { op: 'use'; kind: 'function' | 'class' | 'constant'; names: string[]; at: Loc; end: number }
   | { op: 'autoload' }
   | { op: 'branch'; alts: FlowOp[][]; exhaustive: boolean }

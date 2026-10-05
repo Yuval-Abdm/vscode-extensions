@@ -19,7 +19,7 @@ function render(ops: FlowOp[]): string {
       case 'dynamic': return 'dyn';
       case 'exit': return o.ret ? 'ret' : 'exit';
       case 'define': return `def:${o.name}`;
-      case 'call': return `call:${o.method ? `->${o.method}` : o.names[0] ?? '?'}(${o.args.map((a) => `${a.index}=${a.name}`).join(',')})`;
+      case 'call': return `call${o.quiet ? '?' : ''}:${o.method ? `->${o.method}` : o.names[0] ?? '?'}(${o.args.map((a) => `${a.index}=${a.name}`).join(',')})`;
       case 'use': return `use:${o.kind}:${o.names[0]}`;
       case 'autoload': return 'autoload';
       case 'branch': return `[${o.alts.map(render).join(' | ')}]${o.exhaustive ? '!' : ''}`;
@@ -58,6 +58,15 @@ describe('programme des variables', () => {
     assert.equal(await main('if (!empty($x) && $x > 1) {}'), '[g:x r:x] [g:x]');
     assert.equal(await main('if (!isset($x) || $x == "") { $x = 2; }'), '[g:x r:x] [a:x | g:x]!');
     assert.equal(await main('if (isset($t["k"])) { echo $t["k"]; }'), '[g:t r:t]');
+  });
+
+  it('elseif et else héritent des gardes négatives des conditions précédentes', async () => {
+    assert.equal(await main('if (!isset($page)) { $page = 1; } elseif ($page < 1) { $page = 1; }'), '[a:page | g:page r:page a:page | g:page]!');
+    assert.equal(await main("if (empty($action)) {} elseif ($action == 'edit') {} else { echo $action; }"), '[ | g:action r:action | g:action r:action]!');
+  });
+
+  it('appel sous @ : les paramètres par référence restent des affectations', async () => {
+    assert.equal(await main("@preg_match('/x/', $s, $m); echo $m;"), 'use:function:preg_match call?:preg_match(1=s,2=m) r:m');
   });
 
   it('??, ??=, @, isset, empty, compact : pas de lecture', async () => {

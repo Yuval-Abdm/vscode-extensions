@@ -87,14 +87,27 @@ interface Delta {
   exit: boolean;
 }
 
+/** Ce qu'une exécution a lu du contexte en plus des variables (vérifié avant de la réutiliser). */
+interface Deps {
+  /** Fichiers `_once` sautés parce que l'appelant les avait déjà chargés */
+  once: Set<string>;
+  /** Constantes lues chez l'appelant, avec leur valeur */
+  constants: Map<string, string | undefined>;
+}
+
 interface Run extends Collector {
   delta: Delta;
+  deps: Deps;
 }
 
 interface FileAnalysis {
-  runs: Map<string, Run>;
+  /** Exécutions mémorisées par empreinte des variables (variantes selon les dépendances) */
+  runs: Map<string, Run[]>;
+  stored: number;
+  /** Au-delà de maxContexts : réunion des exécutions, partagée par les contextes suivants */
+  union?: Run;
   /** Contexte d'entrée par appelant */
-  contexts: Map<string, { fp: string; missing: SymbolNeed[] }>;
+  contexts: Map<string, { run: Run; missing: SymbolNeed[] }>;
   approximate: boolean;
   /** Variables à l'entrée du premier contexte (survol, complétion) */
   entry?: Map<string, VarInfo>;
@@ -113,6 +126,7 @@ interface Ctx {
   /** Couche de départ de l'exécution du fichier */
   base: Layer;
   collector: Collector;
+  deps: Deps;
   /** Exécution pour le survol ou la complétion : rien n'est enregistré */
   probe: boolean;
   until?: Loc;
@@ -156,6 +170,14 @@ export class Layer {
     return undefined;
   }
 
+  /** Constante définie dans cette couche ou ses parentes jusqu'à `until` exclue (undefined : pas trouvée). */
+  ownConstant(name: string, until?: Layer): { value: string | undefined } | undefined {
+    for (let layer: Layer | undefined = this; layer && layer !== until; layer = layer.parent) {
+      if (layer.constants.has(name)) return { value: layer.constants.get(name) };
+    }
+    return undefined;
+  }
+
   /** Fichier chargé dans cette couche ou ses parentes, jusqu'à `until` exclue. */
   isLoaded(uri: string, until?: Layer): boolean {
     for (let layer: Layer | undefined = this; layer && layer !== until; layer = layer.parent) {
@@ -181,7 +203,7 @@ export class Layer {
   fingerprint(): string {
     const vars = this.flatten();
     const names = [...vars.keys()].sort().map((name) => (vars.get(name)!.certain ? name : `?${name}`));
-    return `${this.stop ? 's' : ''}${this.request ? 'r' : ''}|${names.join(',')}`;
+    return `${this.stop ? 's' : ''}${this.request ? 'r' : ''}${this.autoload ? 'a' : ''}|${names.join(',')}`;
   }
 
   delta(): Delta {
@@ -267,8 +289,9 @@ export class IncludeAnalysis {
   readonly #declared = new Map<string, string[]>();
   #methodRefs?: Map<string, Set<number>>;
   readonly #autoloaders = new Map<string, boolean>();
+  readonly #lazy = new Map<string, string[]>();
   /** Symboles des fonctions des fichiers atteints par le script d'entrée en cours, vérifiés à la fin du script */
-  #pending?: { context: { fp: string; missing: SymbolNeed[] }; needs: SymbolNeed[] }[];
+  #pending?: { context: { missing: SymbolNeed[] }; needs: SymbolNeed[] }[];
   #probeCache?: { key: string; file: FileSymbols | undefined; layer: Layer | undefined };
 
   constructor(index: SymbolIndex, lookup: Lookup, graph: IncludeGraph, options: AnalysisOptions) {
@@ -301,11 +324,13 @@ export class IncludeAnalysis {
   report(uri: string): FileReport | undefined {
     const state = this.#files.get(uri);
     if (!state) return undefined;
-    const contexts = [...state.contexts].filter(([, context]) => state.runs.has(context.fp));
+    // Un fichier inclus n'est analysé seul que si personne ne l'inclut (le graphe peut ne pas avoir vu un appelant)
+    const all = [...state.contexts];
+    const contexts = all.some(([via]) => via !== '' && via !== 'function') ? all.filter(([via]) => via !== '') : all;
     const reads = new Map<string, { issue: ReadIssue; undefinedVia: string[]; maybeVia: string[] }>();
     const symbols = new Map<string, { need: SymbolNeed; via: string[] }>();
     for (const [via, context] of contexts) {
-      const run = state.runs.get(context.fp)!;
+      const run = context.run;
       for (const issue of run.reads) {
         const key = `${issue.at[0]}:${issue.at[1]}`;
         const entry = reads.get(key) ?? { issue, undefinedVia: [], maybeVia: [] };
@@ -327,7 +352,7 @@ export class IncludeAnalysis {
     for (const issue of state.functions?.reads ?? []) out.reads.push({ ...issue, via: ['function'], others: 0 });
     for (const { need, via } of symbols.values()) out.symbols.push({ need, via, others: contexts.length - via.length });
     const unresolved = new Map<number, UnresolvedInclude>();
-    for (const run of state.runs.values()) for (const u of run.unresolved) unresolved.set(u.index, u);
+    for (const runs of state.runs.values()) for (const run of runs) for (const u of run.unresolved) unresolved.set(u.index, u);
     for (const u of state.functions?.unresolved ?? []) unresolved.set(u.index, u);
     out.unresolved = [...unresolved.values()].sort((a, b) => a.index - b.index);
     out.reads.sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1]);
@@ -389,27 +414,30 @@ export class IncludeAnalysis {
   #state(uri: string): FileAnalysis {
     let state = this.#files.get(uri);
     if (!state) {
-      state = { runs: new Map(), contexts: new Map(), approximate: false };
+      state = { runs: new Map(), stored: 0, contexts: new Map(), approximate: false };
       this.#files.set(uri, state);
     }
     return state;
   }
 
   #ctx(uri: string, file: FileSymbols, call: { entry?: string; via: string; probe: boolean; top: boolean; base: Layer }): Ctx {
-    return { uri, file, fsPath: this.graph.fsPath(uri), entry: call.entry, via: call.via, top: call.top, base: call.base, probe: call.probe, collector: { reads: [], unresolved: [], needs: [] } };
+    return { uri, file, fsPath: this.graph.fsPath(uri), entry: call.entry, via: call.via, top: call.top, base: call.base, probe: call.probe, collector: { reads: [], unresolved: [], needs: [] }, deps: { once: new Set(), constants: new Map() } };
   }
 
   /** Exécute le fichier `uri` par-dessus `layer` (modifiée : effet du fichier sur l'appelant). */
-  #runFile(uri: string, layer: Layer, call: { entry?: string; via: string; probe: boolean; top: boolean }): void {
+  /** Exécute le fichier `uri` par-dessus `layer` (modifiée : effet du fichier sur l'appelant) ; renvoie l'exécution. */
+  #runFile(uri: string, layer: Layer, call: { entry?: string; via: string; probe: boolean; top: boolean }): Run | undefined {
     const file = this.#index.get(uri);
     if (!file?.flow) {
       layer.loaded.add(uri);
-      return;
+      return undefined;
     }
-    if (this.#stack.includes(uri) || this.#stack.length >= MAX_DEPTH) return;
+    if (this.#stack.includes(uri) || this.#stack.length >= MAX_DEPTH) return undefined;
     const state = this.#state(uri);
     const fp = layer.fingerprint();
-    let run = state.runs.get(fp);
+    const variants = state.runs.get(fp) ?? [];
+    let run = variants.find((candidate) => this.#reusable(candidate, layer));
+    if (!run && state.union) run = state.union;
     if (!run) {
       const child = new Layer(layer);
       child.loaded.add(uri);
@@ -421,20 +449,70 @@ export class IncludeAnalysis {
         this.#stack.pop();
       }
       if (child.exit === 'return') child.exit = undefined;
-      run = { ...ctx.collector, delta: child.delta() };
+      run = { ...ctx.collector, delta: child.delta(), deps: ctx.deps };
       if (!state.entry && !call.probe) state.entry = layer.flatten();
-      if (state.runs.size < this.#options.maxContexts) state.runs.set(fp, run);
-      else state.approximate = true;
+      if (!call.probe) {
+        if (state.stored < this.#options.maxContexts) {
+          state.runs.set(fp, [...variants, run]);
+          state.stored++;
+        } else {
+          // Trop de contextes : les suivants partagent la réunion des exécutions (coût borné, règle stricte gardée)
+          state.approximate = true;
+          state.union = this.#union(state);
+          run = state.union;
+        }
+      }
     }
     if (!call.probe) {
-      const context = { fp, missing: run.needs.filter((need) => !need.declaredIn.some((d) => layer.isLoaded(d))) };
+      const context = { run, missing: run.needs.filter((need) => !need.declaredIn.some((d) => layer.isLoaded(d))) };
       state.contexts.set(call.via, context);
       this.#pending?.push({ context, needs: this.#functions(uri).needs });
     }
     layer.apply(run.delta);
     // Autoloader enregistré par le fichier, même dans une fonction ou une méthode (PHPExcel_Autoloader::Register)
     if (this.#registersAutoload(uri, file)) layer.autoload = true;
+    // Fichiers inclus par ses fonctions (chargement à la demande : connectDB(), loadModel()) : considérés chargés
+    for (const target of this.#lazyTargets(uri, file)) layer.loaded.add(target);
+    return run;
   }
+
+  /** Une exécution mémorisée vaut pour ce contexte si ce qu'elle a lu de l'appelant est identique. */
+  #reusable(run: Run, layer: Layer): boolean {
+    for (const target of run.deps.once) if (!layer.isLoaded(target)) return false;
+    for (const [name, value] of run.deps.constants) if ((layer.constant(name) ?? this.graph.constant(name)) !== value) return false;
+    return true;
+  }
+
+  /** Réunion des exécutions mémorisées : lectures et symboles de toutes, effet de la première. */
+  #union(state: FileAnalysis): Run {
+    const runs = [...state.runs.values()].flat();
+    const reads = new Map<string, ReadIssue>();
+    const needs = new Map<string, SymbolNeed>();
+    const unresolved = new Map<number, UnresolvedInclude>();
+    for (const run of runs) {
+      for (const read of run.reads) {
+        const key = `${read.at[0]}:${read.at[1]}`;
+        if (!reads.has(key) || read.kind === 'undefined') reads.set(key, read);
+      }
+      for (const need of run.needs) needs.set(`${need.at[0]}:${need.at[1]}`, need);
+      for (const u of run.unresolved) unresolved.set(u.index, u);
+    }
+    return { reads: [...reads.values()], needs: [...needs.values()], unresolved: [...unresolved.values()], delta: runs[0].delta, deps: { once: new Set(), constants: new Map() } };
+  }
+
+  /** Cibles des includes situés dans les fonctions du fichier. */
+  #lazyTargets(uri: string, file: FileSymbols): string[] {
+    let targets = this.#lazy.get(uri);
+    if (!targets) {
+      const indexes: number[] = [];
+      for (const fn of file.flow?.functions ?? []) walkOps(fn.body, (op) => op.op === 'include' && indexes.push(op.index));
+      const sites = this.graph.sitesOf(uri);
+      targets = indexes.map((i) => sites[i]?.target).filter((t): t is string => !!t);
+      this.#lazy.set(uri, targets);
+    }
+    return targets;
+  }
+
 
   #registersAutoload(uri: string, file: FileSymbols): boolean {
     let found = this.#autoloaders.get(uri);
@@ -513,7 +591,7 @@ export class IncludeAnalysis {
         case 'call':
           for (const arg of op.args) {
             if (this.#byRef(op, arg.index)) layer.vars.set(arg.name, { certain: true, origin: { uri: ctx.uri, line: arg.at[0] } });
-            else this.#read(arg.name, arg.at, arg.end, layer, ctx);
+            else if (!op.quiet) this.#read(arg.name, arg.at, arg.end, layer, ctx);
           }
           break;
         case 'use':
@@ -571,7 +649,14 @@ export class IncludeAnalysis {
   }
 
   #env(ctx: Ctx, layer: Layer): ResolveEnv {
-    return this.graph.env(ctx.fsPath, ctx.entry, (name) => layer.constant(name) ?? this.graph.constant(name));
+    return this.graph.env(ctx.fsPath, ctx.entry, (name) => {
+      const own = layer.ownConstant(name, ctx.base.parent);
+      if (own) return own.value ?? this.graph.constant(name);
+      // Constante de l'appelant : dépendance de l'exécution
+      const value = ctx.base.parent?.constant(name) ?? this.graph.constant(name);
+      ctx.deps.constants.set(name, value);
+      return value;
+    });
   }
 
   #include(index: number, layer: Layer, ctx: Ctx): void {
@@ -584,9 +669,16 @@ export class IncludeAnalysis {
       return;
     }
     const target = this.graph.uriOf(targets[0]);
-    if (ref.kind.endsWith('_once') && layer.isLoaded(target)) return;
+    if (ref.kind.endsWith('_once') && layer.isLoaded(target)) {
+      // Sauté grâce à l'appelant : l'exécution en dépend
+      if (!layer.isLoaded(target, ctx.base.parent)) ctx.deps.once.add(target);
+      return;
+    }
     const via = ctx.top ? `${ctx.uri}#${ref.range.start.line}` : ctx.via;
-    this.#runFile(target, layer, { entry: ctx.entry, via, probe: ctx.probe, top: false });
+    const run = this.#runFile(target, layer, { entry: ctx.entry, via, probe: ctx.probe, top: false });
+    // Dépendances du fichier inclus qui ne sont pas satisfaites par ce fichier-ci : remontées à l'appelant
+    for (const once of run?.deps.once ?? []) if (!layer.isLoaded(once, ctx.base.parent)) ctx.deps.once.add(once);
+    for (const [name, value] of run?.deps.constants ?? []) if (!layer.ownConstant(name, ctx.base.parent)) ctx.deps.constants.set(name, value);
   }
 
   #use(op: Extract<FlowOp, { op: 'use' }>, layer: Layer, ctx: Ctx): void {
@@ -605,7 +697,8 @@ export class IncludeAnalysis {
     let out = this.#declared.get(key);
     if (!out) {
       const hits = names.flatMap((name) => (kind === 'function' ? this.#index.findFunction(name) : kind === 'class' ? this.#index.findClass(name) : this.#index.findConstant(name)));
-      out = [...new Set(hits.map((hit) => hit.uri))].filter((uri) => !this.graph.isAutoloaded(uri));
+      // Classes chargées automatiquement, fichiers d'un dossier inclus dynamiquement : chargés sans include visible
+      out = [...new Set(hits.map((hit) => hit.uri))].filter((uri) => !this.graph.isAutoloaded(uri) && !this.graph.isDynamicTarget(uri));
       this.#declared.set(key, out);
     }
     return out;
