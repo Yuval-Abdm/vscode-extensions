@@ -24,6 +24,7 @@ import { IncludeGraph } from './includes/graph.ts';
 import { includeDefinition, includeLinks, includerLinks, includersLens } from './includes/navigation.ts';
 import { quickFixes } from './features/codeActions.ts';
 import { findReferences, targetAt, type RefEnv, type SourceFile } from './refactor/references.ts';
+import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
@@ -258,7 +259,7 @@ function sourceOf(uri: string): { file: SourceFile; release(): void } | undefine
 }
 
 function refEnv(): RefEnv {
-  return { lookup, resolver, files: () => [...workspace.files()], source: sourceOf };
+  return { lookup, resolver, files: () => [...workspace.files()], source: sourceOf, graph: analysis?.graph };
 }
 
 function inputOf(doc: OpenDocument): CollectInput {
@@ -647,6 +648,8 @@ connection.onReferences(
     const source = sourceOf(textDocument.uri);
     if (!source) return [];
     try {
+      const variable = variableTarget(source.file, position);
+      if (variable) return variableReferences(refEnv(), source.file, variable);
       const target = targetAt(refEnv(), source.file, position);
       return target ? findReferences(refEnv(), target, context.includeDeclaration) : [];
     } finally {

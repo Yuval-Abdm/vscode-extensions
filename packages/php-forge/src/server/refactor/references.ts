@@ -4,6 +4,7 @@
 // fois dans le projet (sinon on ne sait pas de quelle classe il s'agit).
 import type { Location } from 'vscode-languageserver/node';
 import type { FileSymbols, Position, SymbolKind } from '../../shared/types.ts';
+import type { IncludeGraph } from '../includes/graph.ts';
 import type { Lookup } from '../index/lookup.ts';
 import type { IndexedSymbol } from '../index/symbolIndex.ts';
 import { nameAt, type Reference } from '../features/nameAt.ts';
@@ -25,6 +26,8 @@ export interface RefEnv {
   files(): FileSymbols[];
   /** Document ouvert, ou fichier lu et analysé pour la recherche (`release` libère alors son arbre) */
   source(uri: string): { file: SourceFile; release(): void } | undefined;
+  /** Graphe d'inclusion (variables du niveau fichier partagées par la chaîne) */
+  graph?: IncludeGraph;
 }
 
 export type TargetKind = 'class' | 'function' | 'constant' | 'method' | 'property' | 'classConstant';

@@ -1,4 +1,5 @@
 // Environnement de recherche de références sur un projet en mémoire (fichiers sous /p).
+import { IncludeGraph } from '../src/server/includes/graph.ts';
 import { Lookup } from '../src/server/index/lookup.ts';
 import { SymbolIndex } from '../src/server/index/symbolIndex.ts';
 import type { RefEnv, SourceFile } from '../src/server/refactor/references.ts';
@@ -21,6 +22,7 @@ export async function refEnv(files: Record<string, string>, stubs = '<?php funct
   const env: RefEnv = {
     lookup,
     resolver: new TypeResolver(lookup, '8.3'),
+    graph: new IncludeGraph(index, { roots: ['/p'], readFile: () => undefined }),
     files: () => [...index.files()],
     source: (uri) => {
       const file = sources.get(uri);
