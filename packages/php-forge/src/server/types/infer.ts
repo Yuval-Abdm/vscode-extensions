@@ -10,6 +10,7 @@ import type { Node } from '../parser/parser.ts';
 import { typeFromNode } from './declType.ts';
 import { variableType, type Definition } from './flow.ts';
 import { classType, MIXED, ref, scalar, union, withoutNull } from './type.ts';
+import { rowShape } from '../sql/rows.ts';
 
 const COMPARISONS = new Set(['==', '!=', '<>', '===', '!==', '<', '>', '<=', '>=', '&&', '||', 'and', 'or', 'xor', 'instanceof']);
 const ARITHMETIC = new Set(['+', '-', '*', '/', '%', '**']);
@@ -132,6 +133,8 @@ export class Inferrer {
       case 'nullsafe_member_call_expression': {
         const name = node.childForFieldName('name');
         if (name?.type !== 'name') return MIXED;
+        const rows = rowShape(this, node);
+        if (rows) return rows;
         const type = ref({ of: 'method', name: name.text, on: this.expr(node.childForFieldName('object')), args: this.#args(node) });
         return node.type.startsWith('nullsafe') ? union(type, scalar('null')) : type;
       }
@@ -162,6 +165,8 @@ export class Inferrer {
       case 'function_call_expression': {
         const fn = node.childForFieldName('function');
         if (!fn) return MIXED;
+        const rows = rowShape(this, node);
+        if (rows) return rows;
         if (NAMES.has(fn.type)) return ref({ of: 'function', names: resolveFunctionOrConstant(fn.text, 'function', this.scopeOf(fn)), args: this.#args(node) });
         const callee = this.expr(fn);
         return callee.kind === 'closure' ? (callee.returns ?? MIXED) : MIXED;

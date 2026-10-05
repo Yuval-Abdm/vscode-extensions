@@ -62,6 +62,17 @@ export function variableType(inf: Inferrer, name: string, at: Node): TypeExpr {
   return narrow(inf, type, name, at, root);
 }
 
+/** Dernière définition de `$name` visible à `at` (même portée). */
+export function definitionAt(inf: Inferrer, name: string, at: Node): Definition | undefined {
+  const visible = (definitionsOf(inf, scopeRoot(at)).get(name) ?? []).filter((d) => d.from <= at.startIndex);
+  return visible[visible.length - 1];
+}
+
+/** Variables définies dans la portée (`extract()` d'une ligne de requête compris). */
+export function definedNames(inf: Inferrer, root: Node): string[] {
+  return [...definitionsOf(inf, root).keys()];
+}
+
 function isConditional(anchor: Node, pos: number, root: Node): boolean {
   for (let n: Node | null = anchor; n && n.id !== root.id; n = n.parent) {
     if (BRANCHES.has(n.type) && !(n.startIndex <= pos && pos <= n.endIndex)) return true;
@@ -123,6 +134,7 @@ function definitionsOf(inf: Inferrer, root: Node): Map<string, Definition[]> {
     return entry ? parseDocType(entry.type, inf.scopeOf(assignment)) : undefined;
   };
 
+  const extracts: Node[] = [];
   const visit = (node: Node): void => {
     for (const child of node.namedChildren) {
       if (FUNCTION_NODES.has(child.type) || CLASS_DECLARATIONS.has(child.type) || child.type === 'anonymous_class') continue;
@@ -175,6 +187,9 @@ function definitionsOf(inf: Inferrer, root: Node): Map<string, Definition[]> {
           if (variable) add(variable.text.slice(1), child.endIndex, child, () => (value ? inf.expr(value) : MIXED));
           break;
         }
+        case 'function_call_expression':
+          if (child.childForFieldName('function')?.text.toLowerCase() === 'extract') extracts.push(child);
+          break;
         case 'global_declaration':
           for (const variable of child.namedChildren) {
             if (variable.type === 'variable_name') add(variable.text.slice(1), child.endIndex, child, () => MIXED);
@@ -194,6 +209,19 @@ function definitionsOf(inf: Inferrer, root: Node): Map<string, Definition[]> {
   visit(root);
   for (const list of map.values()) list.sort((a, b) => a.from - b.from);
   inf.definitions.set(root.id, map);
+  // extract($row) d'une ligne de requête connue : une variable par colonne (après la mise en cache : le type de
+  // $row se calcule avec cette même table)
+  for (const call of extracts) {
+    const source = call.childForFieldName('arguments')?.namedChildren[0]?.namedChildren[0];
+    if (source?.type !== 'variable_name') continue;
+    const type = inf.variable(source.text.slice(1), source);
+    if (type.kind !== 'array' || !type.shape) continue;
+    for (const [key, value] of Object.entries(type.shape)) {
+      if (!/^[A-Za-z_]\w*$/.test(key)) continue;
+      add(key, call.endIndex, call, () => value);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.from - b.from);
+  }
   return map;
 }
 

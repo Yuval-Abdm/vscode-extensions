@@ -21,7 +21,7 @@ const LINK_FIRST = /^(?:mysqli_(?:query|prepare|real_query|multi_query)|pg_(?:qu
 const SQL_START = /^\s*\(?\s*(?:SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|TRUNCATE|SHOW)\b/;
 const SQL_SHAPE = /^\s*\(?\s*(?:select\b[\s\S]*\bfrom\b|insert\s+(?:ignore\s+)?into\b|update\b[\s\S]*\bset\b|delete\s+from\b|replace\s+into\b)/;
 
-const KEYWORDS = new Set(`
+export const KEYWORDS = new Set(`
   SELECT FROM WHERE AND OR NOT IN IS NULL LIKE BETWEEN EXISTS AS ON JOIN LEFT RIGHT INNER OUTER CROSS NATURAL STRAIGHT_JOIN
   USING GROUP BY ORDER ASC DESC HAVING LIMIT OFFSET UNION ALL DISTINCT INSERT IGNORE INTO VALUES UPDATE SET DELETE REPLACE
   CREATE TABLE TEMPORARY ALTER DROP TRUNCATE INDEX PRIMARY FOREIGN REFERENCES DEFAULT CASE WHEN THEN ELSE END WITH
@@ -29,7 +29,7 @@ const KEYWORDS = new Set(`
   BINARY OVER PARTITION ADD COLUMN MODIFY CHANGE RENAME TO IF
 `.split(/\s+/).filter(Boolean));
 
-const FUNCTIONS = new Set(`
+export const FUNCTIONS = new Set(`
   COUNT SUM AVG MIN MAX GROUP_CONCAT CONCAT CONCAT_WS IFNULL NULLIF COALESCE IF ISNULL NOW CURDATE CURTIME CURRENT_DATE
   CURRENT_TIMESTAMP DATE TIME YEAR MONTH DAY WEEK HOUR MINUTE SECOND DAYOFWEEK DAYOFMONTH WEEKDAY LAST_DAY DATE_FORMAT
   DATE_ADD DATE_SUB ADDDATE SUBDATE DATEDIFF TIMEDIFF TIMESTAMPDIFF STR_TO_DATE UNIX_TIMESTAMP FROM_UNIXTIME LOWER UPPER
@@ -43,6 +43,18 @@ export function sqlTokens(tree: Tree): SqlToken[] {
   for (const query of sqlQueries(tree)) tokenize(query, out);
   return out;
 }
+
+/** Requête SQL trouvée dans le code PHP. */
+export interface SqlQuery {
+  /** Chaîne ou concaténation entière */
+  root: Node;
+  /** Morceaux de la concaténation, dans l'ordre (littéraux et expressions) */
+  parts: Node[];
+  /** Requête entière : une seule chaîne, ni concaténée ni complétée plus loin par `.=` */
+  complete: boolean;
+}
+
+const queryCache = new WeakMap<Tree, SqlQuery[]>();
 
 /** Contexte d'une chaîne (ou d'une concaténation) : ses ancêtres utiles, relevés pendant le parcours. */
 interface Root {
@@ -62,6 +74,17 @@ const CALLS = new Set(['function_call_expression', 'member_call_expression', 'nu
  * remonter vers les parents est coûteux avec tree-sitter (plusieurs secondes sur un fichier de 7 000 lignes).
  */
 export function sqlQueries(tree: Tree): Node[][] {
+  return findQueries(tree).map((q) => q.parts.filter((p) => LITERALS.has(p.type)));
+}
+
+/** Requêtes du fichier (calculées une fois par arbre). */
+export function findQueries(tree: Tree): SqlQuery[] {
+  let cached = queryCache.get(tree);
+  if (!cached) queryCache.set(tree, (cached = scan(tree)));
+  return cached;
+}
+
+function scan(tree: Tree): SqlQuery[] {
   const roots: Root[] = [];
   // Ancêtres : nœud gardé seulement pour les types utiles au contexte
   const stack: { type: string; node?: Node }[] = [];
@@ -94,14 +117,18 @@ export function sqlQueries(tree: Tree): Node[][] {
   }
   cursor.delete();
 
-  const queries = new Map<number, Node[]>();
+  const queries = new Map<number, { root: Root; parts: Node[] }>();
   const sqlVariables = new Set<string>();
+  const appended = new Set<string>();
   const appends: Root[] = [];
   for (const root of roots) {
     const parts = flatten(root.node);
+    // Variable reprise dans une concaténation : sa requête n'est pas entière
+    if (parts.length > 1) for (const part of parts) if (part.type === 'variable_name') appended.add(`${root.scope}:${part.text}`);
+    const target = assignedVariable(root);
+    if (target && root.parent?.type === 'augmented_assignment_expression') appended.add(target);
     if (isSql(parts) || isQueryArgument(root)) {
-      queries.set(root.node.id, parts);
-      const target = assignedVariable(root);
+      queries.set(root.node.id, { root, parts });
       if (target) sqlVariables.add(target);
     } else if (root.parent?.type === 'augmented_assignment_expression') {
       appends.push(root);
@@ -109,9 +136,14 @@ export function sqlQueries(tree: Tree): Node[][] {
   }
   for (const root of appends) {
     const target = assignedVariable(root);
-    if (target && sqlVariables.has(target)) queries.set(root.node.id, flatten(root.node));
+    if (target && sqlVariables.has(target)) queries.set(root.node.id, { root, parts: flatten(root.node) });
   }
-  return [...queries.values()].map((parts) => parts.filter((p) => LITERALS.has(p.type)));
+  // Dans l'ordre du fichier
+  return [...queries.values()].sort((a, b) => a.root.node.startIndex - b.root.node.startIndex).map(({ root, parts }) => {
+    const target = assignedVariable(root);
+    const complete = parts.length === 1 && root.parent?.type !== 'augmented_assignment_expression' && !(target && appended.has(target));
+    return { root: root.node, parts, complete };
+  });
 }
 
 /** Nœud courant du curseur, qui vient de descendre vers son premier enfant : on remonte un instant le relever. */
@@ -154,7 +186,7 @@ function isQueryArgument(root: Root): boolean {
 }
 
 /** Morceaux de texte d'une chaîne (hors guillemets et interpolations). */
-function contentOf(literal: Node): Node[] {
+export function contentOf(literal: Node): Node[] {
   const holder = literal.type === 'heredoc' || literal.type === 'nowdoc' ? literal.namedChildren.find((c) => c.type.endsWith('_body')) : literal;
   return (holder?.namedChildren ?? []).filter((c) => c.type === 'string_content' || c.type === 'escape_sequence');
 }
