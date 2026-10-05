@@ -7,6 +7,7 @@ import type { Position, Range } from '../../shared/types.ts';
 import { resolveClassName, scopeAt } from '../model/names.ts';
 import { rangeOf } from '../model/ranges.ts';
 import type { Node } from '../parser/parser.ts';
+import { namespaceAt, renameNamespace } from './namespace.ts';
 import { findReferences, positionsOf, targetAt, type RefEnv, type SourceFile, type Target } from './references.ts';
 import { variableReferences, variableTarget, type VariableTarget } from './variables.ts';
 
@@ -34,6 +35,11 @@ function checkTarget(target: Target, isLibrary: (uri: string) => boolean): strin
 }
 
 export function prepareRename(env: RefEnv, file: SourceFile, pos: Position, isLibrary: (uri: string) => boolean): Result<{ range: Range; placeholder: string }> {
+  const namespace = namespaceAt(file, pos);
+  if (namespace) {
+    const start = (file.text.split('\n')[pos.line] ?? '').indexOf(namespace);
+    return { range: { start: { line: pos.line, character: start }, end: { line: pos.line, character: start + namespace.length } }, placeholder: namespace };
+  }
   const variable = variableTarget(file, pos);
   if (variable) {
     const range = nameRangeAt(file, pos, variable.name);
@@ -48,6 +54,8 @@ export function prepareRename(env: RefEnv, file: SourceFile, pos: Position, isLi
 }
 
 export function renameAt(env: RefEnv, file: SourceFile, pos: Position, newName: string, isLibrary: (uri: string) => boolean): Result<WorkspaceEdit> {
+  const namespace = namespaceAt(file, pos);
+  if (namespace) return /^[A-Za-z_]\w*(\\[A-Za-z_]\w*)*$/.test(newName) ? renameNamespace(env, namespace, newName) : { error: l10n.t('{0} is not a valid name', newName) };
   const name = newName.replace(/^\$/, '');
   if (!IDENTIFIER.test(name)) return { error: l10n.t('{0} is not a valid name', newName) };
   const prepared = prepareRename(env, file, pos, isLibrary);
