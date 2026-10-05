@@ -129,6 +129,25 @@ test('SQL coloré dans la suite d’une requête concaténée', async () => {
   assert.deepStrictEqual(words, ['1:SELECT', '2:FROM', '3:WHERE', '4:GROUP', '4:BY', '4:ORDER', '4:BY']);
 });
 
+test('survol d’une ligne en erreur : correction appliquée d’un clic', async () => {
+  const doc = await vscode.workspace.openTextDocument({ language: 'php', content: '<?php\n$a = 1\n$b = 2;\n' });
+  await vscode.window.showTextDocument(doc);
+  const link = await waitFor(async () => {
+    const hovers = await vscode.commands.executeCommand('vscode.executeHoverProvider', doc.uri, new vscode.Position(1, 1));
+    for (const h of hovers ?? []) {
+      for (const c of h.contents) {
+        const m = /\]\(command:phpForge\.applyFix\?([^ )]+)\)/.exec(c.value ?? '');
+        if (m) return { args: JSON.parse(decodeURIComponent(m[1])), trusted: c.isTrusted };
+      }
+    }
+    return false;
+  }, 'lien de correction dans le survol');
+  // Le lien n'est cliquable que si la commande est autorisée dans le survol
+  assert.deepStrictEqual(link.trusted, { enabledCommands: ['phpForge.applyFix'] });
+  await vscode.commands.executeCommand('phpForge.applyFix', ...link.args);
+  assert.strictEqual(doc.getText(), '<?php\n$a = 1;\n$b = 2;\n');
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {

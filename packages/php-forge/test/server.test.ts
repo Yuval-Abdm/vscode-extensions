@@ -125,6 +125,15 @@ describe('serveur LSP', () => {
     assert.equal(actions[0].edit.changes[uri('semicolon.php')][0].newText, ';');
   });
 
+  it('survol d’une ligne en erreur : problème et lien de correction', async () => {
+    await open(server, 'semicolon-hover.php', '<?php\n$a = 1\n$b = 2;\n');
+    await waitFor(() => server.diagnostics.get(uri('semicolon-hover.php')), 'diagnostics');
+    const result = (await server.connection.sendRequest('textDocument/hover', {
+      textDocument: { uri: uri('semicolon-hover.php') }, position: { line: 1, character: 1 },
+    })) as { contents: { value: string } };
+    assert.match(result.contents.value, /command:phpForge\.applyFix\?/);
+  });
+
   it('requête SQL aux guillemets mélangés', async () => {
     await open(server, 'quotes.php', `<?php\n$sql = 'UPDATE t SET a'.$d." = '". $h ."' WHERE id = 1";\n`);
     const diagnostics = await waitFor(() => server.diagnostics.get(uri('quotes.php')), 'diagnostics');

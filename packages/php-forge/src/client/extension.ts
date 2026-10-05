@@ -28,6 +28,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.workspace.createFileSystemWatcher('**/*', false, true, false),
       ],
     },
+    // Liens « Appliquer » du survol des problèmes : seule cette commande est autorisée
+    markdown: { isTrusted: { enabledCommands: ['phpForge.applyFix'] } },
     initializationOptions: (): InitOptions => ({
       storagePath: (context.storageUri ?? context.globalStorageUri).fsPath,
       l10nBundle: vscode.l10n.uri?.fsPath,
@@ -50,6 +52,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('phpForge.restartServer', () => client?.restart()),
     vscode.commands.registerCommand('phpForge.reindex', () => client?.sendRequest(REINDEX_REQUEST)),
     vscode.commands.registerCommand('phpForge.showOutput', () => client?.outputChannel.show()),
+    vscode.commands.registerCommand('phpForge.applyFix', (args: ApplyFixArgs) => applyFix(args)),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('phpForge.exclude') || e.affectsConfiguration('phpForge.maxFileSize')) void client?.restart();
     }),
@@ -110,4 +113,19 @@ async function warnAboutCompetitors(context: vscode.ExtensionContext): Promise<v
     if (choice === show) await vscode.commands.executeCommand('extension.open', id);
     else if (choice === never) await context.globalState.update(key, true);
   }
+}
+
+interface ApplyFixArgs {
+  uri: string;
+  edits: { range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }[];
+}
+
+/** Correction proposée dans le survol d'une ligne : appliquée telle quelle au document. */
+async function applyFix({ uri, edits }: ApplyFixArgs): Promise<boolean> {
+  const edit = new vscode.WorkspaceEdit();
+  const target = vscode.Uri.parse(uri);
+  for (const e of edits) {
+    edit.replace(target, new vscode.Range(e.range.start.line, e.range.start.character, e.range.end.line, e.range.end.character), e.newText);
+  }
+  return vscode.workspace.applyEdit(edit);
 }

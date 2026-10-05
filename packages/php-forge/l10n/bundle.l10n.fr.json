@@ -7,6 +7,7 @@
   "Syntax error: unexpected \"{0}\"": "Erreur de syntaxe : « {0} » inattendu",
   "Missing \";\" at end of line": "« ; » manquant en fin de ligne",
   "Add \";\"": "Ajouter « ; »",
+  "Apply": "Appliquer",
   "Value not displayed: did you mean \"<?=\"?": "Valeur non affichée : vouliez-vous écrire « <?= » ?",
   "Replace with \"{0}\"": "Remplacer par « {0} »",
   "SQL query mixes PHP quotes: it starts with {0}, use {0} here too": "Requête SQL aux guillemets PHP mélangés : elle commence par {0}, utilisez {0} ici aussi",

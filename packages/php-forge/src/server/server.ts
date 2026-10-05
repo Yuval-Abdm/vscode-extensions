@@ -3,7 +3,7 @@
 // Aucune exception ne doit faire tomber le serveur : chaque gestionnaire est protégé par `safe`.
 import path from 'node:path';
 import * as l10n from '@vscode/l10n';
-import { CodeActionKind, createConnection, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
+import { CodeActionKind, createConnection, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
   INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
@@ -15,6 +15,7 @@ import { tagDiagnostics } from './diagnostics/tags.ts';
 import { sqlQuoteDiagnostics } from './sql/quotes.ts';
 import { DocumentStore, type OpenDocument } from './documents.ts';
 import { quickFixes } from './features/codeActions.ts';
+import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
 import { foldingRanges } from './features/folding.ts';
@@ -165,9 +166,14 @@ function diagnosticsOf(doc: OpenDocument) {
   return [...syntaxDiagnostics(doc.tree, 100, { parser, text }), ...tagDiagnostics(doc.tree, text), ...sqlQuoteDiagnostics(doc.tree)];
 }
 
+/** Derniers diagnostics publiés par document ouvert (survol des problèmes de la ligne). */
+const published = new Map<string, Diagnostic[]>();
+
 function refresh(doc: OpenDocument): void {
   workspace.set(doc.symbols);
-  void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics: diagnosticsOf(doc) });
+  const diagnostics = diagnosticsOf(doc);
+  published.set(doc.uri, diagnostics);
+  void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics });
 }
 
 connection.onDidOpenTextDocument(
@@ -200,6 +206,7 @@ connection.onDidCloseTextDocument(
     clearTimeout(inference.get(textDocument.uri));
     inference.delete(textDocument.uri);
     documents.close(textDocument.uri);
+    published.delete(textDocument.uri);
     void connection.sendDiagnostics({ uri: textDocument.uri, diagnostics: [] });
     const uri = URI.parse(textDocument.uri);
     // Retour à la version du disque, si le fichier fait partie du workspace
@@ -243,7 +250,8 @@ connection.onDefinition(
 connection.onHover(
   safe(null, ({ textDocument, position }) => {
     const doc = docAt(textDocument.uri);
-    return doc ? hover(lookup, doc.symbols, doc.tree, position, resolver) : null;
+    if (!doc) return null;
+    return withProblems(hover(lookup, doc.symbols, doc.tree, position, resolver), problemsMarkdown(doc.uri, published.get(doc.uri) ?? [], position.line));
   }),
 );
 

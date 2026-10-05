@@ -11,6 +11,7 @@
 - PHP tags in HTML: a value alone in `<?php $x ?>` / `<?$x?>` is never printed (warning, fixes: `<?=` or `<?php echo`); short open tag `<?` flagged (fix: `<?php`).
 - SQL in strings highlighted across the whole query: concatenations (`'SELECT …'.$id.' GROUP BY …'`, even when the next part starts on another line), `$sql .= ' AND …'` and query function arguments (`rp_query`, `->query`, `mysqli_query`…).
 - SQL queries that mix PHP quotes (`'UPDATE …'.$d." = '"…`) are flagged, with a quick fix that converts the whole query to the quotes it starts with; quotes that only wrap a value (`"'"`) are allowed.
+- Hovering a line with an error or warning shows the problem, the proposed fix and an "Apply" link that fixes it in one click.
 - PHP version (`phpForge.phpVersion`, detected from `composer.json` or the `php` executable) shown in the status bar; `phpForge.stubs` selects PHP extensions.
 
 ## 0.1.0 — preview
