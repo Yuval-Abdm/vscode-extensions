@@ -27,7 +27,7 @@ const INCLUDE_KINDS: Record<string, IncludeKind> = {
 const NAME_TYPES = new Set(['name', 'qualified_name', 'relative_name']);
 const CLASS_NODES = new Set(['class_declaration', 'interface_declaration', 'trait_declaration', 'enum_declaration']);
 const SELF = new Set(['self', 'static', 'parent']);
-const NOT_CONSTANTS = new Set(['true', 'false', 'null', '__dir__', '__file__', '__line__', '__function__', '__class__', '__method__', '__namespace__', '__trait__']);
+const NOT_CONSTANTS = new Set(['true', 'false', 'null', 'die', 'exit', '__dir__', '__file__', '__line__', '__function__', '__class__', '__method__', '__namespace__', '__trait__']);
 /** Nœuds dont un enfant `name` est une constante utilisée */
 const CONSTANT_PARENTS = new Set([
   'echo_statement', 'return_statement', 'expression_statement', 'array_element_initializer', 'parenthesized_expression',
@@ -529,6 +529,11 @@ class FlowBuilder {
         return;
       case 'match_expression':
         return this.#match(node, out, quiet);
+      case 'encapsed_string':
+      case 'heredoc_body':
+        // "$a[key]" : la clé est une chaîne, pas une constante
+        for (const child of node.namedChildren) this.#expr(child.type === 'subscript_expression' ? child.namedChildren[0] : child, out, quiet);
+        return;
       case 'anonymous_class':
       case 'class_declaration':
       case 'list_literal':

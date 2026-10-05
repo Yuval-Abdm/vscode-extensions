@@ -51,6 +51,20 @@ describe('symboles introuvables', () => {
     assert.deepEqual(await check('<?php\nfunction f(int $a = 1) {}\nif ($x instanceof Nope) {}\nf(a: 2);\n'), []);
   });
 
+  it('or die, clés non entre guillemets dans une chaîne : pas des constantes', async () => {
+    assert.deepEqual(await check('<?php\n$r = f2() or die;\necho "$a[key] {$b[k2]}";\n', '8.3', { 'f.php': '<?php function f2() {}' }), []);
+  });
+
+  it('classe dans un fichier avec une erreur de syntaxe (membres peut-être perdus) : pas d’alerte de membre', async () => {
+    const others = { 'big.php': '<?php class Big { function a() { $x = ; } function b() {} }' };
+    assert.deepEqual(await check('<?php\n$o = new Big();\n$o->b();\n$o->c();\n', '8.3', others), []);
+  });
+
+  it('classe déclarée dans plusieurs fichiers (versions) : pas d’alerte de membre', async () => {
+    const others = { 'a.php': '<?php class Dup { function a() {} }', 'b.php': '<?php class Dup { function b() {} }' };
+    assert.deepEqual(await check('<?php\n$d = new Dup();\n$d->a();\n$d->b();\n', '8.3', others), []);
+  });
+
   it('gardes function_exists / class_exists / defined', async () => {
     assert.deepEqual(await check("<?php\nif (function_exists('nope')) { nope(); }\nif (class_exists('Missing')) { new Missing(); }\nif (defined('X') && X) {}\nfunction_exists('g') && g();\n"), []);
   });

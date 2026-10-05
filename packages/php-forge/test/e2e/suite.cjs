@@ -166,6 +166,15 @@ test('inclusions : variable non définie selon l’appelant, CodeLens', async ()
   assert.strictEqual(lenses[0].command.title, 'Included by 2 files');
 });
 
+test('diagnostics : fichier non ouvert listé, correction « ignorer »', async () => {
+  const legacy = ws('includes/legacy.php');
+  const diagnostic = await waitFor(() => vscode.languages.getDiagnostics(legacy).find((d) => d.code === 'argument-count'), 'argument-count');
+  const doc = await vscode.workspace.openTextDocument(legacy);
+  await vscode.window.showTextDocument(doc);
+  const actions = await vscode.commands.executeCommand('vscode.executeCodeActionProvider', legacy, diagnostic.range);
+  assert.ok(actions.some((a) => a.title === 'Ignore argument-count on this line'), JSON.stringify(actions.map((a) => a.title)));
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {

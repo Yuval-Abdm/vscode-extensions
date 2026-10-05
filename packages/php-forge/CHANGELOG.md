@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 — preview
+
+- Diagnostics: undefined functions, classes and constants; methods and properties that do not exist on a known type (never on untyped code, classes with `__call` / `__get`, `@mixin` or an unknown parent); argument count of the project's functions and methods; unused `use` and unreachable code (grayed out).
+- PHP version: functions removed in, added after or deprecated for `phpForge.phpVersion` (`mysql_query` in 7.x, `str_contains` before 8.0, `each` since 7.2); deprecated syntax with safe quick fixes (`$s{0}`, `(real)`, nested ternaries, `${var}` in strings, implicitly nullable parameters, PHP 4 constructors).
+- Functions and classes declared twice in an include chain, files included twice without `_once`.
+- Every file of the project is analyzed in the background and listed in the Problems view (`phpForge.diagnostics.scope`); library folders (`phpForge.libraryPaths`, folders with their own `composer.json`) are never diagnosed.
+- Level per rule (`phpForge.diagnostics.rules`), `// @php-forge-ignore <code>` and `/** @php-forge-ignore-file <code> */` with "Ignore on this line / in this file" quick fixes.
+- Baseline: "Create Baseline" hides the existing problems of a legacy project (`.vscode/php-forge-baseline.json`), only new ones are shown; count in the status bar.
+
 ## 0.3.0 — preview
 
 - Include engine for projects without autoload: include paths are evaluated (`ROOT_PATH.'/…'`, `$_SERVER['DOCUMENT_ROOT']`, `__DIR__`, `dirname(__FILE__)`, constants, server paths from `phpForge.serverRoot` or `.vscode/deploy.json`), and every file is analyzed in the context of each file that includes it.

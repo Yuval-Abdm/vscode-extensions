@@ -18,7 +18,7 @@ import { members } from '../types/type.ts';
 const NAME_TYPES = new Set(['name', 'qualified_name', 'relative_name']);
 /** Constructions du langage écrites comme des appels */
 const LANGUAGE = new Set(['isset', 'empty', 'eval', 'die', 'exit', 'list', 'array', 'unset', 'echo', 'print', 'compact', 'extract']);
-const NOT_CONSTANTS = new Set(['true', 'false', 'null', '__dir__', '__file__', '__line__', '__function__', '__class__', '__method__', '__namespace__', '__trait__', '__compiler_halt_offset__']);
+const NOT_CONSTANTS = new Set(['true', 'false', 'null', 'die', 'exit', '__dir__', '__file__', '__line__', '__function__', '__class__', '__method__', '__namespace__', '__trait__', '__compiler_halt_offset__']);
 const CONSTANT_PARENTS = new Set([
   'echo_statement', 'return_statement', 'expression_statement', 'array_element_initializer', 'parenthesized_expression',
   'subscript_expression', 'unary_op_expression', 'sequence_expression', 'argument', 'conditional_expression', 'binary_expression',
@@ -144,6 +144,11 @@ class Checker {
         return;
       case 'unset_statement':
         return;
+      case 'encapsed_string':
+      case 'heredoc_body':
+        // "$a[key]" : la clé est une chaîne, pas une constante
+        for (const child of node.namedChildren) this.visit(child.type === 'subscript_expression' ? child.namedChildren[0] : child, guards);
+        return;
     }
     if (node.type === 'function_call_expression' && LANGUAGE.has(node.childForFieldName('function')?.text.toLowerCase() ?? '')) {
       // isset(), empty() : les accès à l'intérieur ne lèvent pas d'erreur
@@ -267,6 +272,8 @@ class Checker {
       if (!hits.length || DYNAMIC_CLASSES.has(name.toLowerCase())) known = false;
       for (const hit of hits) {
         if (hit.symbol.mixins?.length || /AllowDynamicProperties/.test(hit.symbol.signature ?? '')) known = false;
+        // Erreur de syntaxe dans le fichier : des membres ont pu être perdus par l'analyse
+        if (this.#resolver.lookup.workspace.get(hit.uri)?.syntaxError) known = false;
         queue.push(...(hit.symbol.extends ?? []), ...(hit.symbol.implements ?? []), ...(hit.symbol.uses ?? []));
       }
     }

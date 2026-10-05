@@ -7,8 +7,9 @@ import path from 'node:path';
 import { URI } from 'vscode-uri';
 import { complete } from '../src/server/completion/complete.ts';
 import { DocumentStore } from '../src/server/documents.ts';
+import { collectDiagnostics, semanticPart, type CollectEnv } from '../src/server/diagnostics/collect.ts';
+import { isLibrary } from '../src/server/diagnostics/policy.ts';
 import { IncludeAnalysis } from '../src/server/includes/analysis.ts';
-import { callerLabel, includeDiagnostics } from '../src/server/includes/diagnostics.ts';
 import { IncludeGraph } from '../src/server/includes/graph.ts';
 import { indexFolder } from '../src/server/index/indexer.ts';
 import { Lookup } from '../src/server/index/lookup.ts';
@@ -16,7 +17,7 @@ import { decode } from '../src/server/parser/encoding.ts';
 import { loadStubs } from '../src/server/stubs/stubs.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
 import { SymbolIndex } from '../src/server/index/symbolIndex.ts';
-import { createParser, initParser } from '../src/server/parser/parser.ts';
+import { createParser, initParser, parsePhp } from '../src/server/parser/parser.ts';
 import { DEFAULT_SETTINGS, DEFAULT_STUBS } from '../src/shared/protocol.ts';
 
 interface Result {
@@ -32,6 +33,7 @@ interface Result {
   completionP95: number;
   /** Analyse des inclusions (graphe + exécution), en ms */
   analysisMs: number;
+  workspaceDiagnosticsMs: number;
   entries: number;
   byCode: Record<string, number>;
 }
@@ -96,17 +98,33 @@ for (const root of corpus) {
   const analysis = new IncludeAnalysis(index, new Lookup(index, stubs), graph, { maxContexts: 64, externalGlobals: [] });
   analysis.run();
   const analysisMs = Math.round(performance.now() - analysisStart);
+  // Passe des diagnostics du workspace (fichiers hors librairie), comme le serveur en arrière-plan
   const byCode: Record<string, number> = {};
+  const libraryPaths = ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'];
+  const env: CollectEnv = {
+    parser,
+    resolver: new TypeResolver(new Lookup(index, stubs), process.env.PHP_FORGE_VERSION ?? '7.3'),
+    analysis,
+    rules: {},
+    library: (fsPath) => isLibrary(fsPath, [root], libraryPaths, []),
+    baseline: () => undefined,
+  };
+  const workspaceStart = performance.now();
   for (const file of index.files()) {
-    const report = analysis.report(file.uri);
-    if (!report) continue;
-    for (const d of includeDiagnostics(report, file, (via) => callerLabel(graph, via))) byCode[String(d.code)] = (byCode[String(d.code)] ?? 0) + 1;
+    const fsPath = URI.parse(file.uri).fsPath;
+    if (!file.flow || env.library(fsPath)) continue;
+    const text = decode(readFileSync(fsPath));
+    const tree = parsePhp(parser, text);
+    const input = { uri: file.uri, fsPath, symbols: file, tree, text };
+    for (const d of collectDiagnostics(input, env, semanticPart(input, env)).diagnostics) byCode[String(d.code)] = (byCode[String(d.code)] ?? 0) + 1;
+    tree.delete();
   }
+  const workspaceDiagnosticsMs = Math.round(performance.now() - workspaceStart);
   results.push({
     project: path.basename(root), files: stats.files, parsed: stats.parsed, skipped: stats.skipped, syntaxErrors: stats.syntaxErrors,
     symbols, ms: stats.ms, heapMB: Math.round(process.memoryUsage().heapUsed / 1e6),
     completionP50: percentile(timings, 50), completionP95: percentile(timings, 95),
-    analysisMs, entries: graph.entries().length, byCode,
+    analysisMs, entries: graph.entries().length, workspaceDiagnosticsMs, byCode,
   });
 }
 console.table(results.map(({ byCode, ...r }) => r));
