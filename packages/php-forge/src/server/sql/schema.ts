@@ -32,12 +32,46 @@ export interface SchemaCache {
 
 const CONSTRAINTS = new Set(['PRIMARY', 'KEY', 'INDEX', 'UNIQUE', 'CONSTRAINT', 'FOREIGN', 'FULLTEXT', 'SPATIAL', 'CHECK', 'PERIOD']);
 
-/** Position (ligne, colonne) d'un index du texte. */
-function lineAt(text: string, index: number): { line: number; character: number } {
-  const before = text.slice(0, index);
-  const line = before.split('\n').length - 1;
-  return { line, character: index - (before.lastIndexOf('\n') + 1) };
+/** Position (ligne, colonne) d'un index du texte : débuts de ligne calculés une fois, recherche dichotomique. */
+function positions(text: string): (index: number) => { line: number; character: number } {
+  const starts = [0];
+  for (let i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) starts.push(i + 1);
+  return (index) => {
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid] <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return { line: lo, character: index - starts[lo] };
+  };
 }
+
+/** Fin d'une instruction : premier `;` hors chaîne, commentaire et parenthèses (ou fin du texte). */
+function statementEnd(text: string, from: number): number {
+  let depth = 0;
+  for (let i = from; i < text.length; i++) {
+    const c = text[i];
+    if (c === "'" || c === '"' || c === '`') {
+      for (i++; i < text.length && text[i] !== c; i++) if (text[i] === '\\' && c !== '`') i++;
+    } else if ((c === '-' && text[i + 1] === '-') || c === '#') {
+      const end = text.indexOf('\n', i);
+      if (end < 0) return text.length;
+      i = end;
+    } else if (c === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      if (end < 0) return text.length;
+      i = end + 1;
+    } else if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ';' && depth <= 0) return i;
+  }
+  return text.length;
+}
+
+/** Début d'instruction qui déclare ou complète une table */
+const TABLE_STATEMENT = /\b(?:CREATE\s+(?:(?:TEMPORARY|OR\s+REPLACE)\s+)*TABLE|ALTER\s+(?:IGNORE\s+)?TABLE)\b/gi;
 
 const nameOf = (t: Lexeme) => (t.kind === 'quoted' ? t.value : t.text);
 
@@ -84,10 +118,28 @@ function column(item: Lexeme[], text: string): SqlColumn | undefined {
   return { name: nameOf(name), type: typeText, nullable: !notNull, ...(def !== undefined ? { default: def } : {}) };
 }
 
-/** Tables d'un fichier .sql. */
+/**
+ * Tables d'un fichier .sql. Seules les instructions CREATE TABLE / ALTER TABLE sont analysées : un dump est surtout
+ * fait d'INSERT, jamais lus.
+ */
 export function parseSqlFile(text: string, uri: string): SqlTable[] {
-  const tokens = lex(text);
   const out: SqlTable[] = [];
+  let at: ReturnType<typeof positions> | undefined;
+  let done = 0;
+  for (const match of text.matchAll(TABLE_STATEMENT)) {
+    const start = match.index;
+    if (start < done) continue;
+    // Ligne commentée (-- ou #)
+    const line = text.slice(text.lastIndexOf('\n', start - 1) + 1, start);
+    if (/^\s*(?:--|#)/.test(line)) continue;
+    done = statementEnd(text, start);
+    const tokens = lex(text.slice(start, done)).map((t) => ({ ...t, start: t.start + start, end: t.end + start }));
+    tablesOf(tokens, text, uri, (index) => (at ??= positions(text))(index), out);
+  }
+  return out;
+}
+
+function tablesOf(tokens: Lexeme[], text: string, uri: string, lineAt: (index: number) => { line: number; character: number }, out: SqlTable[]): void {
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t.kind !== 'word') continue;
@@ -102,7 +154,7 @@ export function parseSqlFile(text: string, uri: string): SqlTable[] {
       if (!name || tokens[j + 1]?.text !== '(') continue;
       const list = items(tokens, j + 1);
       const columns = list.items.map((item) => column(item, text)).filter((c): c is SqlColumn => !!c);
-      out.push({ name: nameOf(name), columns, complete: true, uri, ...lineAt(text, name.start) });
+      out.push({ name: nameOf(name), columns, complete: true, uri, ...lineAt(name.start) });
       i = list.end;
     } else if (t.value === 'ALTER' && tokens[i + 1]?.value === 'TABLE') {
       // ALTER TABLE t ADD [COLUMN] c type, ADD …
@@ -130,7 +182,6 @@ export function parseSqlFile(text: string, uri: string): SqlTable[] {
       if (added.length) out.push({ name: nameOf(name), columns: added, complete: false });
     }
   }
-  return out;
 }
 
 export class Schema {
@@ -171,7 +222,9 @@ export class Schema {
   }
 
   addCache(cache: SchemaCache, uri: string): void {
-    if (!Array.isArray(cache?.tables) || !cache.tables.every((t) => typeof t?.name === 'string' && Array.isArray(t.columns))) throw new Error('not a PHP Forge schema cache');
+    const column = (c: SqlColumn) => typeof c?.name === 'string' && typeof c.type === 'string' && typeof c.nullable === 'boolean' && (c.default === undefined || typeof c.default === 'string');
+    const valid = Array.isArray(cache?.tables) && cache.tables.every((t) => typeof t?.name === 'string' && Array.isArray(t.columns) && t.columns.every(column));
+    if (!valid) throw new Error('not a PHP Forge schema cache');
     this.add(cache.tables.map((t) => ({ ...t, complete: true, uri })));
     this.#fromDatabase = true;
   }

@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import { sqlDiagnostics } from '../src/server/sql/diagnostics.ts';
-import { isSchemaSource, loadSchema, SCHEMA_CACHE } from '../src/server/sql/sources.ts';
+import { globRoots, isSchemaSource, loadSchema, SCHEMA_CACHE } from '../src/server/sql/sources.ts';
+import { parseSqlFile } from '../src/server/sql/schema.ts';
 import { parse } from './helpers.ts';
 
 const root = mkdtempSync(path.join(tmpdir(), 'php-forge-sql-'));
@@ -62,10 +63,53 @@ describe('schéma SQL du workspace', () => {
     }
   });
 
+  it('cache JSON d’un autre format (colonnes en chaînes) : ignoré, signalé', () => {
+    write(SCHEMA_CACHE, JSON.stringify({ tables: [{ name: 'x', columns: ['id', 'nom'] }] }));
+    try {
+      const { schema, errors } = loadSchema(sources());
+      assert.equal(errors.length, 1);
+      assert.equal(schema.table('x'), undefined);
+      assert.equal(schema.fromDatabase, false);
+    } finally {
+      rmSync(path.join(root, SCHEMA_CACHE));
+    }
+  });
+
   it('fichier trop gros (dump de données) : ignoré, signalé', () => {
     const { schema, errors } = loadSchema(sources({ maxSize: 100 }));
     assert.ok(errors.some((e) => e.includes('migrations/001_ajout.sql')), errors.join());
     assert.ok(schema.table('clients'));
+  });
+
+  it('dump de 17 Mo (3000 tables et leurs données) : lu en moins de 700 ms', () => {
+    const big = mkdtempSync(path.join(tmpdir(), 'php-forge-dump-'));
+    try {
+      const row = `(1, '${'x'.repeat(60)}', 'a;b', '(c)'),`;
+      const table = (n: number) => `DROP TABLE IF EXISTS t${n};\nCREATE TABLE \`t${n}\` (\n  id int(11) NOT NULL,\n  nom varchar(100) DEFAULT ';',\n  PRIMARY KEY (id)\n) ENGINE=InnoDB;\nINSERT INTO t${n} VALUES ${row.repeat(70)}(2, 'y', 'z', 'w');\n`;
+      mkdirSync(path.join(big, 'sql'));
+      writeFileSync(path.join(big, 'sql/dump.sql'), Array.from({ length: 3000 }, (_, n) => table(n)).join(''));
+      const started = performance.now();
+      const { schema, errors } = loadSchema({ folders: [big], globs: ['sql/**/*.sql'], exclude: [] });
+      const ms = performance.now() - started;
+      assert.deepEqual(errors, []);
+      assert.equal(schema.tables.length, 3000);
+      assert.deepEqual(schema.table('t2999')!.columns.map((c) => `${c.name}:${c.default ?? ''}`), ['id:', `nom:';'`]);
+      assert.ok(ms < 700, `${ms.toFixed(0)} ms`);
+    } finally {
+      rmSync(big, { recursive: true, force: true });
+    }
+  });
+
+  it('CREATE TABLE en commentaire ignoré, position du nom exacte', () => {
+    const tables = parseSqlFile('-- CREATE TABLE vieille (id int);\n# CREATE TABLE autre (id int);\n\nCREATE TABLE  clients (id int);\n', 'file:///s.sql');
+    assert.deepEqual(tables.map((t) => [t.name, t.line, t.character]), [['clients', 3, 14]]);
+  });
+
+  it('volume total lu borné ; seuls les dossiers racines des globs sont parcourus', () => {
+    const { errors } = loadSchema(sources({ maxTotal: 150 }));
+    assert.ok(errors.some((e) => e.startsWith('sql/schema.sql') && e.includes('total')), errors.join());
+    assert.deepEqual(globRoots(['sql/**/*.sql', 'sql/a/*.sql', 'migrations/**/*.sql']), ['migrations', 'sql']);
+    assert.deepEqual(globRoots(['sql/**/*.sql', '**/schema.sql']), ['']);
   });
 
   it('fichiers qui alimentent le schéma', () => {

@@ -93,6 +93,8 @@ const baselines = new Map<string, Baseline>();
 let composerDirs: string[] = [];
 /** Schéma SQL du workspace (fichiers .sql et cache de la base) */
 let sqlSchema = new Schema();
+let schemaTimer: ReturnType<typeof setTimeout> | undefined;
+const SCHEMA_RELOAD_DELAY = 300;
 const workspaceDiagnostics = new WorkspaceDiagnostics();
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -502,7 +504,11 @@ connection.onDidCloseTextDocument(
 
 connection.onDidChangeWatchedFiles(
   safe(undefined, async ({ changes }) => {
-    if (changes.some((c) => c.uri.startsWith('file:') && isSchemaSource(URI.parse(c.uri).fsPath, schemaSources()))) reloadSchema();
+    if (changes.some((c) => c.uri.startsWith('file:') && isSchemaSource(URI.parse(c.uri).fsPath, schemaSources()))) {
+      // Rafale de modifications (git checkout) : un seul rechargement
+      clearTimeout(schemaTimer);
+      schemaTimer = setTimeout(safe(undefined, reloadSchema), SCHEMA_RELOAD_DELAY);
+    }
     await indexing;
     await applyFileChanges(workspace, changes, {
       folders,
