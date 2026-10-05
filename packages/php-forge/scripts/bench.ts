@@ -17,7 +17,7 @@ import { decode } from '../src/server/parser/encoding.ts';
 import { DEFAULT_FORMAT, formatText } from '../src/server/format/format.ts';
 import { tokensOf } from '../src/server/format/tokens.ts';
 import { findReferences, type RefEnv } from '../src/server/refactor/references.ts';
-import { REQUEST_NAMES, returnsData } from '../src/server/security/taint.ts';
+import { REQUEST_NAMES, returnsData, type Summary } from '../src/server/security/taint.ts';
 import { loadSchema } from '../src/server/sql/sources.ts';
 import { loadStubs } from '../src/server/stubs/stubs.ts';
 import { TypeResolver } from '../src/server/types/expand.ts';
@@ -133,6 +133,7 @@ for (const root of corpus) {
     // Propagation comme dans le serveur : fonctions des autres fichiers relues, variables venues des inclusions
     security: (input) => ({
       uri: input.uri,
+      summaries: { get: (name, depth) => benchSummaries.get(`${name}@${depth}`), set: (name, depth, summary) => benchSummaries.set(`${name}@${depth}`, summary) },
       request: (name, at) => analysis.variable(input.uri, name.slice(1), at)?.request,
       requestAtEntry: () => !!analysis.variable(input.uri, '', { line: 0, character: 0 })?.request,
       readsRequest: (name) => {
@@ -156,6 +157,7 @@ for (const root of corpus) {
     ...(process.env.PHP_FORGE_TARGET ? { target: new TypeResolver(new Lookup(index, stubs), process.env.PHP_FORGE_TARGET) } : {}),
   };
   const functionTrees = new Map<string, Tree>();
+  const benchSummaries = new Map<string, Summary>();
   const workspaceStart = performance.now();
   for (const file of index.files()) {
     const fsPath = URI.parse(file.uri).fsPath;

@@ -45,9 +45,18 @@ export interface Finding {
 }
 
 /** Résumé d'une fonction : paramètres qui atteignent un point sensible, ou la valeur renvoyée. */
-interface Summary {
+export interface Summary {
   sinks: { param: number; kind: SinkKind; steps: Step[]; safe: ReadonlySet<SinkKind> }[];
   returns: { param: number; steps: Step[]; safe: ReadonlySet<SinkKind>; quoted?: boolean }[];
+}
+
+/**
+ * Résumés des fonctions d'autres fichiers, partagés entre les fichiers analysés (le serveur les garde tant que le fichier
+ * qui déclare la fonction ne change pas). `depth` : profondeur restante quand le résumé a été calculé.
+ */
+export interface SummaryStore {
+  get(name: string, depth: number): Summary | undefined;
+  set(name: string, depth: number, summary: Summary): void;
 }
 
 export interface FunctionSource {
@@ -72,6 +81,8 @@ export interface TaintEnv {
   sanitizers?: string[];
   /** Profondeur des résumés (appels imbriqués) */
   depth?: number;
+  /** Résumés partagés des fonctions d'autres fichiers */
+  summaries?: SummaryStore;
 }
 
 const ALL: SinkKind[] = ['sql', 'xss', 'command', 'include', 'unserialize', 'redirect', 'path'];
@@ -704,9 +715,19 @@ class Analyzer {
     return union(...returned);
   }
 
+  /** Fonction d'un autre fichier dont la valeur rendue vient de la requête (getter) */
+  returnsRequest(name: string): boolean {
+    return !!this.#summarize(name, undefined)?.returns.some((r) => r.param === DIRECT);
+  }
+
   #summarize(name: string, local: Node | undefined): Summary | undefined {
     const key = local ? `${this.#uri}#${local.startIndex}` : `fn:${name}`;
     if (this.#summaries.has(key)) return this.#summaries.get(key) ?? undefined;
+    const shared = local ? undefined : this.#env.summaries?.get(name, this.#depth);
+    if (shared) {
+      this.#summaries.set(key, shared);
+      return shared;
+    }
     this.#summaries.set(key, null); // récursion
     let source: FunctionSource | undefined;
     const node = local ?? (source = this.#env.loadFunction?.(name))?.node;
@@ -720,6 +741,7 @@ class Analyzer {
       // Étapes dans un autre fichier : chemin affiché avec le fichier
       if (source) for (const s of [...summary.sinks, ...summary.returns]) s.steps = s.steps.map((st) => ({ ...st, uri: st.uri ?? uri }));
       this.#summaries.set(key, summary);
+      if (!local) this.#env.summaries?.set(name, this.#depth, summary);
       return summary;
     } finally {
       source?.release();
@@ -894,7 +916,17 @@ function leaves(body: Node): boolean {
   return !!expr && (expr.type === 'exit_statement' || expr.type === 'exit_expression' || expr.type === 'throw_expression' || (expr.type === 'function_call_expression' && /^(?:die|exit)$/i.test(expr.childForFieldName('function')?.text ?? '')));
 }
 
+const declarationCache = new WeakMap<Tree, Declarations>();
+
 function declarationsOf(tree: Tree): Declarations {
+  const cached = declarationCache.get(tree);
+  if (cached) return cached;
+  const declarations = collectDeclarations(tree);
+  declarationCache.set(tree, declarations);
+  return declarations;
+}
+
+function collectDeclarations(tree: Tree): Declarations {
   const functions = new Map<string, Node>();
   const methods = new Map<string, Node>();
   const all = tree.rootNode.descendantsOfType(['function_definition', 'method_declaration']);
@@ -941,13 +973,16 @@ export function analyzeTaint(tree: Tree, env: TaintEnv): Finding[] {
   const text = tree.rootNode.text;
   // Fonctions appelées qui lisent elles-mêmes la requête (getters) : leurs appels sont aussi des sources
   const readers = new Set<string>();
+  let prober: Analyzer | undefined;
+  const probe = () => (prober ??= new Analyzer(env, env.uri, declarations, summaries, depth));
   for (const call of tree.rootNode.descendantsOfType('function_call_expression')) {
     const fn = call.childForFieldName('function');
     if (fn?.type !== 'name' && fn?.type !== 'qualified_name') continue;
     const name = lower(fn);
     if (readers.has(name)) continue;
     const local = declarations.functions.get(name);
-    if (local ? SOURCE_TEXT.test(local.text) : env.readsRequest?.(name)) readers.add(name);
+    // Autre fichier : le fichier lit la requête (index) et la fonction rend vraiment une donnée de la requête
+    if (local ? SOURCE_TEXT.test(local.text) : env.readsRequest?.(name) && probe().returnsRequest(name)) readers.add(name);
   }
   const reads = (scope: string) => SOURCE_TEXT.test(scope) || [...readers].some((name) => scope.toLowerCase().includes(`${name}(`));
   if (reads(text) || (env.requestAtEntry ? env.requestAtEntry() : !!env.request)) {

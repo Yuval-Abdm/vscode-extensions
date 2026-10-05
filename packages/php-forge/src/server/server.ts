@@ -29,7 +29,8 @@ import { SourceCache } from './refactor/sourceCache.ts';
 import { formatEdits, formatOptions, onTypeRange, onTypeWindow } from './format/format.ts';
 import { sqlCompletionList, sqlDefinitionAt, sqlHoverAt } from './sql/lsp.ts';
 import { collectReport, migrationReport, type ReportFile } from './migration/report.ts';
-import { REQUEST_NAMES, returnsData, type TaintEnv } from './security/taint.ts';
+import type { FileSymbols } from '../shared/types.ts';
+import { REQUEST_NAMES, returnsData, type Summary, type SummaryStore, type TaintEnv } from './security/taint.ts';
 import { Schema } from './sql/schema.ts';
 import { isSchemaSource, loadSchemas, type SchemaSources } from './sql/sources.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
@@ -320,12 +321,29 @@ function reloadSchema(): void {
   startWorkspaceDiagnostics();
 }
 
+/** Résumés de propagation des fonctions d'autres fichiers, valables tant que le fichier qui les déclare ne change pas. */
+const taintSummaries = new Map<string, { symbols: FileSymbols | undefined; summary: Summary }>();
+const declaringFile = (name: string) => {
+  const hit = lookup.workspace.findFunction(name)[0];
+  return hit && workspace.get(hit.uri);
+};
+const summaryStore: SummaryStore = {
+  get: (name, depth) => {
+    const entry = taintSummaries.get(`${name}@${depth}`);
+    return entry && entry.symbols === declaringFile(name) ? entry.summary : undefined;
+  },
+  set: (name, depth, summary) => {
+    taintSummaries.set(`${name}@${depth}`, { symbols: declaringFile(name), summary });
+  },
+};
+
 /** Propagation : variables venues de la requête par les inclusions, fonctions des autres fichiers. */
 function securityEnv(input: CollectInput): TaintEnv {
   const current = analysis;
   return {
     uri: input.uri,
     sanitizers: settings.security.sanitizers.map((s) => s.replace(/^\\/, '').toLowerCase()),
+    summaries: summaryStore,
     // Noms du moteur d'inclusion sans « $ » ; un nom vide n'est jamais défini : il ne reste que la couche « requête »
     request: current ? (name, at) => current.variable(input.uri, name.slice(1), at)?.request : undefined,
     requestAtEntry: () => !!current?.variable(input.uri, '', { line: 0, character: 0 })?.request,
@@ -486,6 +504,8 @@ async function runAnalysis(workspacePass = true): Promise<void> {
   analysisPending = false;
   includeCache.clear();
   connection.console.info(`Include analysis: ${graph.size} files in ${Date.now() - started} ms`);
+  // Résumés de propagation : une fonction appelée par une fonction d'un autre fichier a pu changer
+  taintSummaries.clear();
   // La partie sémantique (sécurité : variables venues des inclusions, fonctions des autres fichiers) dépend de
   // l'analyse et de l'index : recalculée pour les documents ouverts
   for (const doc of documents.all()) {

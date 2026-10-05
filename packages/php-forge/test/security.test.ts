@@ -252,3 +252,18 @@ describe('sécurité : revue 0.8', () => {
     assert.deepEqual(await found(code), ['2:sql-injection', '3:xss', '5:xss', '6:xss', '7:xss']);
   });
 });
+
+describe('sécurité : résumés partagés', () => {
+  it('fonction d’un autre fichier résumée une fois pour tous les fichiers analysés', async () => {
+    const lib = await parse('<?php\nfunction run_sql($q) {\n  mysql_query($q);\n}\n');
+    let loads = 0;
+    const loadFunction = () => {
+      loads++;
+      return { uri: 'file:///p/lib.php', node: lib.rootNode.descendantsOfType('function_definition')[0], release() {} };
+    };
+    const store = new Map();
+    const summaries = { get: (n: string, d: number) => store.get(`${n}@${d}`), set: (n: string, d: number, s: unknown) => store.set(`${n}@${d}`, s) };
+    for (const file of ['a', 'b', 'c']) assert.deepEqual(await found(`<?php\nrun_sql("DELETE FROM t WHERE id = " . $_GET["${file}"]);\n`, { loadFunction, summaries: summaries as never }), ['1:sql-injection']);
+    assert.equal(loads, 1);
+  });
+});
