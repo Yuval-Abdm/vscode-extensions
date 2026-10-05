@@ -4,6 +4,7 @@
 // erreur de syntaxe n'est pas formaté.
 import type { Range, TextEdit } from 'vscode-languageserver/node';
 import type { Tree } from '../parser/parser.ts';
+import { applyOptions } from './align.ts';
 import { Indenter } from './indent.ts';
 import { spacing } from './spacing.ts';
 import { tokensOf, type Token } from './tokens.ts';
@@ -103,7 +104,9 @@ export function layout(tree: Tree, text: string, options: FormatOptions): Layout
       inner.push({ range: { start: { line, character: 0 }, end: { line, character: match[0].length } }, newText: `${indent} ` });
     }
   });
-  return { tokens, current, wanted, inner };
+  const result = { tokens, current, wanted, inner };
+  applyOptions(result, options);
+  return result;
 }
 
 function decide(left: Token, right: Token, gap: string, options: FormatOptions): Decision {
