@@ -76,7 +76,7 @@ function names(sql: SqlText, analysis: SqlAnalysis, schema: Schema, created: Set
   for (const table of analysis.tables) {
     byAlias.set(table.name.toLowerCase(), table.name);
     if (table.alias) byAlias.set(table.alias.toLowerCase(), table.name);
-    if (schema.fromDatabase && !schema.table(table.name) && !created.has(table.name.toLowerCase())) {
+    if (schema.fromDatabase && !schema.table(table.name) && !created.has(table.name.toLowerCase()) && !analysis.ctes.has(table.name.toLowerCase())) {
       out.push(diagnostic(sql, at, table.start, table.end, SQL_UNKNOWN_TABLE, l10n.t('Unknown table {0}', table.name)));
     }
   }

@@ -145,6 +145,11 @@ function scan(tree: Tree): Scan {
     const parts = flatten(root.node);
     // Variable reprise dans une concaténation : sa requête n'est pas entière
     if (parts.length > 1) for (const part of parts) if (part.type === 'variable_name') appended.add(`${root.scope}:${part.text}`);
+    // … ou interpolée dans une chaîne (« "$sql OR b = 2)" », heredoc « {$sql} »)
+    for (const part of parts) {
+      if (part.type !== 'encapsed_string' && part.type !== 'heredoc') continue;
+      for (const v of part.descendantsOfType('variable_name')) appended.add(`${root.scope}:${v.text}`);
+    }
     const target = assignedVariable(root);
     if (target && root.parent?.type === 'augmented_assignment_expression') appended.add(target);
     const row = root.node.startPosition.row;
@@ -162,7 +167,10 @@ function scan(tree: Tree): Scan {
   // Dans l'ordre du fichier
   const found = [...queries.values()].sort((a, b) => a.root.node.startIndex - b.root.node.startIndex).map(({ root, parts }) => {
     const target = assignedVariable(root);
-    const complete = parts.length === 1 && root.parent?.type !== 'augmented_assignment_expression' && !(target && appended.has(target));
+    // Entière : argument direct d'une fonction de requête, ou variable jamais complétée ensuite (une propriété, un
+    // élément de tableau ou une valeur renvoyée peuvent l'être ailleurs)
+    const whole = target ? !appended.has(target) : isQueryArgument(root);
+    const complete = parts.length === 1 && root.parent?.type !== 'augmented_assignment_expression' && whole;
     return { root: root.node, parts, complete };
   });
   const texts = roots

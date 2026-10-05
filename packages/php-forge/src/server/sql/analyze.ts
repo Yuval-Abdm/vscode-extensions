@@ -40,6 +40,13 @@ export function lex(text: string): Lexeme[] {
       push('hole', start, i);
       continue;
     }
+    // Nombres hexadécimaux et binaires : 0x1F, x'1F', b'0101'
+    const literal = /^(?:0x[0-9a-f]+|0b[01]+|[xb]'[0-9a-f]*')/i.exec(text.slice(i, i + 64))?.[0];
+    if (literal) {
+      i += literal.length;
+      push('number', start, i);
+      continue;
+    }
     if (c === "'" || c === '"') {
       i++;
       while (i < text.length) {
@@ -105,15 +112,52 @@ export interface SqlAnalysis {
   /** Alias définis dans le SELECT (`AS total`) : utilisables dans ORDER BY / HAVING */
   selectAliases: Set<string>;
   hasHoles: boolean;
+  /** Tables nommées par WITH (CTE) : n'existent que dans la requête */
+  ctes: Set<string>;
 }
 
 const TABLE_INTRO = new Set(['FROM', 'JOIN', 'UPDATE', 'INTO', 'STRAIGHT_JOIN']);
 const CLAUSES = new Set(['SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT', 'SET', 'VALUES', 'VALUE', 'ON', 'USING', 'UNION', 'INTO', 'JOIN', 'UPDATE', 'DELETE', 'INSERT', 'REPLACE', 'DUPLICATE', 'BY', 'OFFSET', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'NATURAL', 'WITH', 'FOR', 'LOCK']);
-const NOT_COLUMNS = new Set([...KEYWORDS, 'VALUE', 'NULL', 'TRUE', 'FALSE', 'CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'SEPARATOR', 'SIGNED', 'UNSIGNED', 'CHAR', 'INT', 'INTEGER', 'DECIMAL', 'DATETIME']);
+/** Unités d'INTERVAL et d'EXTRACT */
+const UNITS = ['MICROSECOND', 'SECOND', 'MINUTE', 'HOUR', 'DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR', 'SECOND_MICROSECOND', 'MINUTE_MICROSECOND', 'MINUTE_SECOND', 'HOUR_MICROSECOND', 'HOUR_SECOND', 'HOUR_MINUTE', 'DAY_MICROSECOND', 'DAY_SECOND', 'DAY_MINUTE', 'DAY_HOUR', 'YEAR_MONTH'];
+const NOT_COLUMNS = new Set([
+  ...KEYWORDS, ...UNITS, 'VALUE', 'NULL', 'TRUE', 'FALSE', 'CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'SEPARATOR', 'SIGNED', 'UNSIGNED', 'CHAR', 'INT', 'INTEGER', 'DECIMAL', 'DATETIME',
+  'KEY', 'BOOLEAN', 'MODE', 'NATURAL', 'LANGUAGE', 'QUERY', 'EXPANSION', 'LEADING', 'TRAILING', 'BOTH',
+]);
 /** Clauses où un mot nu est une colonne */
 const COLUMN_CLAUSES = new Set(['SELECT', 'WHERE', 'ON', 'SET', 'GROUP', 'ORDER', 'HAVING', 'BY', 'COLUMNS']);
 
-const isName = (t: Lexeme | undefined) => !!t && (t.kind === 'quoted' || (t.kind === 'word' && !KEYWORDS.has(t.value)));
+/** Nom de table ou de colonne (pas un mot-clé, pas une variable `@x`) */
+const isName = (t: Lexeme | undefined) => !!t && (t.kind === 'quoted' || (t.kind === 'word' && !KEYWORDS.has(t.value) && !t.text.startsWith('@')));
+
+/**
+ * Parenthèses d'appel de fonction (`EXTRACT(YEAR FROM d)`, `TRIM(LEADING '0' FROM x)`) : un FROM n'y ouvre pas de
+ * liste de tables. Une sous-requête `(SELECT …)` n'en est pas une.
+ */
+function functionParens(tokens: Lexeme[]): Set<number> {
+  const out = new Set<number>();
+  tokens.forEach((t, i) => {
+    const prev = tokens[i - 1];
+    const next = tokens[i + 1];
+    if (t.text === '(' && prev?.kind === 'word' && !(next?.kind === 'word' && (next.value === 'SELECT' || next.value === 'WITH'))) out.add(i);
+  });
+  return out;
+}
+
+/** Profondeur dans des parenthèses d'appel, pour chaque jeton. */
+function inCall(tokens: Lexeme[]): boolean[] {
+  const calls = functionParens(tokens);
+  const stack: boolean[] = [];
+  return tokens.map((t, i) => {
+    if (t.text === '(') stack.push(calls.has(i));
+    const inside = stack.includes(true);
+    if (t.text === ')') stack.pop();
+    return inside;
+  });
+}
+
+/** `UPDATE` de `ON DUPLICATE KEY UPDATE` : liste de colonnes, pas une table. */
+const duplicateUpdate = (tokens: Lexeme[], i: number) => tokens[i].value === 'UPDATE' && tokens[i - 1]?.kind === 'word' && tokens[i - 1].value === 'KEY';
 const nameOf = (t: Lexeme) => (t.kind === 'quoted' ? t.value : t.text);
 
 export function analyzeSql(text: string): SqlAnalysis {
@@ -123,11 +167,18 @@ export function analyzeSql(text: string): SqlAnalysis {
   const aliases = new Set<string>();
   const selectAliases = new Set<string>();
   const hasHoles = tokens.some((t) => t.kind === 'hole');
+  const calls = inCall(tokens);
+  // WITH a AS (…), b AS (…)
+  const ctes = new Set<string>();
+  tokens.forEach((t, i) => {
+    const before = tokens[i - 1];
+    if (isName(t) && tokens[i + 1]?.value === 'AS' && tokens[i + 2]?.text === '(' && before && (before.value === 'WITH' || before.value === 'RECURSIVE' || (before.text === ',' && ctes.size))) ctes.add(nameOf(t).toLowerCase());
+  });
 
   // 1. Tables : après FROM / JOIN / UPDATE / INTO, et listes `FROM a, b`
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
-    if (t.kind !== 'word' || !TABLE_INTRO.has(t.value)) continue;
+    if (t.kind !== 'word' || !TABLE_INTRO.has(t.value) || calls[i] || duplicateUpdate(tokens, i)) continue;
     // DELETE t FROM … / INSERT INTO t (…) : la table suit directement
     let j = i + 1;
     for (;;) {
@@ -177,12 +228,16 @@ export function analyzeSql(text: string): SqlAnalysis {
       insertColumns = false;
       continue;
     }
-    if (t.kind === 'word' && CLAUSES.has(t.value) && !(next?.text === '(' && FUNCTIONS.has(t.value))) {
-      clause = t.value;
+    if (t.kind === 'word' && CLAUSES.has(t.value) && !(next?.text === '(' && FUNCTIONS.has(t.value)) && !calls[i]) {
+      // ON DUPLICATE KEY UPDATE a = … : colonnes de la table de l'INSERT
+      clause = duplicateUpdate(tokens, i) ? 'SET' : t.value;
       if (t.value === 'VALUES' || t.value === 'VALUE') valuesDepth = depth + 1;
       continue;
     }
     if (!isName(t) || prev?.text === '.' || tables.some((r) => r.start === t.start)) continue;
+    // COLLATE utf8_bin, CHARACTER SET utf8
+    if (prev?.kind === 'word' && (prev.value === 'COLLATE' || prev.value === 'SET' && tokens[i - 2]?.value === 'CHARACTER')) continue;
+    if (ctes.has(nameOf(t).toLowerCase()) && next?.value === 'AS') continue;
     if (next?.text === '.' && isName(tokens[i + 2])) {
       // q.col (q : alias ou table)
       columns.push({ qualifier: nameOf(t), name: nameOf(tokens[i + 2]), start: tokens[i + 2].start, end: tokens[i + 2].end });
@@ -205,7 +260,7 @@ export function analyzeSql(text: string): SqlAnalysis {
   }
   // ORDER BY / HAVING peuvent citer un alias du SELECT
   const filtered = columns.filter((c) => c.qualifier || !selectAliases.has(c.name.toLowerCase()));
-  return { tables, columns: filtered, select: selectList(tokens, text), selectAliases, hasHoles };
+  return { tables, columns: filtered, select: selectList(tokens, text), selectAliases, hasHoles, ctes };
 }
 
 /** Colonnes du premier SELECT (niveau 0), jusqu'au FROM. */
