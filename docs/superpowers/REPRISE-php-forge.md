@@ -1,4 +1,4 @@
-# PHP Forge — note de reprise (2026-10-05, mise à jour après 0.8)
+# PHP Forge — note de reprise (2026-10-05, mise à jour après 0.9)
 
 Note pour reprendre le travail dans une nouvelle session Claude Code (autre compte possible). Demande en cours de
 l'utilisateur : **« enchaîne tout jusqu'à 1.0 »** — enchaîner les jalons 0.3 → 1.0 sans merge, sans push, sans
@@ -40,6 +40,7 @@ cd packages/php-forge && PHP_FORGE_CORPUS=$HOME/dev/retraite-plus/CRM-FR node sc
 | `feat/php-forge-0.6` | 0.6 Formatage — terminée, revue faite et corrigée (`d46db76`) |
 | `feat/php-forge-0.7` | 0.7 SQL — terminée, revue faite et corrigée (plan `docs/superpowers/plans/2026-10-05-php-forge-0.7-sql.md`) ; contient la règle `mixed-quotes` demandée |
 | `feat/php-forge-0.8` | 0.8 Sécurité et migration — terminée, revue faite et corrigée (plan `docs/superpowers/plans/2026-10-05-php-forge-0.8-security-migration.md`) |
+| `feat/php-forge-0.9` | 0.9 Intégration FTP SFTP Deploy — terminée, revue faite et corrigée (plan `docs/superpowers/plans/2026-10-05-php-forge-0.9-deploy.md`) |
 | `wip/php-forge-0.7-sql-draft` | Brouillon repris dans `feat/php-forge-0.7` : peut être supprimée |
 
 Chaque branche part de la précédente. Rien n'est mergé ni poussé. Rulings et mineurs différés de chaque jalon :
@@ -47,11 +48,9 @@ Chaque branche part de la précédente. Rien n'est mergé ni poussé. Rulings et
 
 ## Ensuite
 
-0.9 intégration FTP SFTP Deploy (§5.9) sur une branche `feat/php-forge-0.9` partie de `feat/php-forge-0.8` : vue
-« Impact » (pages qui atteignent par inclusion les fichiers modifiés — `IncludeGraph.includersOf` / `entries`), bouton
-« Deploy changed files » via l'API `yuval-abdm.ftp-sftp-deploy` (`exports.upload(uris)`, voir Changed Files Explorer),
-avertissement avant déploiement si un fichier a des erreurs. `serverRoot` lu dans `deploy.json` est déjà fait (0.3).
-
-Puis 1.0 (performances §3 : compaction du cache — réouverture 5,6 s contre 3 s visés —, références d'une fonction très
-utilisée 2,9 s contre 2 s visés ; documentation, traduction française complète, empaquetage). À la fin : rapport en
-français avec tous les rulings et mineurs différés, liste des branches et commandes de push / merge pour l'utilisateur.
+1.0 sur une branche `feat/php-forge-1.0` partie de `feat/php-forge-0.9` : performances (§3) — réouverture avec cache
+6,1 s mesurés contre 3 s visés : `indexFolder` réécrit tout le cache (JSON 260 Mo + gzip, ≈ 3 s) même sans changement,
+à éviter ; références d'une fonction très utilisée 3,0 s contre 2 s ; tas du bench 2 Go (serveur visé < 1,5 Go) —,
+documentation, traduction française complète, empaquetage (publication par l'utilisateur). À la fin : rapport en
+français avec tous les rulings et mineurs différés (`.superpowers/php-forge-decisions.md`), branches, commandes de
+push / merge / publication.
