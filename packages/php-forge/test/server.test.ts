@@ -125,6 +125,12 @@ describe('serveur LSP', () => {
     assert.equal(actions[0].edit.changes[uri('semicolon.php')][0].newText, ';');
   });
 
+  it('requête SQL aux guillemets mélangés', async () => {
+    await open(server, 'quotes.php', `<?php\n$sql = 'UPDATE t SET a'.$d." = '". $h ."' WHERE id = 1";\n`);
+    const diagnostics = await waitFor(() => server.diagnostics.get(uri('quotes.php')), 'diagnostics');
+    assert.deepEqual(diagnostics.map((d) => d.code), ['sql-mixed-quotes', 'sql-mixed-quotes']);
+  });
+
   it('valeur non affichée dans du HTML, avec ses corrections rapides', async () => {
     await open(server, 'tags.php', '<div><?$nom?></div>\n');
     const diagnostics = await waitFor(() => server.diagnostics.get(uri('tags.php')), 'diagnostics');

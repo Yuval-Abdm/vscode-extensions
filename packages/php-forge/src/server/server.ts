@@ -12,6 +12,7 @@ import {
 import { complete, resolveCompletion } from './completion/complete.ts';
 import { syntaxDiagnostics } from './diagnostics/syntax.ts';
 import { tagDiagnostics } from './diagnostics/tags.ts';
+import { sqlQuoteDiagnostics } from './sql/quotes.ts';
 import { DocumentStore, type OpenDocument } from './documents.ts';
 import { quickFixes } from './features/codeActions.ts';
 import { definition } from './features/definition.ts';
@@ -161,7 +162,7 @@ async function reindex(): Promise<void> {
 
 function diagnosticsOf(doc: OpenDocument) {
   const text = doc.doc.getText();
-  return [...syntaxDiagnostics(doc.tree, 100, { parser, text }), ...tagDiagnostics(doc.tree, text)];
+  return [...syntaxDiagnostics(doc.tree, 100, { parser, text }), ...tagDiagnostics(doc.tree, text), ...sqlQuoteDiagnostics(doc.tree)];
 }
 
 function refresh(doc: OpenDocument): void {
