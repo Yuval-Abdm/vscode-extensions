@@ -99,6 +99,11 @@
         "category": "PHP Forge"
       },
       {
+        "command": "phpForge.showReferences",
+        "title": "%phpForge.showReferences.title%",
+        "category": "PHP Forge"
+      },
+      {
         "command": "phpForge.createBaseline",
         "title": "%phpForge.createBaseline.title%",
         "category": "PHP Forge"
@@ -284,6 +289,16 @@
             "**/Google/Api/**"
           ],
           "markdownDescription": "%phpForge.libraryPaths.description%"
+        },
+        "phpForge.codeLens.references": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.codeLens.references.description%"
+        },
+        "phpForge.codeLens.implementations": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.codeLens.implementations.description%"
         }
       }
     },
@@ -291,6 +306,10 @@
       "commandPalette": [
         {
           "command": "phpForge.showIncluders",
+          "when": "false"
+        },
+        {
+          "command": "phpForge.showReferences",
           "when": "false"
         }
       ]

@@ -84,6 +84,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('phpForge.reindex', () => client?.sendRequest(REINDEX_REQUEST)),
     vscode.commands.registerCommand('phpForge.showOutput', () => client?.outputChannel.show()),
     vscode.commands.registerCommand('phpForge.applyFix', (args: ApplyFixArgs) => applyFix(args)),
+    vscode.commands.registerCommand('phpForge.showReferences', (uri: string, position: { line: number; character: number }, locations: { uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }[]) =>
+      vscode.commands.executeCommand(
+        'editor.action.showReferences',
+        vscode.Uri.parse(uri),
+        new vscode.Position(position.line, position.character),
+        locations.map((l) => new vscode.Location(vscode.Uri.parse(l.uri), new vscode.Range(l.range.start.line, l.range.start.character, l.range.end.line, l.range.end.character))),
+      )),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('phpForge.exclude') || e.affectsConfiguration('phpForge.maxFileSize')) void client?.restart();
     }),
@@ -127,6 +134,7 @@ function readSettings(): Partial<Settings> {
       scope: config.get<'openFiles' | 'workspace'>('diagnostics.scope') ?? 'workspace',
     },
     libraryPaths: config.get<string[]>('libraryPaths') ?? ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
+    codeLens: { references: config.get<boolean>('codeLens.references', true), implementations: config.get<boolean>('codeLens.implementations', true) },
   };
   const exclude = config.get<string[]>('exclude');
   const maxFileSize = config.get<number>('maxFileSize');

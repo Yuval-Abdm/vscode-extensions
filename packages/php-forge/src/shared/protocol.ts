@@ -31,6 +31,8 @@ export interface Settings {
   };
   /** Globs des dossiers librairie : indexés, jamais diagnostiqués */
   libraryPaths: string[];
+  /** CodeLens du nombre de références et d'implémentations */
+  codeLens: { references: boolean; implementations: boolean };
 }
 
 export const DEFAULT_STUBS = [
@@ -53,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
   externalGlobals: [],
   diagnostics: { rules: {}, scope: 'workspace' },
   libraryPaths: ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'],
+  codeLens: { references: true, implementations: true },
 };
 
 /** Réglages complets à partir de valeurs partielles (options d'initialisation, changement de configuration). */
@@ -63,6 +66,7 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
     inlayHints: { ...DEFAULT_SETTINGS.inlayHints, ...partial?.inlayHints },
     includes: { ...DEFAULT_SETTINGS.includes, ...partial?.includes },
     diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...partial?.diagnostics },
+    codeLens: { ...DEFAULT_SETTINGS.codeLens, ...partial?.codeLens },
   };
 }
 

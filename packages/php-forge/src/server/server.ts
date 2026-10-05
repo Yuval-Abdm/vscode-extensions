@@ -26,6 +26,7 @@ import { quickFixes } from './features/codeActions.ts';
 import { findReferences, targetAt, type RefEnv, type SourceFile } from './refactor/references.ts';
 import { variableReferences, variableTarget } from './refactor/variables.ts';
 import { prepareRename, renameAt } from './refactor/rename.ts';
+import { resolveLens, symbolLenses } from './refactor/codeLens.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
 import { documentSymbols } from './features/documentSymbols.ts';
@@ -135,7 +136,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       foldingRangeProvider: true,
       selectionRangeProvider: true,
       inlayHintProvider: true,
-      codeLensProvider: { resolveProvider: false },
+      codeLensProvider: { resolveProvider: true },
       codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
       semanticTokensProvider: { legend: { tokenTypes: [...TOKEN_TYPES], tokenModifiers: [...TOKEN_MODIFIERS] }, full: true },
     },
@@ -583,7 +584,29 @@ connection.onRequest(
   }),
 );
 
-connection.onCodeLens(safe([], ({ textDocument }) => (analysis ? includersLens(analysis.graph, textDocument.uri) : [])));
+connection.onCodeLens(
+  safe([], ({ textDocument }) => {
+    const symbols = docAt(textDocument.uri)?.symbols ?? workspace.get(textDocument.uri);
+    return [...(analysis ? includersLens(analysis.graph, textDocument.uri) : []), ...(symbols ? symbolLenses(symbols, settings.codeLens) : [])];
+  }),
+);
+
+connection.onCodeLensResolve((lens) => {
+  try {
+    const data = lens.data as { uri?: string } | undefined;
+    if (lens.command || !data?.uri) return lens;
+    const source = sourceOf(data.uri);
+    if (!source) return lens;
+    try {
+      return resolveLens(refEnv(), lens, source.file, (position) => implementations(lookup, source.file.symbols, source.file.tree, position, resolver));
+    } finally {
+      source.release();
+    }
+  } catch (err) {
+    connection.console.error(String((err as Error)?.stack ?? err));
+    return lens;
+  }
+});
 
 connection.onRequest(INCLUDERS_REQUEST, safe([], ({ uri }: { uri: string }) => (analysis ? includerLinks(analysis.graph, uri) : [])));
 

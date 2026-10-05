@@ -24,5 +24,8 @@
   "phpForge.libraryPaths.description": "Globs of library folders: indexed (completion, navigation) but never diagnosed. Folders that contain their own `composer.json` are libraries too.",
   "phpForge.createBaseline.title": "Create Baseline (Hide Existing Problems)",
   "phpForge.updateBaseline.title": "Update Baseline",
-  "phpForge.clearBaseline.title": "Clear Baseline"
+  "phpForge.clearBaseline.title": "Clear Baseline",
+  "phpForge.codeLens.references.description": "Show the number of references above classes, functions and methods.",
+  "phpForge.codeLens.implementations.description": "Show the number of implementations above interfaces, abstract classes and their methods.",
+  "phpForge.showReferences.title": "Show References"
 }
