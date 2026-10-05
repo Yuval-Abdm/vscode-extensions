@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { DiagnosticSeverity, type Diagnostic } from 'vscode-languageserver/node';
 import { quickFixes } from '../src/server/features/codeActions.ts';
-import { sqlQuoteDiagnostics } from '../src/server/sql/quotes.ts';
+import { mixedQuoteDiagnostics, sqlQuoteDiagnostics } from '../src/server/sql/quotes.ts';
 import { parse } from './helpers.ts';
 
 const URI = 'file:///a.php';
@@ -78,5 +78,45 @@ describe('requête SQL : guillemets PHP mélangés', () => {
 
   it('texte ordinaire mélangé : rien', async () => {
     assert.deepEqual(await check(`<?php $m = 'Bonjour ' . $n . " !";`), []);
+  });
+});
+
+describe('concaténation hors SQL : guillemets PHP mélangés', () => {
+  const mixed = async (code: string) => mixedQuoteDiagnostics(await parse(code));
+
+  it('cas de l’utilisateur : morceaux en simples soulignés, correction tout en doubles', async () => {
+    const code = `<?php\n$prompt = "de la " . $type . ": ". $x['nom']." de tipo ". $y .' y se encuentra en '. $z .'(' . $w .') <br>';`;
+    const diagnostics = await mixed(code);
+    assert.deepEqual(diagnostics.map((d) => text(code, d)), [`' y se encuentra en '`, `') <br>'`]);
+    assert.equal(diagnostics[0].code, 'mixed-quotes');
+    assert.equal(diagnostics[0].severity, DiagnosticSeverity.Warning);
+    assert.equal(quickFixes(URI, [diagnostics[0]])[0].title, 'Use double quotes throughout the concatenation');
+    const fixed = `<?php\n$prompt = "de la " . $type . ": ". $x['nom']." de tipo ". $y ." y se encuentra en ". $z ."(" . $w .") <br>";`;
+    assert.equal(apply(code, diagnostics[0]), fixed);
+    assert.deepEqual(await mixed(fixed), []);
+  });
+
+  it('les requêtes SQL restent à sql-mixed-quotes', async () => {
+    assert.deepEqual(await mixed(`<?php $s = 'SELECT a FROM t' . " WHERE b = 1";`), []);
+  });
+
+  it('morceaux tolérés : séquences d’échappement seules ("\\n"), guillemets et parenthèses', async () => {
+    assert.deepEqual(await mixed(`<?php $m = '[' . $k . '] = ' . $v . "\\n";`), []);
+    assert.deepEqual(await mixed(`<?php $h = '<a href="' . $u . '">' . "\\r\\n";`), []);
+  });
+
+  it('conversion vers les doubles (imposés par une interpolation) : $ échappé, la valeur ne change pas', async () => {
+    const code = `<?php $p = "Total $n" . ' coûte $5';`;
+    const [d] = await mixed(code);
+    assert.equal(text(code, d), `' coûte $5'`);
+    assert.equal(apply(code, d), `<?php $p = "Total $n" . " coûte \\$5";`);
+  });
+
+  it('interpolation : pas de conversion possible des doubles, tout en doubles', async () => {
+    const code = `<?php $e = "Erreur $code : " . $msg . '<br />';`;
+    const [d, ...rest] = await mixed(code);
+    assert.equal(rest.length, 0);
+    assert.equal(text(code, d), `'<br />'`);
+    assert.equal(apply(code, d), `<?php $e = "Erreur $code : " . $msg . "<br />";`);
   });
 });

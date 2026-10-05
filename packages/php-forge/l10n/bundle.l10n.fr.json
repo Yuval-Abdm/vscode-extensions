@@ -92,5 +92,8 @@
   "Implement {0} missing methods": "Implémenter les {0} méthodes manquantes",
   "Generate PHPDoc": "Générer la PHPDoc",
   "Add @var": "Ajouter @var",
-  "Declare {0}": "Déclarer {0}"
+  "Declare {0}": "Déclarer {0}",
+  "String concatenation mixes PHP quotes: use {0} throughout": "La concaténation mélange les guillemets PHP : utiliser {0} partout",
+  "Use single quotes throughout the concatenation": "Utiliser des guillemets simples dans toute la concaténation",
+  "Use double quotes throughout the concatenation": "Utiliser des guillemets doubles dans toute la concaténation"
 }

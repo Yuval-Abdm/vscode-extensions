@@ -1,12 +1,12 @@
 // Diagnostics d'un fichier (document ouvert ou fichier du disque) : erreurs locales (syntaxe, balises, guillemets
-// SQL), inclusions, règles sémantiques (calculées à part : coûteuses pendant la frappe), puis politique
+// mélangés), inclusions, règles sémantiques (calculées à part : coûteuses pendant la frappe), puis politique
 // (librairie, suppressions, niveaux) et baseline.
 import type { Diagnostic } from 'vscode-languageserver/node';
 import type { FileSymbols } from '../../shared/types.ts';
 import type { IncludeAnalysis } from '../includes/analysis.ts';
 import { callerLabel, includeDiagnostics } from '../includes/diagnostics.ts';
 import type { Parser, Tree } from '../parser/parser.ts';
-import { sqlQuoteDiagnostics } from '../sql/quotes.ts';
+import { mixedQuoteDiagnostics, sqlQuoteDiagnostics } from '../sql/quotes.ts';
 import type { TypeResolver } from '../types/expand.ts';
 import type { Baseline } from './baseline.ts';
 import { codeDiagnostics } from './code.ts';
@@ -52,7 +52,7 @@ export function collectDiagnostics(input: CollectInput, env: CollectEnv, semanti
   if (env.library(input.fsPath)) return { diagnostics: [], raw: [], hidden: 0 };
   const braces = braceOffsetLines(input.tree, input.text);
   const syntax = syntaxDiagnostics(input.tree, 100, { parser: env.parser, text: input.text }).filter((d) => !braces.has(d.range.start.line));
-  const all = [...syntax, ...tagDiagnostics(input.tree, input.text), ...sqlQuoteDiagnostics(input.tree), ...semantic];
+  const all = [...syntax, ...tagDiagnostics(input.tree, input.text), ...sqlQuoteDiagnostics(input.tree), ...mixedQuoteDiagnostics(input.tree), ...semantic];
   const provided = env.includes?.(input);
   if (provided) all.push(...provided);
   else {

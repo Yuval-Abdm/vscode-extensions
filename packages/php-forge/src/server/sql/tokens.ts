@@ -54,7 +54,14 @@ export interface SqlQuery {
   complete: boolean;
 }
 
-const queryCache = new WeakMap<Tree, SqlQuery[]>();
+/** Requêtes et concaténations d'un arbre, relevées en un seul parcours */
+interface Scan {
+  queries: SqlQuery[];
+  /** Concaténations qui ne sont pas du SQL : leurs chaînes littérales, dans l'ordre */
+  texts: Node[][];
+}
+
+const scanCache = new WeakMap<Tree, Scan>();
 
 /** Contexte d'une chaîne (ou d'une concaténation) : ses ancêtres utiles, relevés pendant le parcours. */
 interface Root {
@@ -79,12 +86,21 @@ export function sqlQueries(tree: Tree): Node[][] {
 
 /** Requêtes du fichier (calculées une fois par arbre). */
 export function findQueries(tree: Tree): SqlQuery[] {
-  let cached = queryCache.get(tree);
-  if (!cached) queryCache.set(tree, (cached = scan(tree)));
+  return scanned(tree).queries;
+}
+
+/** Concaténations de chaînes qui ne sont pas des requêtes SQL (chaînes littérales de chacune, dans l'ordre). */
+export function textConcatenations(tree: Tree): Node[][] {
+  return scanned(tree).texts;
+}
+
+function scanned(tree: Tree): Scan {
+  let cached = scanCache.get(tree);
+  if (!cached) scanCache.set(tree, (cached = scan(tree)));
   return cached;
 }
 
-function scan(tree: Tree): SqlQuery[] {
+function scan(tree: Tree): Scan {
   const roots: Root[] = [];
   // Ancêtres : nœud gardé seulement pour les types utiles au contexte
   const stack: { type: string; node?: Node }[] = [];
@@ -139,11 +155,16 @@ function scan(tree: Tree): SqlQuery[] {
     if (target && sqlVariables.has(target)) queries.set(root.node.id, { root, parts: flatten(root.node) });
   }
   // Dans l'ordre du fichier
-  return [...queries.values()].sort((a, b) => a.root.node.startIndex - b.root.node.startIndex).map(({ root, parts }) => {
+  const found = [...queries.values()].sort((a, b) => a.root.node.startIndex - b.root.node.startIndex).map(({ root, parts }) => {
     const target = assignedVariable(root);
     const complete = parts.length === 1 && root.parent?.type !== 'augmented_assignment_expression' && !(target && appended.has(target));
     return { root: root.node, parts, complete };
   });
+  const texts = roots
+    .filter((root) => root.node.type === 'binary_expression' && !queries.has(root.node.id))
+    .map((root) => flatten(root.node).filter((p) => LITERALS.has(p.type)))
+    .filter((parts) => parts.length > 1);
+  return { queries: found, texts };
 }
 
 /** Nœud courant du curseur, qui vient de descendre vers son premier enfant : on remonte un instant le relever. */
