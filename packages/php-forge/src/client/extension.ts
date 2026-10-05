@@ -4,6 +4,8 @@ import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
 import type { Level } from '../server/diagnostics/policy.ts';
 import { IncludeTreeProvider } from './includeTree.ts';
+import { mysqlDriver } from './mysql.ts';
+import { connectionKey, fetchSchema, isAccessDenied, missingFields, type ConnectionSettings } from './sqlSchema.ts';
 import { BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type BaselineResult, type BaselineStatus, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
 
 /** Extensions PHP dont la complétion et les diagnostics feraient doublon. */
@@ -84,6 +86,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('phpForge.showIncludeTree', () => vscode.commands.executeCommand('phpForge.includeTree.focus')),
     vscode.commands.registerCommand('phpForge.showIncluders', (uri: string) => showIncluders(uri)),
     vscode.commands.registerCommand('phpForge.restartServer', () => client?.restart()),
+    vscode.commands.registerCommand('phpForge.refreshSqlSchema', () => refreshSqlSchema(context)),
     vscode.commands.registerCommand('phpForge.reindex', () => client?.sendRequest(REINDEX_REQUEST)),
     vscode.commands.registerCommand('phpForge.showOutput', () => client?.outputChannel.show()),
     vscode.commands.registerCommand('phpForge.applyFix', (args: ApplyFixArgs) => applyFix(args)),
@@ -211,4 +214,47 @@ async function showIncluders(uri: string): Promise<void> {
   const position = new vscode.Position(pick.link.line, 0);
   editor.selection = new vscode.Selection(position, position);
   editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+}
+
+/**
+ * Lit le schéma de la base (phpForge.sql.connection, mot de passe dans le SecretStorage) et l'écrit dans
+ * `.vscode/php-forge-schema.json` du premier dossier : le serveur le relit. Échec : l'ancien schéma est conservé.
+ */
+async function refreshSqlSchema(context: vscode.ExtensionContext): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showWarningMessage(vscode.l10n.t('Open a folder to refresh the SQL schema.'));
+    return;
+  }
+  const config = vscode.workspace.getConfiguration('phpForge', folder.uri).get<Partial<ConnectionSettings>>('sql.connection') ?? {};
+  const missing = missingFields(config);
+  if (missing.length) {
+    const open = vscode.l10n.t('Open settings');
+    const choice = await vscode.window.showWarningMessage(vscode.l10n.t('Set {0} in phpForge.sql.connection to read the database schema.', missing.join(', ')), open);
+    if (choice === open) await vscode.commands.executeCommand('workbench.action.openSettings', 'phpForge.sql.connection');
+    return;
+  }
+  const connection: ConnectionSettings = { host: config.host!, port: config.port ?? 3306, user: config.user!, database: config.database! };
+  const key = connectionKey(connection);
+  let password = await context.secrets.get(key);
+  if (password === undefined) {
+    password = await vscode.window.showInputBox({
+      password: true,
+      ignoreFocusOut: true,
+      prompt: vscode.l10n.t('Password of {0} (kept in VS Code secret storage)', `${connection.user}@${connection.host}`),
+    });
+    if (password === undefined) return;
+  }
+  try {
+    const cache = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('PHP Forge: reading the SQL schema of {0}…', connection.database) },
+      () => fetchSchema(() => mysqlDriver(connection, password!), connection.database, new Date()),
+    );
+    await context.secrets.store(key, password);
+    await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(folder.uri, '.vscode', 'php-forge-schema.json'), new TextEncoder().encode(`${JSON.stringify(cache, null, 1)}\n`));
+    void vscode.window.showInformationMessage(vscode.l10n.t('SQL schema refreshed: {0} tables from {1}.', cache.tables.length, connection.database));
+  } catch (err) {
+    if (isAccessDenied(err)) await context.secrets.delete(key);
+    void vscode.window.showWarningMessage(vscode.l10n.t('Could not read the SQL schema: {0}. The previous schema is kept.', (err as Error)?.message ?? String(err)));
+  }
 }

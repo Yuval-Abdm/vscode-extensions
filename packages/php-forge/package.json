@@ -58,6 +58,7 @@
   "dependencies": {
     "@vscode/l10n": "^0.0.18",
     "minimatch": "^10.2.6",
+    "mysql2": "^3.24.5",
     "tree-sitter-php": "0.24.2",
     "vscode-languageclient": "^10.1.2",
     "vscode-languageserver": "^10.1.2",
@@ -116,6 +117,11 @@
       {
         "command": "phpForge.clearBaseline",
         "title": "%phpForge.clearBaseline.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.refreshSqlSchema",
+        "title": "%phpForge.refreshSqlSchema.title%",
         "category": "PHP Forge"
       }
     ],
@@ -355,6 +361,27 @@
             "database/**/*.sql"
           ],
           "markdownDescription": "%phpForge.sql.schema.description%"
+        },
+        "phpForge.sql.connection": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "number",
+              "default": 3306
+            },
+            "user": {
+              "type": "string"
+            },
+            "database": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "default": {},
+          "markdownDescription": "%phpForge.sql.connection.description%"
         }
       }
     },

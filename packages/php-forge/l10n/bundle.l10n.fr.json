@@ -102,5 +102,12 @@
   "SQL syntax: ( is never closed": "Syntaxe SQL : « ( » jamais fermée",
   "SQL syntax: string never closed": "Syntaxe SQL : chaîne jamais fermée",
   "Unknown table {0}": "Table inconnue : {0}",
-  "Unknown column {0} in {1}": "Colonne inconnue {0} dans {1}"
+  "Unknown column {0} in {1}": "Colonne inconnue {0} dans {1}",
+  "Open a folder to refresh the SQL schema.": "Ouvrir un dossier pour mettre à jour le schéma SQL.",
+  "Open settings": "Ouvrir les réglages",
+  "Set {0} in phpForge.sql.connection to read the database schema.": "Renseigner {0} dans phpForge.sql.connection pour lire le schéma de la base.",
+  "Password of {0} (kept in VS Code secret storage)": "Mot de passe de {0} (gardé dans le stockage sécurisé de VS Code)",
+  "PHP Forge: reading the SQL schema of {0}…": "PHP Forge : lecture du schéma SQL de {0}…",
+  "SQL schema refreshed: {0} tables from {1}.": "Schéma SQL mis à jour : {0} tables de {1}.",
+  "Could not read the SQL schema: {0}. The previous schema is kept.": "Impossible de lire le schéma SQL : {0}. L'ancien schéma est conservé."
 }

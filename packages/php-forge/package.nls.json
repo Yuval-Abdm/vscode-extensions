@@ -36,5 +36,7 @@
   "phpForge.format.alignAssignments.description": "Align the `=` of consecutive assignments.",
   "phpForge.format.trailingCommas.description": "Add a trailing comma to arrays written on several lines.",
   "phpForge.format.lineLength.description": "Indicative line length: alignment is skipped when it would make a line longer.",
-  "phpForge.sql.schema.description": "Globs of the `.sql` files (`CREATE TABLE`, `ALTER TABLE … ADD`) that describe the database, relative to each workspace folder. The schema read from the database by **Refresh SQL schema** (`.vscode/php-forge-schema.json`) is always used and is the reference: keep the `.sql` files up to date or refresh it."
+  "phpForge.sql.schema.description": "Globs of the `.sql` files (`CREATE TABLE`, `ALTER TABLE … ADD`) that describe the database, relative to each workspace folder. The schema read from the database by **Refresh SQL schema** (`.vscode/php-forge-schema.json`) is always used and is the reference: keep the `.sql` files up to date or refresh it.",
+  "phpForge.refreshSqlSchema.title": "Refresh SQL schema",
+  "phpForge.sql.connection.description": "MySQL / MariaDB database read by **Refresh SQL schema** (`host`, `port`, `user`, `database`). The password is asked once and kept in VS Code secret storage. Only `INFORMATION_SCHEMA` is read, in a read-only session."
 }
