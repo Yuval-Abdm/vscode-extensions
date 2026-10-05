@@ -199,6 +199,30 @@
           ],
           "default": "off",
           "description": "%phpForge.trace.server.description%"
+        },
+        "phpForge.documentRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%phpForge.documentRoot.description%"
+        },
+        "phpForge.serverRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%phpForge.serverRoot.description%"
+        },
+        "phpForge.includes.maxContexts": {
+          "type": "number",
+          "default": 64,
+          "minimum": 1,
+          "markdownDescription": "%phpForge.includes.maxContexts.description%"
+        },
+        "phpForge.externalGlobals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%phpForge.externalGlobals.description%"
         }
       }
     }

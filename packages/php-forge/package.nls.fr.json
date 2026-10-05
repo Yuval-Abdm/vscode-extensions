@@ -11,5 +11,9 @@
   "phpForge.stubs.description": "Extensions PHP dont les fonctions, classes et constantes natives sont connues (noms des dossiers de JetBrains phpstorm-stubs).",
   "phpForge.inlayHints.parameterNames.description": "Afficher le nom des paramètres devant les arguments littéraux.",
   "phpForge.inlayHints.variableTypes.description": "Afficher le type déduit des variables affectées.",
-  "phpForge.inlayHints.returnTypes.description": "Afficher le type de retour déduit des fonctions sans type déclaré."
+  "phpForge.inlayHints.returnTypes.description": "Afficher le type de retour déduit des fonctions sans type déclaré.",
+  "phpForge.documentRoot.description": "Racine web utilisée pour `$_SERVER['DOCUMENT_ROOT']` dans les chemins d'inclusion : absolue, ou relative au dossier du workspace. Vide : le dossier du workspace.",
+  "phpForge.serverRoot.description": "Chemin absolu du site sur le serveur, pour retrouver localement les includes écrits avec des chemins du serveur (`/var/www/site/inc/x.php`). Vide : le `remotePath` des profils de `.vscode/deploy.json`.",
+  "phpForge.includes.maxContexts.description": "Nombre de contextes d'inclusion différents analysés par fichier. Au-delà, l'analyse du fichier est approximative.",
+  "phpForge.externalGlobals.description": "Variables définies hors du code analysé (`auto_prepend_file`, framework), jamais signalées comme non définies, par exemple `$config`."
 }

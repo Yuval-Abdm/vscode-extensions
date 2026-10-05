@@ -87,6 +87,10 @@ function readSettings(): Partial<Settings> {
       variableTypes: config.get<boolean>('inlayHints.variableTypes', false),
       returnTypes: config.get<boolean>('inlayHints.returnTypes', false),
     },
+    documentRoot: config.get<string>('documentRoot') ?? '',
+    serverRoot: config.get<string>('serverRoot') ?? '',
+    includes: { maxContexts: config.get<number>('includes.maxContexts', 64) },
+    externalGlobals: config.get<string[]>('externalGlobals') ?? [],
   };
   const exclude = config.get<string[]>('exclude');
   const maxFileSize = config.get<number>('maxFileSize');

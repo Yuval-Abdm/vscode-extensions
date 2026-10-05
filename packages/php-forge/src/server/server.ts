@@ -14,6 +14,9 @@ import { syntaxDiagnostics } from './diagnostics/syntax.ts';
 import { tagDiagnostics } from './diagnostics/tags.ts';
 import { sqlQuoteDiagnostics } from './sql/quotes.ts';
 import { DocumentStore, type OpenDocument } from './documents.ts';
+import { IncludeAnalysis } from './includes/analysis.ts';
+import { callerLabel, includeDiagnostics } from './includes/diagnostics.ts';
+import { IncludeGraph } from './includes/graph.ts';
 import { quickFixes } from './features/codeActions.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
@@ -55,6 +58,10 @@ let indexing: Promise<void> = Promise.resolve();
 /** Types déduits des documents modifiés, calculés après une pause de frappe */
 const inference = new Map<string, ReturnType<typeof setTimeout>>();
 const INFERENCE_DELAY = 300;
+/** Analyse des inclusions, relancée après l'indexation et les modifications */
+let analysis: IncludeAnalysis | undefined;
+let analysisTimer: ReturnType<typeof setTimeout> | undefined;
+const ANALYSIS_DELAY = 500;
 
 /** Gestionnaire protégé : une exception est journalisée et le résultat par défaut renvoyé. */
 function safe<A extends unknown[], R>(fallback: R, handler: (...args: A) => R | Promise<R>): (...args: A) => Promise<R> {
@@ -116,10 +123,12 @@ connection.onInitialized(() => {
   if (!lookup.stubs.size) connection.console.warn('PHP stubs not found: native functions are unavailable');
   void connection.sendNotification(STATUS_NOTIFICATION, status);
   indexing = reindex();
+  scheduleAnalysis(0);
 });
 
 connection.onDidChangeConfiguration(
   safe(undefined, async ({ settings: all }) => {
+    const previous = settings;
     const next = mergeSettings((all as { phpForge?: Partial<Settings> } | undefined)?.phpForge);
     const environment = next.phpVersion !== settings.phpVersion || next.stubs.join() !== settings.stubs.join();
     // exclude et maxFileSize : le client redémarre le serveur
@@ -128,6 +137,9 @@ connection.onDidChangeConfiguration(
       await applyEnvironment();
       void connection.sendNotification(STATUS_NOTIFICATION, status);
       connection.languages.semanticTokens.refresh();
+    }
+    if (next.documentRoot !== previous.documentRoot || next.serverRoot !== previous.serverRoot || next.includes.maxContexts !== previous.includes.maxContexts || next.externalGlobals.join() !== previous.externalGlobals.join()) {
+      scheduleAnalysis(0);
     }
     void connection.languages.inlayHint.refresh();
   }),
@@ -161,19 +173,45 @@ async function reindex(): Promise<void> {
   for (const doc of documents.all()) workspace.set(doc.symbols);
 }
 
-function diagnosticsOf(doc: OpenDocument) {
+function diagnosticsOf(doc: OpenDocument): Diagnostic[] {
   const text = doc.doc.getText();
-  return [...syntaxDiagnostics(doc.tree, 100, { parser, text }), ...tagDiagnostics(doc.tree, text), ...sqlQuoteDiagnostics(doc.tree)];
+  const local = [...syntaxDiagnostics(doc.tree, 100, { parser, text }), ...tagDiagnostics(doc.tree, text), ...sqlQuoteDiagnostics(doc.tree)];
+  const report = analysis?.report(doc.uri);
+  if (!analysis || !report) return local;
+  const graph = analysis.graph;
+  return [...local, ...includeDiagnostics(report, doc.symbols, (via) => callerLabel(graph, via))];
 }
 
 /** Derniers diagnostics publiés par document ouvert (survol des problèmes de la ligne). */
 const published = new Map<string, Diagnostic[]>();
 
-function refresh(doc: OpenDocument): void {
-  workspace.set(doc.symbols);
+function publish(doc: OpenDocument): void {
   const diagnostics = diagnosticsOf(doc);
   published.set(doc.uri, diagnostics);
   void connection.sendDiagnostics({ uri: doc.uri, version: doc.doc.version, diagnostics });
+}
+
+function refresh(doc: OpenDocument): void {
+  workspace.set(doc.symbols);
+  publish(doc);
+}
+
+/** Relance l'analyse des inclusions après un délai (modifications groupées), jamais pendant l'indexation. */
+function scheduleAnalysis(delay = ANALYSIS_DELAY): void {
+  clearTimeout(analysisTimer);
+  analysisTimer = setTimeout(() => {
+    void indexing.then(safe(undefined, () => runAnalysis()));
+  }, delay);
+}
+
+function runAnalysis(): void {
+  const started = Date.now();
+  const graph = new IncludeGraph(workspace, { roots: folders, documentRoot: settings.documentRoot, serverRoot: settings.serverRoot });
+  const next = new IncludeAnalysis(workspace, lookup, graph, { maxContexts: settings.includes.maxContexts, externalGlobals: settings.externalGlobals });
+  next.run();
+  analysis = next;
+  connection.console.info(`Include analysis: ${graph.size} files in ${Date.now() - started} ms`);
+  for (const doc of documents.all()) publish(doc);
 }
 
 connection.onDidOpenTextDocument(
@@ -185,6 +223,7 @@ connection.onDidChangeTextDocument(
     const doc = documents.change(textDocument.uri, textDocument.version, contentChanges);
     if (!doc) return;
     refresh(doc);
+    scheduleAnalysis();
     clearTimeout(inference.get(doc.uri));
     inference.set(
       doc.uri,
@@ -228,6 +267,7 @@ connection.onDidChangeWatchedFiles(
       workerScript: path.join(__dirname, 'worker.cjs'),
       isOpen: (uri) => documents.get(uri) !== undefined,
     });
+    scheduleAnalysis();
   }),
 );
 
@@ -328,6 +368,7 @@ connection.onRequest(
     await indexing;
     indexing = reindex();
     await indexing;
+    scheduleAnalysis(0);
   }),
 );
 

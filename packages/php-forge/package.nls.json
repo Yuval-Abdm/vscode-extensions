@@ -11,5 +11,9 @@
   "phpForge.stubs.description": "PHP extensions whose native functions, classes and constants are known (folder names of JetBrains phpstorm-stubs).",
   "phpForge.inlayHints.parameterNames.description": "Show parameter names before literal arguments.",
   "phpForge.inlayHints.variableTypes.description": "Show the inferred type of assigned variables.",
-  "phpForge.inlayHints.returnTypes.description": "Show the inferred return type of functions without a declared type."
+  "phpForge.inlayHints.returnTypes.description": "Show the inferred return type of functions without a declared type.",
+  "phpForge.documentRoot.description": "Web root used for `$_SERVER['DOCUMENT_ROOT']` in include paths: absolute, or relative to the workspace folder. Empty: the workspace folder.",
+  "phpForge.serverRoot.description": "Absolute path of the site on the server, so that includes written with server paths (`/var/www/site/inc/x.php`) are found locally. Empty: the `remotePath` of `.vscode/deploy.json` profiles.",
+  "phpForge.includes.maxContexts.description": "Number of different include contexts analyzed per file. Beyond that, the analysis of the file is approximate.",
+  "phpForge.externalGlobals.description": "Variables defined outside the analyzed code (`auto_prepend_file`, framework), never reported as undefined, e.g. `$config`."
 }

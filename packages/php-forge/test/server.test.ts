@@ -1,7 +1,7 @@
 // Serveur complet lancé comme par VS Code (stdio) sur le projet de test : indexation, cache, requêtes, robustesse.
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -77,7 +77,7 @@ describe('serveur LSP', () => {
   after(async () => stopServer(server));
 
   it('indexe le projet et écrit le cache', () => {
-    assert.deepEqual({ ...server.indexed.stats, ms: 0 }, { files: 5, parsed: 5, fromCache: 0, skipped: 0, syntaxErrors: 1, ms: 0 });
+    assert.deepEqual({ ...server.indexed.stats, ms: 0 }, { files: 8, parsed: 8, fromCache: 0, skipped: 0, syntaxErrors: 1, ms: 0 });
     assert.equal(readdirSync(storage).filter((f) => f.endsWith('.json.gz')).length, 1);
   });
 
@@ -113,6 +113,13 @@ describe('serveur LSP', () => {
     await open(server, 'broken.php', '<?php\nfunction broken( {\n');
     const diagnostics = await waitFor(() => server.diagnostics.get(uri('broken.php')), 'diagnostics');
     assert.equal(diagnostics[0].code, 'syntax-error');
+  });
+
+  it('variable non définie selon l’appelant (moteur d’inclusion)', async () => {
+    const footer = path.join(fixture, 'includes/footer.php');
+    await open(server, 'includes/footer.php', readFileSync(footer, 'utf8'));
+    const found = await waitFor(() => server.diagnostics.get(uri('includes/footer.php'))?.find((d) => d.code === 'undefined-variable'), 'undefined-variable');
+    assert.equal((found as unknown as { message: string }).message, '$footer_text is not defined when included from pages/about.php:2 (defined in 1 other caller)');
   });
 
   it('« ; » manquant signalé, avec sa correction rapide', async () => {
@@ -207,7 +214,7 @@ describe('serveur LSP', () => {
   it('second démarrage : tout vient du cache', async () => {
     const second = await startServer(storage);
     try {
-      assert.equal(second.indexed.stats.fromCache, 5);
+      assert.equal(second.indexed.stats.fromCache, 8);
       assert.equal(second.indexed.stats.parsed, 0);
     } finally {
       await stopServer(second);

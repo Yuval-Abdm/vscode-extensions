@@ -15,6 +15,13 @@ export interface Settings {
   /** Extensions PHP (dossiers de phpstorm-stubs) dont les fonctions et classes natives sont connues */
   stubs: string[];
   inlayHints: InlayHintSettings;
+  /** Racine web (`$_SERVER['DOCUMENT_ROOT']`) : absolue ou relative au workspace ; vide : racine du workspace */
+  documentRoot: string;
+  /** Chemin du site sur le serveur, pour les includes en chemin absolu ; vide : remotePath de deploy.json */
+  serverRoot: string;
+  includes: { maxContexts: number };
+  /** Variables définies par l'environnement (auto_prepend_file, framework…) */
+  externalGlobals: string[];
 }
 
 export const DEFAULT_STUBS = [
@@ -31,11 +38,20 @@ export const DEFAULT_SETTINGS: Settings = {
   phpVersion: '',
   stubs: DEFAULT_STUBS,
   inlayHints: { parameterNames: true, variableTypes: false, returnTypes: false },
+  documentRoot: '',
+  serverRoot: '',
+  includes: { maxContexts: 64 },
+  externalGlobals: [],
 };
 
 /** Réglages complets à partir de valeurs partielles (options d'initialisation, changement de configuration). */
 export function mergeSettings(partial: Partial<Settings> | undefined): Settings {
-  return { ...DEFAULT_SETTINGS, ...partial, inlayHints: { ...DEFAULT_SETTINGS.inlayHints, ...partial?.inlayHints } };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...partial,
+    inlayHints: { ...DEFAULT_SETTINGS.inlayHints, ...partial?.inlayHints },
+    includes: { ...DEFAULT_SETTINGS.includes, ...partial?.includes },
+  };
 }
 
 export interface InitOptions {
