@@ -122,6 +122,16 @@ describe('serveur LSP', () => {
     assert.equal((found as unknown as { message: string }).message, '$footer_text is not defined when included from pages/about.php:2 (defined in 1 other caller)');
   });
 
+  it('CodeLens « Included by » et appelants', async () => {
+    const lenses = await waitFor(async () => {
+      const result = (await server.connection.sendRequest('textDocument/codeLens', { textDocument: { uri: uri('includes/footer.php') } })) as { command: { title: string } }[];
+      return result.length ? result : undefined;
+    }, 'codeLens');
+    assert.equal(lenses[0].command.title, 'Included by 2 files');
+    const includers = (await server.connection.sendRequest('phpForge/includers', { uri: uri('includes/footer.php') })) as { label: string }[];
+    assert.deepEqual(includers.map((i) => i.label).sort(), ['pages/about.php:2', 'pages/home.php:3']);
+  });
+
   it('« ; » manquant signalé, avec sa correction rapide', async () => {
     await open(server, 'semicolon.php', '<?php\n$a = 1\n$b = 2;\n');
     const diagnostics = await waitFor(() => server.diagnostics.get(uri('semicolon.php')), 'diagnostics');

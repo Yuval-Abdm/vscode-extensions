@@ -35,5 +35,11 @@
   "{0} is declared in {1}, which is not included here": "{0} est déclaré dans {1}, qui n'est pas inclus ici",
   "Include analysis is approximate: this file is included in too many different contexts": "Analyse des inclusions approximative : ce fichier est inclus dans trop de contextes différents",
   "Defined in {0}": "Définie dans {0}",
-  "From {0} via extract (line {1})": "Venue de {0} par extract (ligne {1})"
+  "From {0} via extract (line {1})": "Venue de {0} par extract (ligne {1})",
+  "Included by 1 file": "Inclus par 1 fichier",
+  "Included by {0} files": "Inclus par {0} fichiers",
+  "Included by": "Inclus par",
+  "Includes": "Inclut",
+  "Open": "Ouvrir",
+  "Files that include this file": "Fichiers qui incluent ce fichier"
 }

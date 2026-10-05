@@ -2,7 +2,8 @@
 // utilisée, commandes, cohabitation avec d'autres extensions PHP.
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
-import { REINDEX_REQUEST, STATUS_NOTIFICATION, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
+import { IncludeTreeProvider } from './includeTree.ts';
+import { INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
 
 /** Extensions PHP dont la complétion et les diagnostics feraient doublon. */
 const COMPETITORS = ['bmewburn.vscode-intelephense-client', 'DEVSENSE.phptools-vscode'];
@@ -47,8 +48,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     status.detail = sourceLabel(params.source);
   });
 
+  const tree = new IncludeTreeProvider(async (uri) => (await client?.sendRequest<IncludeTree>(INCLUDE_TREE_REQUEST, { uri })) ?? { includedBy: [], includes: [] });
+  const followEditor = (editor: vscode.TextEditor | undefined) => {
+    if (editor?.document.languageId === 'php') tree.setRoot(editor.document.uri.toString());
+  };
+  followEditor(vscode.window.activeTextEditor);
+
   context.subscriptions.push(
     status,
+    vscode.window.createTreeView('phpForge.includeTree', { treeDataProvider: tree, showCollapseAll: true }),
+    vscode.window.onDidChangeActiveTextEditor(followEditor),
+    vscode.commands.registerCommand('phpForge.showIncludeTree', () => vscode.commands.executeCommand('phpForge.includeTree.focus')),
+    vscode.commands.registerCommand('phpForge.showIncluders', (uri: string) => showIncluders(uri)),
     vscode.commands.registerCommand('phpForge.restartServer', () => client?.restart()),
     vscode.commands.registerCommand('phpForge.reindex', () => client?.sendRequest(REINDEX_REQUEST)),
     vscode.commands.registerCommand('phpForge.showOutput', () => client?.outputChannel.show()),
@@ -139,4 +150,18 @@ async function applyFix({ uri, version, edits }: ApplyFixArgs): Promise<boolean>
     edit.replace(target, new vscode.Range(e.range.start.line, e.range.start.character, e.range.end.line, e.range.end.character), e.newText);
   }
   return vscode.workspace.applyEdit(edit);
+}
+
+/** Liste des appelants d'un fichier (CodeLens « Included by N files ») : ouvre l'include choisi. */
+async function showIncluders(uri: string): Promise<void> {
+  const links = (await client?.sendRequest<IncludeLink[]>(INCLUDERS_REQUEST, { uri })) ?? [];
+  const pick = await vscode.window.showQuickPick(
+    links.map((link) => ({ label: link.label, link })),
+    { placeHolder: vscode.l10n.t('Files that include this file') },
+  );
+  if (!pick) return;
+  const editor = await vscode.window.showTextDocument(vscode.Uri.parse(pick.link.uri));
+  const position = new vscode.Position(pick.link.line, 0);
+  editor.selection = new vscode.Selection(position, position);
+  editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
 }

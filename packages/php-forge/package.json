@@ -87,6 +87,16 @@
         "command": "phpForge.showOutput",
         "title": "%phpForge.showOutput.title%",
         "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showIncludeTree",
+        "title": "%phpForge.showIncludeTree.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showIncluders",
+        "title": "%phpForge.showIncluders.title%",
+        "category": "PHP Forge"
       }
     ],
     "configuration": {
@@ -225,6 +235,22 @@
           "markdownDescription": "%phpForge.externalGlobals.description%"
         }
       }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "phpForge.showIncluders",
+          "when": "false"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "phpForge.includeTree",
+          "name": "%phpForge.includeTree.name%"
+        }
+      ]
     }
   }
 }

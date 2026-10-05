@@ -6,8 +6,8 @@ import * as l10n from '@vscode/l10n';
 import { CodeActionKind, createConnection, ProposedFeatures, TextDocumentSyncKind, type CompletionItem, type Diagnostic, type InitializeParams, type InitializeResult } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import {
-  INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
-  type IndexedParams, type InitOptions, type Settings, type StatusParams,
+  INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, INDEXED_NOTIFICATION, mergeSettings, REINDEX_REQUEST, STATUS_NOTIFICATION,
+  type IncludeTree, type IndexedParams, type InitOptions, type Settings, type StatusParams,
 } from '../shared/protocol.ts';
 import { complete, resolveCompletion } from './completion/complete.ts';
 import { syntaxDiagnostics } from './diagnostics/syntax.ts';
@@ -17,6 +17,7 @@ import { DocumentStore, type OpenDocument } from './documents.ts';
 import { IncludeAnalysis } from './includes/analysis.ts';
 import { callerLabel, includeDiagnostics, relativePath } from './includes/diagnostics.ts';
 import { IncludeGraph } from './includes/graph.ts';
+import { includeDefinition, includeLinks, includerLinks, includersLens } from './includes/navigation.ts';
 import { quickFixes } from './features/codeActions.ts';
 import { problemsMarkdown, withProblems } from './features/problemHover.ts';
 import { definition } from './features/definition.ts';
@@ -113,6 +114,7 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
       foldingRangeProvider: true,
       selectionRangeProvider: true,
       inlayHintProvider: true,
+      codeLensProvider: { resolveProvider: false },
       codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
       semanticTokensProvider: { legend: { tokenTypes: [...TOKEN_TYPES], tokenModifiers: [...TOKEN_MODIFIERS] }, full: true },
     },
@@ -227,6 +229,7 @@ function runAnalysis(): void {
   analysis = next;
   connection.console.info(`Include analysis: ${graph.size} files in ${Date.now() - started} ms`);
   for (const doc of documents.all()) publish(doc);
+  void connection.sendRequest('workspace/codeLens/refresh').catch(() => undefined);
 }
 
 connection.onDidOpenTextDocument(
@@ -299,7 +302,9 @@ connection.onWorkspaceSymbol(safe([], ({ query }) => workspaceSymbols(workspace,
 connection.onDefinition(
   safe([], ({ textDocument, position }) => {
     const doc = docAt(textDocument.uri);
-    return doc ? definition(lookup, doc.symbols, doc.tree, position, resolver) : [];
+    if (!doc) return [];
+    const target = analysis ? includeDefinition(analysis.graph, doc.symbols, position) : [];
+    return target.length ? target : definition(lookup, doc.symbols, doc.tree, position, resolver);
   }),
 );
 
@@ -386,6 +391,18 @@ connection.onRequest(
     await indexing;
     scheduleAnalysis(0);
   }),
+);
+
+connection.onCodeLens(safe([], ({ textDocument }) => (analysis ? includersLens(analysis.graph, textDocument.uri) : [])));
+
+connection.onRequest(INCLUDERS_REQUEST, safe([], ({ uri }: { uri: string }) => (analysis ? includerLinks(analysis.graph, uri) : [])));
+
+connection.onRequest(
+  INCLUDE_TREE_REQUEST,
+  safe({ includedBy: [], includes: [] } as IncludeTree, ({ uri }: { uri: string }): IncludeTree => ({
+    includedBy: analysis ? includerLinks(analysis.graph, uri) : [],
+    includes: analysis ? includeLinks(analysis.graph, uri) : [],
+  })),
 );
 
 connection.listen();

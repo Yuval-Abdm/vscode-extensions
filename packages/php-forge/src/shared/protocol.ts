@@ -81,3 +81,21 @@ export interface StatusParams {
   phpVersion: string;
   source: PhpVersionSource;
 }
+
+/** Lien vers un fichier de la chaîne d'inclusion ; `label` : « pages/home.php:3 ». */
+export interface IncludeLink {
+  uri: string;
+  line: number;
+  label: string;
+}
+
+/** Appelants d'un fichier (sites d'inclusion). */
+export const INCLUDERS_REQUEST = 'phpForge/includers';
+
+/** Appelants et fichiers inclus d'un fichier, pour la vue « Include tree ». */
+export const INCLUDE_TREE_REQUEST = 'phpForge/includeTree';
+
+export interface IncludeTree {
+  includedBy: IncludeLink[];
+  includes: IncludeLink[];
+}
