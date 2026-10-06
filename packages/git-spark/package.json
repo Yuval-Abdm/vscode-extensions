@@ -1,0 +1,1075 @@
+{
+  "name": "git-spark",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "1.0.0",
+  "publisher": "yuval-abdm",
+  "license": "MIT",
+  "type": "module",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1f2b24",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions.git",
+    "directory": "packages/git-spark"
+  },
+  "bugs": {
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions/issues"
+  },
+  "homepage": "https://github.com/Yuval-Abdm/vscode-extensions/tree/main/packages/git-spark#readme",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "l10n": "./l10n",
+  "categories": [
+    "SCM Providers",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "blame",
+    "history",
+    "annotations",
+    "graph",
+    "merge",
+    "conflicts",
+    "rebase",
+    "gitlens alternative"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "typecheck": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "bench": "node scripts/bench.ts",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/vscode": "~1.91.0",
+    "typescript": "^5.9.3"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Git Spark",
+      "properties": {
+        "gitSpark.blame.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.blame.enabled%"
+        },
+        "gitSpark.blame.format": {
+          "type": "string",
+          "default": "${author}, ${date} • ${message}",
+          "markdownDescription": "%config.blame.format%"
+        },
+        "gitSpark.blame.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.blame.statusBar%"
+        },
+        "gitSpark.blame.maxLines": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 1,
+          "description": "%config.blame.maxLines%"
+        },
+        "gitSpark.history.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.history.enabled%"
+        },
+        "gitSpark.conflicts.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.conflicts.enabled%"
+        },
+        "gitSpark.merge.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.merge.enabled%"
+        },
+        "gitSpark.compare.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.compare.enabled%"
+        },
+        "gitSpark.graph.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.graph.enabled%"
+        },
+        "gitSpark.operations.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.operations.enabled%"
+        },
+        "gitSpark.rebaseEditor": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.rebaseEditor%"
+        },
+        "gitSpark.commit.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.commit.enabled%"
+        },
+        "gitSpark.commit.pullBeforeCommit": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.commit.pullBeforeCommit%"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "gitSpark.toggleFileBlame",
+        "title": "%command.toggleFileBlame%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.showLineCommit",
+        "title": "%command.showLineCommit%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.diffWithPrevious",
+        "title": "%command.diffWithPrevious%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.openRevision",
+        "title": "%command.openRevision%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.copySha",
+        "title": "%command.copySha%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.showFileHistory",
+        "title": "%command.showFileHistory%",
+        "category": "Git Spark",
+        "icon": "$(history)"
+      },
+      {
+        "command": "gitSpark.showLineHistory",
+        "title": "%command.showLineHistory%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.history.pin",
+        "title": "%command.history.pin%",
+        "category": "Git Spark",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "gitSpark.history.unpin",
+        "title": "%command.history.unpin%",
+        "category": "Git Spark",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "gitSpark.history.refresh",
+        "title": "%command.history.refresh%",
+        "category": "Git Spark",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitSpark.history.openRevision",
+        "title": "%command.openRevision%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.history.compareWithWorking",
+        "title": "%command.history.compareWithWorking%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.history.copySha",
+        "title": "%command.copySha%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.history.copyMessage",
+        "title": "%command.history.copyMessage%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.mergeLocal",
+        "title": "%command.mergeLocal%",
+        "category": "Git Spark",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitSpark.conflicts.refresh",
+        "title": "%command.history.refresh%",
+        "category": "Git Spark",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitSpark.conflicts.finish",
+        "title": "%command.conflicts.finish%",
+        "category": "Git Spark",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "gitSpark.conflicts.abort",
+        "title": "%command.conflicts.abort%",
+        "category": "Git Spark",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "gitSpark.conflicts.keepOurs",
+        "title": "%command.conflicts.keepOurs%",
+        "category": "Git Spark",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "gitSpark.conflicts.keepTheirs",
+        "title": "%command.conflicts.keepTheirs%",
+        "category": "Git Spark",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "gitSpark.conflicts.keepBoth",
+        "title": "%command.conflicts.keepBoth%",
+        "category": "Git Spark",
+        "icon": "$(arrow-both)"
+      },
+      {
+        "command": "gitSpark.conflicts.keepAllOurs",
+        "title": "%command.conflicts.keepAllOurs%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.conflicts.keepAllTheirs",
+        "title": "%command.conflicts.keepAllTheirs%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.conflicts.openMergeEditor",
+        "title": "%command.conflicts.openMergeEditor%",
+        "category": "Git Spark",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitSpark.conflicts.markResolved",
+        "title": "%command.conflicts.markResolved%",
+        "category": "Git Spark",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitSpark.conflicts.keepFile",
+        "title": "%command.conflicts.keepFile%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.conflicts.deleteFile",
+        "title": "%command.conflicts.deleteFile%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.compareReferences",
+        "title": "%command.compareReferences%",
+        "category": "Git Spark",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "gitSpark.compare.swap",
+        "title": "%command.compare.swap%",
+        "category": "Git Spark",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "gitSpark.compare.toggleMode",
+        "title": "%command.compare.toggleMode%",
+        "category": "Git Spark",
+        "icon": "$(git-pull-request-go-to-changes)"
+      },
+      {
+        "command": "gitSpark.compare.clear",
+        "title": "%command.compare.clear%",
+        "category": "Git Spark",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "gitSpark.compare.deploy",
+        "title": "%command.compare.deploy%",
+        "category": "Git Spark",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "gitSpark.compare.show",
+        "title": "%command.compareReferences%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.stash.push",
+        "title": "%command.stash.push%",
+        "category": "Git Spark",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitSpark.stash.apply",
+        "title": "%command.stash.apply%",
+        "category": "Git Spark",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitSpark.stash.pop",
+        "title": "%command.stash.pop%",
+        "category": "Git Spark",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "gitSpark.stash.drop",
+        "title": "%command.stash.drop%",
+        "category": "Git Spark",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitSpark.worktree.add",
+        "title": "%command.worktree.add%",
+        "category": "Git Spark",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitSpark.worktree.open",
+        "title": "%command.worktree.open%",
+        "category": "Git Spark",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "gitSpark.worktree.remove",
+        "title": "%command.worktree.remove%",
+        "category": "Git Spark",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitSpark.showGraph",
+        "title": "%command.showGraph%",
+        "category": "Git Spark",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitSpark.graph.checkoutCommit",
+        "title": "%command.graph.checkoutCommit%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graph.createBranch",
+        "title": "%command.graph.createBranch%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graph.createTag",
+        "title": "%command.graph.createTag%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graph.compareWithHead",
+        "title": "%command.graph.compareWithHead%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graph.copySha",
+        "title": "%command.copySha%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graph.checkoutBranch",
+        "title": "%command.graph.checkoutBranch%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graph.mergeBranch",
+        "title": "%command.graph.mergeBranch%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graph.deleteBranch",
+        "title": "%command.graph.deleteBranch%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graph.compareWithSelected",
+        "title": "%command.graph.compareWithSelected%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.cherryPick",
+        "title": "%command.cherryPick%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.revert",
+        "title": "%command.revert%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.reset",
+        "title": "%command.reset%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.interactiveRebase",
+        "title": "%command.interactiveRebase%",
+        "category": "Git Spark"
+      },
+      {
+        "command": "gitSpark.graphView.refresh",
+        "title": "%command.history.refresh%",
+        "category": "Git Spark",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "gitSpark.toggleFileBlame",
+          "when": "gitSpark.active && config.gitSpark.blame.enabled"
+        },
+        {
+          "command": "gitSpark.showLineCommit",
+          "when": "gitSpark.active && config.gitSpark.blame.enabled"
+        },
+        {
+          "command": "gitSpark.diffWithPrevious",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.openRevision",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.copySha",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.showFileHistory",
+          "when": "gitSpark.active && config.gitSpark.history.enabled",
+          "visibility": "collapsed"
+        },
+        {
+          "command": "gitSpark.showLineHistory",
+          "when": "gitSpark.active && config.gitSpark.history.enabled && editorIsOpen"
+        },
+        {
+          "command": "gitSpark.history.pin",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.history.unpin",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.history.refresh",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.history.openRevision",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.history.compareWithWorking",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.history.copySha",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.history.copyMessage",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.mergeLocal",
+          "when": "gitSpark.active && config.gitSpark.merge.enabled"
+        },
+        {
+          "command": "gitSpark.conflicts.finish",
+          "when": "gitSpark.conflicts.active && config.gitSpark.conflicts.enabled"
+        },
+        {
+          "command": "gitSpark.conflicts.abort",
+          "when": "gitSpark.conflicts.active && config.gitSpark.conflicts.enabled"
+        },
+        {
+          "command": "gitSpark.conflicts.refresh",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.keepOurs",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.keepTheirs",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.keepBoth",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.keepAllOurs",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.keepAllTheirs",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.openMergeEditor",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.markResolved",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.keepFile",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.conflicts.deleteFile",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.compareReferences",
+          "when": "gitSpark.active && config.gitSpark.compare.enabled"
+        },
+        {
+          "command": "gitSpark.stash.push",
+          "when": "gitSpark.active && config.gitSpark.compare.enabled"
+        },
+        {
+          "command": "gitSpark.worktree.add",
+          "when": "gitSpark.active && config.gitSpark.compare.enabled"
+        },
+        {
+          "command": "gitSpark.compare.swap",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.compare.toggleMode",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.compare.clear",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.compare.deploy",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.compare.show",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.stash.apply",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.stash.pop",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.stash.drop",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.worktree.open",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.worktree.remove",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.showGraph",
+          "when": "gitSpark.active && config.gitSpark.graph.enabled"
+        },
+        {
+          "command": "gitSpark.graph.checkoutCommit",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graph.createBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graph.createTag",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graph.compareWithHead",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graph.copySha",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graph.checkoutBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graph.mergeBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graph.deleteBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graph.compareWithSelected",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.cherryPick",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.revert",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.reset",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.interactiveRebase",
+          "when": "false"
+        },
+        {
+          "command": "gitSpark.graphView.refresh",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "gitSpark.history.pin",
+          "when": "view == gitSpark.history && !gitSpark.history.pinned",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitSpark.history.unpin",
+          "when": "view == gitSpark.history && gitSpark.history.pinned",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitSpark.history.refresh",
+          "when": "view == gitSpark.history",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitSpark.conflicts.finish",
+          "when": "view == gitSpark.conflicts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitSpark.conflicts.abort",
+          "when": "view == gitSpark.conflicts",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitSpark.conflicts.refresh",
+          "when": "view == gitSpark.conflicts",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitSpark.compareReferences",
+          "when": "view == gitSpark.compare",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitSpark.compare.swap",
+          "when": "view == gitSpark.compare && gitSpark.compare.active && gitSpark.compare.hasRight",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitSpark.compare.toggleMode",
+          "when": "view == gitSpark.compare && gitSpark.compare.active",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitSpark.compare.deploy",
+          "when": "view == gitSpark.compare && gitSpark.compare.active && gitSpark.deployAvailable",
+          "group": "navigation@4"
+        },
+        {
+          "command": "gitSpark.compare.clear",
+          "when": "view == gitSpark.compare && gitSpark.compare.active",
+          "group": "navigation@5"
+        },
+        {
+          "command": "gitSpark.stash.push",
+          "when": "view == gitSpark.stashes",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitSpark.worktree.add",
+          "when": "view == gitSpark.worktrees",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitSpark.graphView.refresh",
+          "when": "view == gitSpark.graphView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitSpark.showGraph",
+          "when": "view == gitSpark.graphView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitSpark.mergeLocal",
+          "when": "view == gitSpark.graphView && config.gitSpark.merge.enabled",
+          "group": "navigation@0"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gitSpark.history.openRevision",
+          "when": "view == gitSpark.history && viewItem =~ /^gitSpark\\.commit/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "gitSpark.history.compareWithWorking",
+          "when": "view == gitSpark.history && viewItem == gitSpark.commit",
+          "group": "1_open@2"
+        },
+        {
+          "command": "gitSpark.history.copySha",
+          "when": "view == gitSpark.history && viewItem =~ /^gitSpark\\.commit/",
+          "group": "2_copy@1"
+        },
+        {
+          "command": "gitSpark.history.copyMessage",
+          "when": "view == gitSpark.history && viewItem =~ /^gitSpark\\.commit/",
+          "group": "2_copy@2"
+        },
+        {
+          "command": "gitSpark.conflicts.keepOurs",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictBlock",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitSpark.conflicts.keepTheirs",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictBlock",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSpark.conflicts.keepBoth",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictBlock",
+          "group": "inline@3"
+        },
+        {
+          "command": "gitSpark.conflicts.keepOurs",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictBlock",
+          "group": "1_keep@1"
+        },
+        {
+          "command": "gitSpark.conflicts.keepTheirs",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictBlock",
+          "group": "1_keep@2"
+        },
+        {
+          "command": "gitSpark.conflicts.keepBoth",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictBlock",
+          "group": "1_keep@3"
+        },
+        {
+          "command": "gitSpark.conflicts.openMergeEditor",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictFile.text",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitSpark.conflicts.markResolved",
+          "when": "view == gitSpark.conflicts && viewItem =~ /^gitSpark\\.conflictFile\\.(text|other)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSpark.conflicts.keepAllOurs",
+          "when": "view == gitSpark.conflicts && viewItem =~ /^gitSpark\\.conflictFile\\.(text|other)$/",
+          "group": "1_keep@1"
+        },
+        {
+          "command": "gitSpark.conflicts.keepAllTheirs",
+          "when": "view == gitSpark.conflicts && viewItem =~ /^gitSpark\\.conflictFile\\.(text|other)$/",
+          "group": "1_keep@2"
+        },
+        {
+          "command": "gitSpark.conflicts.openMergeEditor",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictFile.text",
+          "group": "2_resolve@1"
+        },
+        {
+          "command": "gitSpark.conflicts.markResolved",
+          "when": "view == gitSpark.conflicts && viewItem =~ /^gitSpark\\.conflictFile\\.(text|other)$/",
+          "group": "2_resolve@2"
+        },
+        {
+          "command": "gitSpark.conflicts.keepFile",
+          "when": "view == gitSpark.conflicts && viewItem == gitSpark.conflictFile.deleted",
+          "group": "1_keep@1"
+        },
+        {
+          "command": "gitSpark.conflicts.deleteFile",
+          "when": "view == gitSpark.conflicts && viewItem =~ /^gitSpark\\.conflictFile\\.(deleted|gone)$/",
+          "group": "1_keep@2"
+        },
+        {
+          "command": "gitSpark.stash.apply",
+          "when": "view == gitSpark.stashes && viewItem == gitSpark.stash",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitSpark.stash.pop",
+          "when": "view == gitSpark.stashes && viewItem == gitSpark.stash",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSpark.stash.drop",
+          "when": "view == gitSpark.stashes && viewItem == gitSpark.stash",
+          "group": "inline@3"
+        },
+        {
+          "command": "gitSpark.stash.apply",
+          "when": "view == gitSpark.stashes && viewItem == gitSpark.stash",
+          "group": "1_stash@1"
+        },
+        {
+          "command": "gitSpark.stash.pop",
+          "when": "view == gitSpark.stashes && viewItem == gitSpark.stash",
+          "group": "1_stash@2"
+        },
+        {
+          "command": "gitSpark.stash.drop",
+          "when": "view == gitSpark.stashes && viewItem == gitSpark.stash",
+          "group": "1_stash@3"
+        },
+        {
+          "command": "gitSpark.worktree.open",
+          "when": "view == gitSpark.worktrees && viewItem =~ /^gitSpark\\.worktree/",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitSpark.worktree.remove",
+          "when": "view == gitSpark.worktrees && viewItem == gitSpark.worktree",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSpark.revert",
+          "when": "view == gitSpark.history && viewItem == gitSpark.commit && config.gitSpark.operations.enabled",
+          "group": "3_operations@2"
+        },
+        {
+          "command": "gitSpark.reset",
+          "when": "view == gitSpark.history && viewItem == gitSpark.commit && config.gitSpark.operations.enabled",
+          "group": "3_operations@3"
+        },
+        {
+          "command": "gitSpark.interactiveRebase",
+          "when": "view == gitSpark.history && viewItem == gitSpark.commit && config.gitSpark.operations.enabled",
+          "group": "3_operations@4"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "gitSpark.showLineHistory",
+          "when": "gitSpark.active && config.gitSpark.history.enabled && resourceScheme == file",
+          "group": "gitSpark@1"
+        },
+        {
+          "command": "gitSpark.showFileHistory",
+          "when": "gitSpark.active && config.gitSpark.history.enabled && resourceScheme == file",
+          "group": "gitSpark@2"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "gitSpark.showFileHistory",
+          "when": "gitSpark.active && config.gitSpark.history.enabled && resourceScheme == file",
+          "group": "gitSpark@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "gitSpark.showFileHistory",
+          "when": "gitSpark.active && config.gitSpark.history.enabled && !explorerResourceIsFolder",
+          "group": "gitSpark@1"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "gitSpark.graph.checkoutCommit",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit'",
+          "group": "1_checkout@1"
+        },
+        {
+          "command": "gitSpark.graph.createBranch",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit'",
+          "group": "2_create@1"
+        },
+        {
+          "command": "gitSpark.graph.createTag",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit'",
+          "group": "2_create@2"
+        },
+        {
+          "command": "gitSpark.graph.compareWithHead",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit' && config.gitSpark.compare.enabled",
+          "group": "3_compare@1"
+        },
+        {
+          "command": "gitSpark.graph.compareWithSelected",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit' && config.gitSpark.compare.enabled",
+          "group": "3_compare@2"
+        },
+        {
+          "command": "gitSpark.graph.copySha",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection =~ /^(commit|branch)$/",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "gitSpark.graph.checkoutBranch",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'branch'",
+          "group": "1_checkout@1"
+        },
+        {
+          "command": "gitSpark.graph.mergeBranch",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'branch' && config.gitSpark.merge.enabled",
+          "group": "2_merge@1"
+        },
+        {
+          "command": "gitSpark.graph.deleteBranch",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'branch'",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "gitSpark.cherryPick",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit' && config.gitSpark.operations.enabled",
+          "group": "4_operations@1"
+        },
+        {
+          "command": "gitSpark.revert",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit' && config.gitSpark.operations.enabled",
+          "group": "4_operations@2"
+        },
+        {
+          "command": "gitSpark.reset",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit' && config.gitSpark.operations.enabled",
+          "group": "4_operations@3"
+        },
+        {
+          "command": "gitSpark.interactiveRebase",
+          "when": "webviewId =~ /^gitSpark\\.graph(View)?$/ && webviewSection == 'commit' && config.gitSpark.operations.enabled",
+          "group": "4_operations@4"
+        }
+      ]
+    },
+    "colors": [
+      {
+        "id": "gitSpark.blameForeground",
+        "description": "%color.blameForeground%",
+        "defaults": {
+          "dark": "#ffffff59",
+          "light": "#00000059",
+          "highContrast": "#ffffff99",
+          "highContrastLight": "#00000099"
+        }
+      }
+    ],
+    "views": {
+      "gitSpark": [
+        {
+          "type": "webview",
+          "id": "gitSpark.commitView",
+          "name": "%view.commit%",
+          "when": "gitSpark.active && config.gitSpark.commit.enabled"
+        },
+        {
+          "id": "gitSpark.conflicts",
+          "name": "%view.conflicts%",
+          "when": "gitSpark.active && config.gitSpark.conflicts.enabled && gitSpark.conflicts.active",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "gitSpark.history",
+          "name": "%view.history%",
+          "when": "gitSpark.active && config.gitSpark.history.enabled",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "gitSpark.compare",
+          "name": "%view.compare%",
+          "when": "gitSpark.active && config.gitSpark.compare.enabled",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "gitSpark.stashes",
+          "name": "%view.stashes%",
+          "when": "gitSpark.active && config.gitSpark.compare.enabled",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "gitSpark.worktrees",
+          "name": "%view.worktrees%",
+          "when": "gitSpark.active && config.gitSpark.compare.enabled",
+          "visibility": "collapsed"
+        }
+      ],
+      "gitSparkPanel": [
+        {
+          "type": "webview",
+          "id": "gitSpark.graphView",
+          "name": "%view.graph%",
+          "when": "gitSpark.active && config.gitSpark.graph.enabled"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "gitSpark.rebaseTodo",
+        "displayName": "%customEditor.rebaseTodo%",
+        "selector": [
+          {
+            "filenamePattern": "git-rebase-todo"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitSpark",
+          "title": "%viewsContainer.gitSpark%",
+          "icon": "media/spark.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "gitSparkPanel",
+          "title": "%viewsContainer.gitSpark%",
+          "icon": "media/spark.svg"
+        }
+      ]
+    }
+  }
+}

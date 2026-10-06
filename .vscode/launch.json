@@ -24,8 +24,8 @@
       "name": "Run Git Spark",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/git-forge"],
-      "outFiles": ["${workspaceFolder}/packages/git-forge/dist/**/*.cjs"],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/git-spark"],
+      "outFiles": ["${workspaceFolder}/packages/git-spark/dist/**/*.cjs"],
       "preLaunchTask": "npm: build"
     }
   ]

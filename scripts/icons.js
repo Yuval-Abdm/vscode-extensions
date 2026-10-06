@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { Resvg } = require('@resvg/resvg-js');
 
-for (const pkg of ['changed-files-explorer', 'ftp-sftp-deploy', 'php-forge', 'git-forge']) {
+for (const pkg of ['changed-files-explorer', 'ftp-sftp-deploy', 'php-forge', 'git-spark']) {
   const dir = path.join(__dirname, '..', 'packages', pkg, 'media');
   const png = new Resvg(fs.readFileSync(path.join(dir, 'icon.svg')), { fitTo: { mode: 'width', value: 256 } }).render().asPng();
   fs.writeFileSync(path.join(dir, 'icon.png'), png);
