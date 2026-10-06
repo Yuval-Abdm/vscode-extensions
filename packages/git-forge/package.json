@@ -109,6 +109,16 @@
           "type": "boolean",
           "default": true,
           "description": "%config.graph.enabled%"
+        },
+        "gitForge.operations.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.operations.enabled%"
+        },
+        "gitForge.rebaseEditor": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.rebaseEditor%"
         }
       }
     },
@@ -388,6 +398,26 @@
         "command": "gitForge.graph.compareWithSelected",
         "title": "%command.graph.compareWithSelected%",
         "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.cherryPick",
+        "title": "%command.cherryPick%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.revert",
+        "title": "%command.revert%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.reset",
+        "title": "%command.reset%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.interactiveRebase",
+        "title": "%command.interactiveRebase%",
+        "category": "Git Forge"
       }
     ],
     "menus": {
@@ -591,6 +621,22 @@
         {
           "command": "gitForge.graph.compareWithSelected",
           "when": "false"
+        },
+        {
+          "command": "gitForge.cherryPick",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.revert",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.reset",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.interactiveRebase",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -790,6 +836,26 @@
           "command": "gitForge.worktree.remove",
           "when": "view == gitForge.worktrees && viewItem == gitForge.worktree",
           "group": "inline@2"
+        },
+        {
+          "command": "gitForge.cherryPick",
+          "when": "view == gitForge.history && viewItem == gitForge.commit && config.gitForge.operations.enabled",
+          "group": "3_operations@1"
+        },
+        {
+          "command": "gitForge.revert",
+          "when": "view == gitForge.history && viewItem == gitForge.commit && config.gitForge.operations.enabled",
+          "group": "3_operations@2"
+        },
+        {
+          "command": "gitForge.reset",
+          "when": "view == gitForge.history && viewItem == gitForge.commit && config.gitForge.operations.enabled",
+          "group": "3_operations@3"
+        },
+        {
+          "command": "gitForge.interactiveRebase",
+          "when": "view == gitForge.history && viewItem == gitForge.commit && config.gitForge.operations.enabled",
+          "group": "3_operations@4"
         }
       ],
       "editor/context": [
@@ -875,6 +941,26 @@
           "command": "gitForge.graph.deleteBranch",
           "when": "webviewId == 'gitForge.graph' && webviewSection == 'branch'",
           "group": "3_delete@1"
+        },
+        {
+          "command": "gitForge.cherryPick",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.operations.enabled",
+          "group": "4_operations@1"
+        },
+        {
+          "command": "gitForge.revert",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.operations.enabled",
+          "group": "4_operations@2"
+        },
+        {
+          "command": "gitForge.reset",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.operations.enabled",
+          "group": "4_operations@3"
+        },
+        {
+          "command": "gitForge.interactiveRebase",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.operations.enabled",
+          "group": "4_operations@4"
         }
       ]
     },
@@ -921,6 +1007,18 @@
           "visibility": "collapsed"
         }
       ]
-    }
+    },
+    "customEditors": [
+      {
+        "viewType": "gitForge.rebaseTodo",
+        "displayName": "%customEditor.rebaseTodo%",
+        "selector": [
+          {
+            "filenamePattern": "git-rebase-todo"
+          }
+        ],
+        "priority": "option"
+      }
+    ]
   }
 }

@@ -60,5 +60,12 @@
   "command.graph.checkoutBranch": "Checkout Branch",
   "command.graph.mergeBranch": "Merge Locally into the Current Branch…",
   "command.graph.deleteBranch": "Delete Branch…",
-  "command.graph.compareWithSelected": "Compare with the Selected Commit"
+  "command.graph.compareWithSelected": "Compare with the Selected Commit",
+  "config.operations.enabled": "Add cherry-pick, revert, reset and interactive rebase to the commit menus of the graph and the File History view.",
+  "config.rebaseEditor": "Open `git rebase -i` todo lists in Git Forge's rebase editor (when VS Code is your Git editor, e.g. `git config --global core.editor \"code --wait\"`). Adds or removes the `workbench.editorAssociations` entry for `git-rebase-todo`.",
+  "customEditor.rebaseTodo": "Git Forge Rebase Editor",
+  "command.cherryPick": "Cherry-pick onto the Current Branch…",
+  "command.revert": "Revert (New Commit)…",
+  "command.reset": "Reset the Current Branch to This Commit…",
+  "command.interactiveRebase": "Interactive Rebase from Here…"
 }
