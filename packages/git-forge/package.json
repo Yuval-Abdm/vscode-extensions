@@ -89,6 +89,16 @@
           "type": "boolean",
           "default": true,
           "description": "%config.history.enabled%"
+        },
+        "gitForge.conflicts.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.conflicts.enabled%"
+        },
+        "gitForge.merge.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.merge.enabled%"
         }
       }
     },
@@ -166,6 +176,80 @@
         "command": "gitForge.history.copyMessage",
         "title": "%command.history.copyMessage%",
         "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.mergeLocal",
+        "title": "%command.mergeLocal%",
+        "category": "Git Forge",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitForge.conflicts.refresh",
+        "title": "%command.history.refresh%",
+        "category": "Git Forge",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitForge.conflicts.finish",
+        "title": "%command.conflicts.finish%",
+        "category": "Git Forge",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "gitForge.conflicts.abort",
+        "title": "%command.conflicts.abort%",
+        "category": "Git Forge",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "gitForge.conflicts.keepOurs",
+        "title": "%command.conflicts.keepOurs%",
+        "category": "Git Forge",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "gitForge.conflicts.keepTheirs",
+        "title": "%command.conflicts.keepTheirs%",
+        "category": "Git Forge",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "gitForge.conflicts.keepBoth",
+        "title": "%command.conflicts.keepBoth%",
+        "category": "Git Forge",
+        "icon": "$(arrow-both)"
+      },
+      {
+        "command": "gitForge.conflicts.keepAllOurs",
+        "title": "%command.conflicts.keepAllOurs%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.conflicts.keepAllTheirs",
+        "title": "%command.conflicts.keepAllTheirs%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.conflicts.openMergeEditor",
+        "title": "%command.conflicts.openMergeEditor%",
+        "category": "Git Forge",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitForge.conflicts.markResolved",
+        "title": "%command.conflicts.markResolved%",
+        "category": "Git Forge",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitForge.conflicts.keepFile",
+        "title": "%command.conflicts.keepFile%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.conflicts.deleteFile",
+        "title": "%command.conflicts.deleteFile%",
+        "category": "Git Forge"
       }
     ],
     "menus": {
@@ -225,6 +309,58 @@
         {
           "command": "gitForge.history.copyMessage",
           "when": "false"
+        },
+        {
+          "command": "gitForge.mergeLocal",
+          "when": "gitForge.active && config.gitForge.merge.enabled"
+        },
+        {
+          "command": "gitForge.conflicts.finish",
+          "when": "gitForge.conflicts.active && config.gitForge.conflicts.enabled"
+        },
+        {
+          "command": "gitForge.conflicts.abort",
+          "when": "gitForge.conflicts.active && config.gitForge.conflicts.enabled"
+        },
+        {
+          "command": "gitForge.conflicts.refresh",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.keepOurs",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.keepTheirs",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.keepBoth",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.keepAllOurs",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.keepAllTheirs",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.openMergeEditor",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.markResolved",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.keepFile",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.conflicts.deleteFile",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -242,6 +378,21 @@
           "command": "gitForge.history.refresh",
           "when": "view == gitForge.history",
           "group": "navigation@2"
+        },
+        {
+          "command": "gitForge.conflicts.finish",
+          "when": "view == gitForge.conflicts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitForge.conflicts.abort",
+          "when": "view == gitForge.conflicts",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitForge.conflicts.refresh",
+          "when": "view == gitForge.conflicts",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -264,6 +415,76 @@
           "command": "gitForge.history.copyMessage",
           "when": "view == gitForge.history && viewItem =~ /^gitForge\\.commit/",
           "group": "2_copy@2"
+        },
+        {
+          "command": "gitForge.conflicts.keepOurs",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictBlock",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitForge.conflicts.keepTheirs",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictBlock",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitForge.conflicts.keepBoth",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictBlock",
+          "group": "inline@3"
+        },
+        {
+          "command": "gitForge.conflicts.keepOurs",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictBlock",
+          "group": "1_keep@1"
+        },
+        {
+          "command": "gitForge.conflicts.keepTheirs",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictBlock",
+          "group": "1_keep@2"
+        },
+        {
+          "command": "gitForge.conflicts.keepBoth",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictBlock",
+          "group": "1_keep@3"
+        },
+        {
+          "command": "gitForge.conflicts.openMergeEditor",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictFile.text",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitForge.conflicts.markResolved",
+          "when": "view == gitForge.conflicts && viewItem =~ /^gitForge\\.conflictFile\\.(text|other)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitForge.conflicts.keepAllOurs",
+          "when": "view == gitForge.conflicts && viewItem =~ /^gitForge\\.conflictFile\\.(text|other)$/",
+          "group": "1_keep@1"
+        },
+        {
+          "command": "gitForge.conflicts.keepAllTheirs",
+          "when": "view == gitForge.conflicts && viewItem =~ /^gitForge\\.conflictFile\\.(text|other)$/",
+          "group": "1_keep@2"
+        },
+        {
+          "command": "gitForge.conflicts.openMergeEditor",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictFile.text",
+          "group": "2_resolve@1"
+        },
+        {
+          "command": "gitForge.conflicts.markResolved",
+          "when": "view == gitForge.conflicts && viewItem =~ /^gitForge\\.conflictFile\\.(text|other)$/",
+          "group": "2_resolve@2"
+        },
+        {
+          "command": "gitForge.conflicts.keepFile",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictFile.deleted",
+          "group": "1_keep@1"
+        },
+        {
+          "command": "gitForge.conflicts.deleteFile",
+          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictFile.deleted",
+          "group": "1_keep@2"
         }
       ],
       "editor/context": [
@@ -291,6 +512,13 @@
           "when": "gitForge.active && config.gitForge.history.enabled && !explorerResourceIsFolder",
           "group": "gitForge@1"
         }
+      ],
+      "scm/title": [
+        {
+          "command": "gitForge.mergeLocal",
+          "when": "gitForge.active && config.gitForge.merge.enabled && scmProvider == git",
+          "group": "navigation@10"
+        }
       ]
     },
     "colors": [
@@ -307,6 +535,11 @@
     ],
     "views": {
       "scm": [
+        {
+          "id": "gitForge.conflicts",
+          "name": "%view.conflicts%",
+          "when": "gitForge.active && config.gitForge.conflicts.enabled && gitForge.conflicts.active"
+        },
         {
           "id": "gitForge.history",
           "name": "%view.history%",

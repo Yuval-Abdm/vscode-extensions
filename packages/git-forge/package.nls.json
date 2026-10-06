@@ -19,5 +19,20 @@
   "command.history.unpin": "Unpin (follow the active editor)",
   "command.history.refresh": "Refresh",
   "command.history.compareWithWorking": "Compare with Working File",
-  "command.history.copyMessage": "Copy Commit Message"
+  "command.history.copyMessage": "Copy Commit Message",
+  "config.conflicts.enabled": "Show the Conflicts view during a merge, rebase, cherry-pick or revert with conflicts.",
+  "config.merge.enabled": "Add the Merge Locally command (fetch, update both branches, merge, optionally delete the merged branch).",
+  "view.conflicts": "Conflicts",
+  "command.mergeLocal": "Merge Locally…",
+  "command.conflicts.finish": "Finish (commit or continue)",
+  "command.conflicts.abort": "Abort",
+  "command.conflicts.keepOurs": "Keep Mine",
+  "command.conflicts.keepTheirs": "Keep Theirs",
+  "command.conflicts.keepBoth": "Keep Both",
+  "command.conflicts.keepAllOurs": "Keep Mine for the Whole File",
+  "command.conflicts.keepAllTheirs": "Keep Theirs for the Whole File",
+  "command.conflicts.openMergeEditor": "Open in 3-Way Merge Editor",
+  "command.conflicts.markResolved": "Mark as Resolved",
+  "command.conflicts.keepFile": "Keep the File",
+  "command.conflicts.deleteFile": "Delete the File"
 }

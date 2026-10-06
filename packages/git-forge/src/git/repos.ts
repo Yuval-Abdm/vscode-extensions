@@ -21,6 +21,11 @@ export class Repos implements RepoLocator, vscode.Disposable {
     return repo ? { root: repo.rootUri.fsPath, head: repo.state.HEAD?.commit } : undefined;
   }
 
+  /** Racines des dépôts ouverts. */
+  roots(): string[] {
+    return this.#api.repositories.map((repo) => repo.rootUri.fsPath);
+  }
+
   dispose(): void {
     for (const disposable of this.#disposables) disposable.dispose();
   }

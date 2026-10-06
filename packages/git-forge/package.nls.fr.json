@@ -19,5 +19,20 @@
   "command.history.unpin": "Désépingler (suivre l'éditeur actif)",
   "command.history.refresh": "Actualiser",
   "command.history.compareWithWorking": "Comparer avec le fichier actuel",
-  "command.history.copyMessage": "Copier le message du commit"
+  "command.history.copyMessage": "Copier le message du commit",
+  "config.conflicts.enabled": "Affiche la vue Conflits pendant un merge, un rebase, un cherry-pick ou un revert en conflit.",
+  "config.merge.enabled": "Ajoute la commande Merger en local (fetch, mise à jour des deux branches, merge, suppression facultative de la branche mergée).",
+  "view.conflicts": "Conflits",
+  "command.mergeLocal": "Merger en local…",
+  "command.conflicts.finish": "Terminer (commit ou continuer)",
+  "command.conflicts.abort": "Abandonner",
+  "command.conflicts.keepOurs": "Garder le mien",
+  "command.conflicts.keepTheirs": "Garder le leur",
+  "command.conflicts.keepBoth": "Garder les deux",
+  "command.conflicts.keepAllOurs": "Garder le mien pour tout le fichier",
+  "command.conflicts.keepAllTheirs": "Garder le leur pour tout le fichier",
+  "command.conflicts.openMergeEditor": "Ouvrir dans l'éditeur de fusion à 3 voies",
+  "command.conflicts.markResolved": "Marquer comme résolu",
+  "command.conflicts.keepFile": "Garder le fichier",
+  "command.conflicts.deleteFile": "Supprimer le fichier"
 }

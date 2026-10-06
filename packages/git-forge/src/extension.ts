@@ -3,6 +3,8 @@
 import * as vscode from 'vscode';
 import { BlameFeature } from './features/blame/index.ts';
 import { HistoryView } from './features/history/view.ts';
+import { ConflictsView } from './features/conflicts/view.ts';
+import { MergeCommand } from './features/merge/command.ts';
 import { GitCommands } from './git/commands.ts';
 import type { API, GitExtension } from './git/gitApi.ts';
 import { Repos } from './git/repos.ts';
@@ -18,11 +20,14 @@ export interface GitForgeApi {
 interface Services {
   git: GitCommands;
   repos: Repos;
+  state: vscode.Memento;
 }
 
 const FEATURES: Record<string, (services: Services) => vscode.Disposable> = {
   blame: ({ git, repos }) => new BlameFeature(git, repos),
   history: ({ git, repos }) => new HistoryView(git, repos),
+  conflicts: ({ git, repos, state }) => new ConflictsView(git, repos, state),
+  merge: ({ git, repos, state }) => new MergeCommand(git, repos, state),
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<GitForgeApi> {
@@ -90,7 +95,7 @@ async function setup(context: vscode.ExtensionContext, gitApi: API, live: Map<st
     for (const [key, create] of Object.entries(FEATURES)) {
       const enabled = config.get<boolean>(`${key}.enabled`, true);
       const current = live.get(key);
-      if (enabled && !current) live.set(key, create({ git, repos }));
+      if (enabled && !current) live.set(key, create({ git, repos, state: context.workspaceState }));
       else if (!enabled && current) {
         current.dispose();
         live.delete(key);
