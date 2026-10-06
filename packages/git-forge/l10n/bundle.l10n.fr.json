@@ -154,5 +154,8 @@
   "Invalid name.": "Nom invalide.",
   "Delete the branch {0}? It is merged into HEAD.": "Supprimer la branche {0} ? Elle est mergée dans HEAD.",
   "Delete the branch {0}? It is NOT merged into HEAD: its commits will only be reachable through the reflog.": "Supprimer la branche {0} ? Elle n'est PAS mergée dans HEAD : ses commits ne seront plus accessibles que par le reflog.",
-  "{0} is the current branch: pick another branch to merge into it.": "{0} est la branche courante : choisissez une autre branche à y merger."
+  "{0} is the current branch: pick another branch to merge into it.": "{0} est la branche courante : choisissez une autre branche à y merger.",
+  "This commit is no longer in the graph.": "Ce commit n'est plus dans le graphe.",
+  "Select a commit first (click), then right-click another one to compare them.": "Sélectionnez d'abord un commit (clic), puis faites un clic droit sur un autre pour les comparer.",
+  "{0} is the current branch: check out another branch before deleting it.": "{0} est la branche courante : faites d'abord un checkout d'une autre branche."
 }

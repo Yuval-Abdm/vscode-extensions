@@ -21,6 +21,7 @@ export interface GraphRowData extends GraphRow {
   summary: string;
   author: string;
   authorMail: string;
+  authorTime: number;
   date: string;
   refs: GraphRef[];
 }
@@ -47,6 +48,7 @@ export class GraphPanel implements vscode.Disposable {
   #timer: ReturnType<typeof setTimeout> | undefined;
   readonly #files = new Map<string, FileChange[]>();
   #disposed = false;
+  #selected: string | undefined;
 
   constructor(git: GitCommands, repos: Repos, root: string, extensionUri: vscode.Uri, onDispose: () => void) {
     this.#git = git;
@@ -90,31 +92,47 @@ export class GraphPanel implements vscode.Disposable {
     await this.#load(true);
   }
 
+  /** Commit sélectionné dans le graphe (pour « comparer avec le commit sélectionné »). */
+  get selected(): string | undefined {
+    return this.#selected;
+  }
+
   async #receive(message: Incoming): Promise<void> {
-    switch (message.type) {
-      case 'ready':
-        if (this.#rows.length) this.#post({ type: 'rows', rows: this.#rows, reset: true, hasMore: this.#hasMore, all: this.#all });
-        else await this.#load(true);
-        break;
-      case 'loadMore':
-        await this.#load(false);
-        break;
-      case 'refresh':
-        await this.#load(true);
-        break;
-      case 'setAll':
-        this.#all = message.all;
-        await this.#load(true);
-        break;
-      case 'select':
-        await this.#details(message.sha);
-        break;
-      case 'openFile': {
-        const row = this.#rows.find((r) => r.sha === message.sha);
-        const change = this.#files.get(message.sha)?.[message.index];
-        if (row && change) await vscode.commands.executeCommand('gitForge.diffWithPrevious', changeDiffArgs(this.root, row.sha, row.parents[0], change));
-        break;
+    try {
+      switch (message.type) {
+        case 'ready':
+          if (this.#loading) await this.#loading;
+          if (this.#rows.length) this.#post({ type: 'rows', rows: this.#rows, reset: true, hasMore: this.#hasMore, all: this.#all });
+          else await this.#load(true);
+          break;
+        case 'loadMore':
+          // Références changées depuis la dernière page : --skip ne désigne plus les mêmes commits, on recharge tout.
+          if ((await this.#currentSignature()) !== this.#signature) await this.#load(true);
+          else await this.#load(false);
+          break;
+        case 'refresh':
+          await this.#load(true);
+          break;
+        case 'setAll':
+          this.#all = message.all;
+          await this.#load(true);
+          break;
+        case 'select':
+          this.#selected = message.sha;
+          await this.#details(message.sha);
+          break;
+        case 'openFile': {
+          if (this.#loading) await this.#loading;
+          const row = this.#rows.find((r) => r.sha === message.sha);
+          if (!row) return;
+          const files = await this.#filesOf(row);
+          const change = files[message.index];
+          if (change) await vscode.commands.executeCommand('gitForge.diffWithPrevious', changeDiffArgs(this.root, row.sha, row.parents[0], change));
+          break;
+        }
       }
+    } catch (err) {
+      void vscode.window.showErrorMessage(errorText(err));
     }
   }
 
@@ -124,14 +142,12 @@ export class GraphPanel implements vscode.Disposable {
     if (!reset && !this.#hasMore) return;
     this.#loading = (async () => {
       try {
-        if (reset) {
-          this.#layout = new GraphLayout();
-          this.#rows = [];
-          this.#files.clear();
-          this.#signature = await this.#currentSignature();
-        }
-        const commits = await this.#git.graph(this.root, { skip: this.#rows.length, limit: PAGE, all: this.#all });
-        const placed = this.#layout.add(commits);
+        // Construit à part : les lignes affichées restent valides jusqu'à ce que le chargement réussisse.
+        const layout = reset ? new GraphLayout() : this.#layout;
+        const signature = reset ? await this.#currentSignature() : this.#signature;
+        const skip = reset ? 0 : this.#rows.length;
+        const commits = await this.#git.graph(this.root, { skip, limit: PAGE, all: this.#all });
+        const placed = layout.add(commits);
         const language = vscode.env.language;
         const now = Date.now();
         const rows = commits.map((commit, i): GraphRowData => ({
@@ -141,10 +157,13 @@ export class GraphPanel implements vscode.Disposable {
           summary: commit.summary,
           author: commit.author,
           authorMail: commit.authorMail,
+          authorTime: commit.authorTime,
           date: relativeTime(commit.authorTime, now, language),
           refs: commit.refs,
         }));
-        this.#rows.push(...rows);
+        this.#layout = layout;
+        this.#signature = signature;
+        this.#rows = reset ? rows : [...this.#rows, ...rows];
         this.#hasMore = commits.length === PAGE;
         this.#post({ type: 'rows', rows, reset, hasMore: this.#hasMore, all: this.#all });
       } catch (err) {
@@ -158,23 +177,30 @@ export class GraphPanel implements vscode.Disposable {
     }
   }
 
+  /** Fichiers d'un commit (par rapport à son premier parent) ; ne changent jamais pour un SHA donné. */
+  async #filesOf(row: GraphRowData): Promise<FileChange[]> {
+    let files = this.#files.get(row.sha);
+    if (!files) {
+      files = await this.#git.commitFiles(this.root, row.sha, row.parents[0]);
+      this.#files.set(row.sha, files);
+    }
+    return files;
+  }
+
+  /** Détails du commit sélectionné ; répond toujours, même si le commit n'est plus dans le graphe. */
   async #details(sha: string): Promise<void> {
+    if (this.#loading) await this.#loading;
     const row = this.#rows.find((r) => r.sha === sha);
-    if (!row) return;
+    if (!row) {
+      this.#post({ type: 'details', sha, message: vscode.l10n.t('This commit is no longer in the graph.'), files: [], date: '' });
+      return;
+    }
     try {
-      const [files, message] = await Promise.all([
-        this.#files.get(sha) ?? this.#git.commitFiles(this.root, sha, row.parents[0]),
-        this.#git.message(this.root, sha),
-      ]);
-      this.#files.set(sha, files);
-      this.#post({ type: 'details', sha, message, files, date: absoluteDate(await this.#authorTime(sha), vscode.env.language) });
+      const [files, message] = await Promise.all([this.#filesOf(row), this.#git.message(this.root, sha)]);
+      this.#post({ type: 'details', sha, message, files, date: absoluteDate(row.authorTime, vscode.env.language) });
     } catch (err) {
       this.#post({ type: 'details', sha, message: errorText(err), files: [], date: '' });
     }
-  }
-
-  async #authorTime(sha: string): Promise<number> {
-    return Number((await this.#git.runner.read(this.root, ['show', '-s', '--format=%at', sha])).stdout.trim());
   }
 
   /** Références et HEAD : le graphe n'est rechargé que si elles changent. */
@@ -206,6 +232,7 @@ export class GraphPanel implements vscode.Disposable {
       loading: vscode.l10n.t('Loading…'),
       openDiff: vscode.l10n.t('Double-click to compare with the previous revision'),
       noFiles: vscode.l10n.t('No file changed (merge commit: see the first parent).'),
+      root: this.root,
     };
     const json = JSON.stringify(strings).replace(/</g, '\\u003c');
     const text = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');

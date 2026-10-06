@@ -383,6 +383,11 @@
         "command": "gitForge.graph.deleteBranch",
         "title": "%command.graph.deleteBranch%",
         "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graph.compareWithSelected",
+        "title": "%command.graph.compareWithSelected%",
+        "category": "Git Forge"
       }
     ],
     "menus": {
@@ -581,6 +586,10 @@
         },
         {
           "command": "gitForge.graph.deleteBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.graph.compareWithSelected",
           "when": "false"
         }
       ],
@@ -841,6 +850,11 @@
           "command": "gitForge.graph.compareWithHead",
           "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.compare.enabled",
           "group": "3_compare@1"
+        },
+        {
+          "command": "gitForge.graph.compareWithSelected",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.compare.enabled",
+          "group": "3_compare@2"
         },
         {
           "command": "gitForge.graph.copySha",

@@ -436,12 +436,26 @@ export class GitCommands {
       `--format=${GRAPH_FORMAT}`,
       `--skip=${options.skip ?? 0}`,
       `--max-count=${options.limit ?? 500}`,
-      ...(options.all ? ['--exclude=refs/stash', '--all'] : ['HEAD']),
+      // Branches, branches distantes et tags seulement (ni stash, ni notes, ni refs/replace, refs/original…).
+      ...(options.all ? ['--branches', '--remotes', '--tags', 'HEAD'] : ['HEAD']),
     ];
     try {
       return parseGraphLog((await this.runner.read(root, args)).stdout);
     } catch (err) {
       if (err instanceof GitError && !(await this.revParse(root, 'HEAD'))) return []; // dépôt sans commit
+      throw err;
+    }
+  }
+
+  /** Nom de branche ou de tag accepté par git (`check-ref-format`). */
+  async validRefName(root: string, name: string, kind: 'branch' | 'tag'): Promise<boolean> {
+    // « @ », « HEAD » et un nom en « - » sont acceptés par check-ref-format mais ambigus pour git.
+    if (!name || name === '@' || name === 'HEAD' || name.startsWith('-')) return false;
+    try {
+      await this.runner.read(root, ['check-ref-format', `refs/${kind === 'branch' ? 'heads' : 'tags'}/${name}`]);
+      return true;
+    } catch (err) {
+      if (err instanceof GitError) return false;
       throw err;
     }
   }

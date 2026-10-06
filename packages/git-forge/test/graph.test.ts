@@ -42,6 +42,7 @@ describe('log du graphe', () => {
       repo.git('switch', '-q', 'main');
       repo.write('f', 'stash me\n');
       repo.git('stash', 'push', '-q');
+      repo.git('notes', 'add', '-m', 'a note', 'HEAD');
 
       const all = await git.graph(repo.root, { all: true });
       assert.equal(all.length, 6);
@@ -77,6 +78,9 @@ describe('log du graphe', () => {
       await git.checkoutDetached(repo.root, first);
       assert.equal(repo.git('rev-parse', 'HEAD').trim(), first);
       assert.equal((await git.status(repo.root)).branch.head, undefined);
+      assert.equal(await git.validRefName(repo.root, 'feature/ok', 'branch'), true);
+      for (const bad of ['', 'a..b', 'x.lock', '@', 'HEAD', '-x', 'a@{b', 'with space']) assert.equal(await git.validRefName(repo.root, bad, 'branch'), false, bad);
+      assert.equal(await git.validRefName(repo.root, 'v1.0', 'tag'), true);
     } finally {
       repo.dispose();
     }

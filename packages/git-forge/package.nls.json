@@ -59,5 +59,6 @@
   "command.graph.compareWithHead": "Compare with HEAD",
   "command.graph.checkoutBranch": "Checkout Branch",
   "command.graph.mergeBranch": "Merge Locally into the Current Branch…",
-  "command.graph.deleteBranch": "Delete Branch…"
+  "command.graph.deleteBranch": "Delete Branch…",
+  "command.graph.compareWithSelected": "Compare with the Selected Commit"
 }

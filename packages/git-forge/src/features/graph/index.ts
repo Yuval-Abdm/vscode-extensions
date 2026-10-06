@@ -8,11 +8,12 @@ import { GraphPanel } from './panel.ts';
 
 /** Contexte reçu d'un menu contextuel de la webview (data-vscode-context). */
 interface MenuContext {
+  root?: string;
   sha?: string;
   branch?: string;
+  /** Branche extraite (HEAD). */
+  current?: boolean;
 }
-
-const BRANCH_NAME = /^(?!-)(?!.*\.\.)(?!.*\/\/)[^\s~^:?*[\\]+(?<!\.lock)(?<![./])$/;
 
 export class GraphFeature implements vscode.Disposable {
   readonly #git: GitCommands;
@@ -41,12 +42,31 @@ export class GraphFeature implements vscode.Disposable {
           await vscode.commands.executeCommand('gitForge.compare.focus');
         }),
       ),
+      command('gitForge.graph.compareWithSelected', (ctx: MenuContext) =>
+        this.#withPanel(ctx, async (panel, sha) => {
+          const selected = panel.selected;
+          if (!selected || selected === sha) {
+            void vscode.window.showInformationMessage(vscode.l10n.t('Select a commit first (click), then right-click another one to compare them.'));
+            return;
+          }
+          await vscode.commands.executeCommand('gitForge.compare.show', { root: panel.root, left: selected, right: sha, mode: 'direct' });
+          await vscode.commands.executeCommand('gitForge.compare.focus');
+        }),
+      ),
       command('gitForge.graph.copySha', (ctx: MenuContext) => (ctx?.sha ? vscode.commands.executeCommand('gitForge.copySha', { sha: ctx.sha }) : undefined)),
       command('gitForge.graph.checkoutBranch', (ctx: MenuContext) => this.#withBranch(ctx, (panel, branch) => this.#run(panel, () => this.#git.checkout(panel.root, branch)))),
       command('gitForge.graph.mergeBranch', (ctx: MenuContext) =>
         this.#withBranch(ctx, (panel, branch) => vscode.commands.executeCommand('gitForge.mergeLocal', { root: panel.root, source: branch })),
       ),
-      command('gitForge.graph.deleteBranch', (ctx: MenuContext) => this.#withBranch(ctx, (panel, branch) => this.#deleteBranch(panel, branch))),
+      command('gitForge.graph.deleteBranch', (ctx: MenuContext) =>
+        this.#withBranch(ctx, (panel, branch) => {
+          if (ctx.current) {
+            void vscode.window.showErrorMessage(vscode.l10n.t('{0} is the current branch: check out another branch before deleting it.', branch));
+            return;
+          }
+          return this.#run(panel, () => this.#deleteBranch(panel, branch));
+        }),
+      ),
     ];
   }
 
@@ -79,13 +99,18 @@ export class GraphFeature implements vscode.Disposable {
     return panel;
   }
 
+  /** Graphe d'où vient le menu : celui du dépôt `ctx.root`, sinon le dernier actif. */
+  #panelOf(ctx: MenuContext): GraphPanel | undefined {
+    return (ctx?.root && this.#panels.get(ctx.root)) || this.#active;
+  }
+
   #withPanel(ctx: MenuContext, run: (panel: GraphPanel, sha: string) => unknown): unknown {
-    const panel = this.#active;
+    const panel = this.#panelOf(ctx);
     if (panel && ctx?.sha) return run(panel, ctx.sha);
   }
 
   #withBranch(ctx: MenuContext, run: (panel: GraphPanel, branch: string) => unknown): unknown {
-    const panel = this.#active;
+    const panel = this.#panelOf(ctx);
     if (panel && ctx?.branch) return run(panel, ctx.branch);
   }
 
@@ -111,7 +136,8 @@ export class GraphFeature implements vscode.Disposable {
   async #create(panel: GraphPanel, sha: string, kind: 'branch' | 'tag'): Promise<void> {
     const name = await vscode.window.showInputBox({
       title: kind === 'branch' ? vscode.l10n.t('New branch at {0}', sha.slice(0, 8)) : vscode.l10n.t('New tag at {0}', sha.slice(0, 8)),
-      validateInput: (value) => (BRANCH_NAME.test(value) ? undefined : vscode.l10n.t('Invalid name.')),
+      // Nom vérifié par git lui-même (check-ref-format).
+      validateInput: async (value) => ((await this.#git.validRefName(panel.root, value, kind)) ? undefined : vscode.l10n.t('Invalid name.')),
     });
     if (!name) return;
     await this.#run(panel, () => (kind === 'branch' ? this.#git.createBranch(panel.root, name, sha) : this.#git.createTag(panel.root, name, sha)));
@@ -129,6 +155,6 @@ export class GraphFeature implements vscode.Disposable {
       { modal: true },
       remove,
     );
-    if (choice === remove) await this.#run(panel, () => this.#git.deleteBranch(panel.root, branch));
+    if (choice === remove) await this.#git.deleteBranch(panel.root, branch);
   }
 }

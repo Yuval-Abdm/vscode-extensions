@@ -3,6 +3,7 @@
 (function () {
   const vscode = acquireVsCodeApi();
   const strings = JSON.parse(document.getElementById('strings').textContent);
+  const root = strings.root;
   const ROW = 24;
   const LANE = 14;
   const RADIUS = 4;
@@ -56,7 +57,8 @@
     dot.setAttribute('cx', String(x(row.column)));
     dot.setAttribute('cy', String(ROW / 2));
     dot.setAttribute('r', String(merge ? RADIUS + 1 : RADIUS));
-    dot.setAttribute('fill', merge ? 'var(--vscode-editor-background)' : color(row.color));
+    // var() n'est pas interprété dans un attribut SVG : propriété CSS (CSSOM, permis par la CSP).
+    dot.style.fill = merge ? 'var(--vscode-editor-background)' : color(row.color);
     dot.setAttribute('stroke', color(row.color));
     dot.setAttribute('stroke-width', '2');
     svg.appendChild(dot);
@@ -70,7 +72,7 @@
     const div = el('div', className);
     div.style.top = `${index * ROW}px`;
     div.dataset.index = String(index);
-    div.dataset.vscodeContext = JSON.stringify({ webviewSection: 'commit', sha: row.sha, preventDefaultContextMenuItems: true });
+    div.dataset.vscodeContext = JSON.stringify({ webviewSection: 'commit', root, sha: row.sha, parents: row.parents.length, preventDefaultContextMenuItems: true });
     const graph = el('div', 'graph');
     graph.appendChild(graphCell(row));
     div.appendChild(graph);
@@ -78,7 +80,7 @@
     for (const ref of row.refs) {
       const badge = el('span', `ref ${ref.kind}${ref.current ? ' current' : ''}`, ref.name);
       if (ref.kind === 'branch') {
-        badge.dataset.vscodeContext = JSON.stringify({ webviewSection: 'branch', branch: ref.name, sha: row.sha, preventDefaultContextMenuItems: true });
+        badge.dataset.vscodeContext = JSON.stringify({ webviewSection: 'branch', root, branch: ref.name, current: Boolean(ref.current), sha: row.sha, preventDefaultContextMenuItems: true });
       }
       message.appendChild(badge);
     }
@@ -157,6 +159,11 @@
         }
       });
     }
+    // Nouvelles lignes chargées : Entrée repart de la sélection, pas du premier résultat.
+    matchIndex = -1;
+    matchOrder.forEach((index, i) => {
+      if (index <= selected) matchIndex = i;
+    });
     render();
   }
 
