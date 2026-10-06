@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0
+
+- First stable release: inline blame, file and line history, conflicts view and local merge, compare / stashes / worktrees with deploy, commit graph, guided cherry-pick / revert / reset / interactive rebase.
+- Performance measured on 10,000 commits (`npm run bench`).
+
 ## 0.6.0
 
 - Cherry-pick and revert from the graph and the File History view, merge commits relative to their first parent.

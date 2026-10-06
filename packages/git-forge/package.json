@@ -2,8 +2,7 @@
   "name": "git-forge",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.6.0",
-  "preview": true,
+  "version": "1.0.0",
   "publisher": "yuval-abdm",
   "license": "MIT",
   "type": "module",
@@ -52,6 +51,7 @@
     "build": "node scripts/build.ts",
     "typecheck": "tsc -p .",
     "test": "node --test \"test/**/*.test.ts\"",
+    "bench": "node scripts/bench.ts",
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies"
   },

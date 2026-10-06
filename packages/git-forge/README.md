@@ -2,7 +2,7 @@
 
 **Free and lightweight Git tools for VS Code: inline blame, file history, conflict resolution, local merge and commit graph — no account, no paid tier, nothing you did not ask for.**
 
-> Preview (0.6). Interface in English and French (follows the VS Code display language).
+> 1.0. Interface in English and French (follows the VS Code display language).
 
 ## Features
 
@@ -24,6 +24,10 @@
   - **Interactive rebase**: an editor lists the commits after the chosen one (oldest first): drag to reorder, pick / reword / edit / squash / fixup / drop, edit the messages in place. Uncommitted changes are stashed and restored; a stop (conflict, edit) is finished from the Conflicts view.
   - With `gitForge.rebaseEditor` on and VS Code as your Git editor, `git rebase -i` started in a terminal opens the same editor.
   - Good to know: backup tags are ordinary local tags (`git push --tags` would publish them; delete them with `git tag -d` when you no longer need them). An interactive rebase also creates one. Stacked branches are not moved by the rebase editor (`rebase.updateRefs` is not applied).
+
+## Performance
+
+Measured on a synthetic repository of 10,000 commits (`npm run bench` in `packages/git-forge`): the blame of the current line is served from cache in well under 100 ms, and the first page of the graph (500 commits, laid out) loads in under 500 ms. Every Git call runs in the background with at most 4 reads at a time per repository, and features you turn off cost nothing.
 
 ## Settings
 
