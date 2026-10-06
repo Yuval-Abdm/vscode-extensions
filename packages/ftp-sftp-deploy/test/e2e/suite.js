@@ -79,6 +79,25 @@ test('système de fichiers distant : lire, écrire, lister, renommer, supprimer'
   await assert.rejects(Promise.resolve(vscode.workspace.fs.stat(uri('/www/nope.php'))), (e) => e.code === 'FileNotFound');
 });
 
+test('recherche de fichiers sur le serveur : liste complète hors exclusions, filtre flou', async () => {
+  const profile = api.config.profiles()[0];
+  fs.mkdirSync(onFtp('node_modules/lib'), { recursive: true });
+  fs.writeFileSync(onFtp('node_modules/lib/x.js'), 'ignored');
+  const listing = api.remoteSearch.listing(profile, profile.remotePath);
+  await waitFor(() => listing.done, 'liste des fichiers du serveur');
+  assert.ok(!listing.error, listing.error);
+  assert.deepStrictEqual([...listing.files].sort(), ['includes/js/app.js', 'index.php']);
+  assert.deepStrictEqual(require('../../src/fuzzy').fuzzyFilter('incapp', listing.files), ['includes/js/app.js']);
+  // Une écriture sur le serveur par l'extension vide la liste en mémoire : la recherche suivante relit le serveur.
+  const uri = vscode.Uri.from({ scheme: 'ftp-sftp-deploy', authority: Buffer.from(profile.id).toString('hex'), path: '/www/found.php' });
+  await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode('x'));
+  const again = api.remoteSearch.listing(profile, profile.remotePath);
+  await waitFor(() => again.done, 'nouvelle liste');
+  assert.ok(again.files.includes('found.php'), again.files.join(', '));
+  await vscode.workspace.fs.delete(uri);
+  fs.rmSync(onFtp('node_modules'), { recursive: true });
+});
+
 test('éditer un fichier distant dans l’éditeur et l’enregistrer', async () => {
   const profile = api.config.profiles()[0];
   const uri = vscode.Uri.from({ scheme: 'ftp-sftp-deploy', authority: Buffer.from(profile.id).toString('hex'), path: '/www/index.php' });

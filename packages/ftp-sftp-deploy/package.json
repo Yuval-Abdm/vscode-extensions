@@ -143,6 +143,12 @@
         "category": "FTP SFTP Deploy"
       },
       {
+        "command": "ftpSftpDeploy.remote.search",
+        "title": "%ftpSftpDeploy.remote.search.title%",
+        "icon": "$(search)",
+        "category": "FTP SFTP Deploy"
+      },
+      {
         "command": "ftpSftpDeploy.remote.refresh",
         "title": "%ftpSftpDeploy.remote.refresh.title%",
         "icon": "$(refresh)"
@@ -196,6 +202,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "ftpSftpDeploy.remote.search",
+          "when": "view == ftpSftpDeploy.remote && ftpSftpDeploy.hasConfig",
+          "group": "navigation@0"
+        },
+        {
           "command": "ftpSftpDeploy.remote.refresh",
           "when": "view == ftpSftpDeploy.remote",
           "group": "navigation@3"
@@ -232,6 +243,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "ftpSftpDeploy.remote.search",
+          "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir)$/",
+          "group": "inline@0"
+        },
         {
           "command": "ftpSftpDeploy.remote.newFile",
           "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir)$/",

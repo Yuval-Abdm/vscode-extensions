@@ -88,8 +88,10 @@ class RemoteTreeProvider {
  * @param {RemoteTreeProvider} provider
  * @param {vscode.TreeView<RemoteNode>} view
  * @param {import('./deployer').Deployer} deployer
+ * @param {import('./remoteSearch').RemoteSearch} search
+ * @param {import('./config').ConfigManager} config
  */
-function registerRemoteCommands(provider, view, deployer) {
+function registerRemoteCommands(provider, view, deployer, search, config) {
   const uriOf = (node) => remoteUri(node.profile, node.kind === 'profile' ? node.profile.remotePath : node.path);
   const dirOf = (node) => (node.kind === 'profile' ? node.profile.remotePath : node.type === 'dir' ? node.path : path.posix.dirname(node.path));
   const nodes = (node, all) => (all?.length ? all : node ? [node] : view.selection).filter((n) => n?.kind === 'entry' || n?.kind === 'profile');
@@ -146,6 +148,25 @@ function registerRemoteCommands(provider, view, deployer) {
       const ok = await vscode.window.showWarningMessage(`${question}\n\n${vscode.l10n.t('This cannot be undone.')}`, { modal: true }, del);
       if (ok !== del) return;
       for (const n of list) await fsApi.delete(uriOf(n), { recursive: true });
+    },
+
+    // Depuis un serveur ou un dossier : recherche dedans ; depuis le titre de la vue : serveur sélectionné, sinon profil
+    // actif s'il n'y en a qu'un, sinon au choix.
+    search: async (node) => {
+      if (node?.kind === 'profile' || (node?.kind === 'entry' && node.type === 'dir')) return search.show(node.profile, dirOf(node));
+      const selected = view.selection.find((n) => n.kind !== 'error');
+      if (selected) return search.show(selected.profile, selected.kind === 'profile' ? undefined : dirOf(selected));
+      const profiles = config.profiles();
+      if (!profiles.length) return;
+      const actives = profiles.filter((p) => config.active(p.folder)?.id === p.id);
+      const candidates = actives.length === 1 ? actives : profiles;
+      const profile = candidates.length === 1
+        ? candidates[0]
+        : (await vscode.window.showQuickPick(
+          candidates.map((p) => ({ label: p.name, description: `${p.protocol}://${p.host}${p.remotePath}`, p })),
+          { placeHolder: vscode.l10n.t('Search on which server?') },
+        ))?.p;
+      if (profile) await search.show(profile);
     },
 
     open: (node) => node?.kind === 'entry' && node.type === 'file' && vscode.commands.executeCommand('vscode.open', uriOf(node)),

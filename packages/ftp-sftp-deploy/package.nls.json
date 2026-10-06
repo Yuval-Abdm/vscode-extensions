@@ -9,6 +9,7 @@
   "ftpSftpDeploy.importSftp.title": "Import configuration from sftp.json",
   "ftpSftpDeploy.forgetPassword.title": "Forget a saved password",
   "ftpSftpDeploy.showLog.title": "Show deployment logs",
+  "ftpSftpDeploy.remote.search.title": "Search files on the server…",
   "ftpSftpDeploy.remote.refresh.title": "Refresh",
   "ftpSftpDeploy.remote.newFile.title": "New File…",
   "ftpSftpDeploy.remote.newFolder.title": "New Folder…",

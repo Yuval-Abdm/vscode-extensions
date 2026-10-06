@@ -6,6 +6,7 @@ const { ConnectionManager } = require('./connections');
 const { RemoteFileSystem, SCHEME } = require('./remoteFs');
 const { RemoteTreeProvider, registerRemoteCommands } = require('./remoteTree');
 const { Deployer } = require('./deployer');
+const { RemoteSearch } = require('./remoteSearch');
 
 /** @param {vscode.ExtensionContext} context */
 async function activate(context) {
@@ -15,6 +16,7 @@ async function activate(context) {
   const remoteFs = new RemoteFileSystem(config, connections);
   const deployer = new Deployer(config, connections, remoteFs, log);
   const remoteTree = new RemoteTreeProvider(config, remoteFs);
+  const remoteSearch = new RemoteSearch(config, connections, remoteFs);
   const remoteView = vscode.window.createTreeView('ftpSftpDeploy.remote', { treeDataProvider: remoteTree, canSelectMany: true, showCollapseAll: true });
 
   // Barre d'état : profil actif du dossier de l'éditeur courant, clic = changer de profil
@@ -112,9 +114,9 @@ async function activate(context) {
   };
 
   context.subscriptions.push(
-    log, status, remoteView, connections,
+    log, status, remoteView, connections, remoteSearch,
     vscode.workspace.registerFileSystemProvider(SCHEME, remoteFs, { isCaseSensitive: true }),
-    ...registerRemoteCommands(remoteTree, remoteView, deployer),
+    ...registerRemoteCommands(remoteTree, remoteView, deployer, remoteSearch, config),
     ...Object.entries(commands).map(([id, fn]) => vscode.commands.registerCommand(`ftpSftpDeploy.${id}`, fn)),
     config.onDidChange(() => {
       connections.disconnectAll(); // les paramètres de connexion ont pu changer
@@ -147,7 +149,7 @@ async function activate(context) {
     deleteRemote: (uris, options) => deployer.deleteRemote(uris, options),
     diff: (uri) => deployer.diff(uri),
     // Internes, pour les tests d'intégration
-    _internals: { config, deployer, remoteTree },
+    _internals: { config, deployer, remoteTree, remoteSearch },
   };
 }
 
