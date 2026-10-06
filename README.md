@@ -1,12 +1,13 @@
 # VS Code extensions
 
-Three independent VS Code extensions, developed together.
+Four independent VS Code extensions, developed together.
 
 | Extension | Marketplace | Open VSX | What it does |
 |---|---|---|---|
 | [**Changed Files Explorer**](packages/changed-files-explorer) | [yuval-abdm.changed-files-explorer](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.changed-files-explorer) | [open-vsx.org](https://open-vsx.org/extension/yuval-abdm/changed-files-explorer) | All your git changed files in an Explorer-like view, with the full right-click menu |
 | [**FTP SFTP Deploy**](packages/ftp-sftp-deploy) | [yuval-abdm.ftp-sftp-deploy](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.ftp-sftp-deploy) | [open-vsx.org](https://open-vsx.org/extension/yuval-abdm/ftp-sftp-deploy) | Deploy over FTP, FTPS and SFTP; browse and edit the server; migrate from `sftp.json` |
 | [**PHP Forge**](packages/php-forge) | [yuval-abdm.php-forge](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.php-forge) | [open-vsx.org](https://open-vsx.org/extension/yuval-abdm/php-forge) | Free PHP language server: navigation, diagnostics, include-aware analysis (preview) |
+| [**Git Forge**](packages/git-forge) | [yuval-abdm.git-forge](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.git-forge) | [open-vsx.org](https://open-vsx.org/extension/yuval-abdm/git-forge) | Free, lightweight Git tools: inline blame, history, conflicts, local merge, commit graph (preview) |
 
 Each extension works on its own. When both are installed, Changed Files Explorer uses FTP SFTP Deploy's public API to deploy every changed file in one click.
 
@@ -22,6 +23,7 @@ PHP Forge is written in TypeScript and its tests run the sources directly: they 
 npm run typecheck                     # PHP Forge: tsc --noEmit
 npm run test:e2e:php-forge            # PHP Forge in a real VS Code
 npm run bench --workspace php-forge   # local benchmark on real projects (PHP_FORGE_CORPUS=/a:/b)
+npm run test:e2e:git-forge            # Git Forge in a real VS Code, on a temporary repository
 ```
 
 ```bash
@@ -44,6 +46,7 @@ packages/
   changed-files-explorer/   extension: src/, l10n/, media/, package.json
   ftp-sftp-deploy/          extension: src/, l10n/, media/, schema/, test/
   php-forge/                extension: src/{client,server,shared}, l10n/, media/, scripts/, test/
+  git-forge/                extension: src/{git,features,shared}, l10n/, media/, scripts/, test/
 test/
   e2e/run.js                launches VS Code with both extensions and local servers
   l10n.test.js              checks every UI string has its French translation

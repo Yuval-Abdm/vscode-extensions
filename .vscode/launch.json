@@ -19,6 +19,14 @@
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/php-forge"],
       "outFiles": ["${workspaceFolder}/packages/php-forge/dist/**/*.cjs"],
       "preLaunchTask": "npm: build"
+    },
+    {
+      "name": "Run Git Forge",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/git-forge"],
+      "outFiles": ["${workspaceFolder}/packages/git-forge/dist/**/*.cjs"],
+      "preLaunchTask": "npm: build"
     }
   ]
 }

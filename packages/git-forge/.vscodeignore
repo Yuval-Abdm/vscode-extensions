@@ -6,3 +6,7 @@ tsconfig.json
 **/*.map
 *.vsix
 media/icon.svg
+.claude-flow/**
+.claude/**
+.swarm/**
+ruvector.db
