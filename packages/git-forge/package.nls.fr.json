@@ -10,5 +10,14 @@
   "command.diffWithPrevious": "Comparer avec la révision précédente",
   "command.openRevision": "Ouvrir le fichier à cette révision",
   "command.copySha": "Copier le SHA du commit",
-  "color.blameForeground": "Couleur du texte du blame en fin de ligne courante et dans le blame du fichier."
+  "color.blameForeground": "Couleur du texte du blame en fin de ligne courante et dans le blame du fichier.",
+  "config.history.enabled": "Affiche la vue Historique du fichier dans le panneau Contrôle de code source.",
+  "view.history": "Historique du fichier",
+  "command.showFileHistory": "Afficher l'historique du fichier",
+  "command.showLineHistory": "Afficher l'historique des lignes",
+  "command.history.pin": "Épingler (ne plus suivre l'éditeur actif)",
+  "command.history.unpin": "Désépingler (suivre l'éditeur actif)",
+  "command.history.refresh": "Actualiser",
+  "command.history.compareWithWorking": "Comparer avec le fichier actuel",
+  "command.history.copyMessage": "Copier le message du commit"
 }

@@ -2,6 +2,7 @@
 // Rien n'est créé tant qu'aucun dépôt n'est ouvert.
 import * as vscode from 'vscode';
 import { BlameFeature } from './features/blame/index.ts';
+import { HistoryView } from './features/history/view.ts';
 import { GitCommands } from './git/commands.ts';
 import type { API, GitExtension } from './git/gitApi.ts';
 import { Repos } from './git/repos.ts';
@@ -21,6 +22,7 @@ interface Services {
 
 const FEATURES: Record<string, (services: Services) => vscode.Disposable> = {
   blame: ({ git, repos }) => new BlameFeature(git, repos),
+  history: ({ git, repos }) => new HistoryView(git, repos),
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<GitForgeApi> {

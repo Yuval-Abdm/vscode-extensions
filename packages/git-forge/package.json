@@ -84,6 +84,11 @@
           "default": 20000,
           "minimum": 1,
           "description": "%config.blame.maxLines%"
+        },
+        "gitForge.history.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.history.enabled%"
         }
       }
     },
@@ -112,6 +117,55 @@
         "command": "gitForge.copySha",
         "title": "%command.copySha%",
         "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.showFileHistory",
+        "title": "%command.showFileHistory%",
+        "category": "Git Forge",
+        "icon": "$(history)"
+      },
+      {
+        "command": "gitForge.showLineHistory",
+        "title": "%command.showLineHistory%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.history.pin",
+        "title": "%command.history.pin%",
+        "category": "Git Forge",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "gitForge.history.unpin",
+        "title": "%command.history.unpin%",
+        "category": "Git Forge",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "gitForge.history.refresh",
+        "title": "%command.history.refresh%",
+        "category": "Git Forge",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitForge.history.openRevision",
+        "title": "%command.openRevision%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.history.compareWithWorking",
+        "title": "%command.history.compareWithWorking%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.history.copySha",
+        "title": "%command.copySha%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.history.copyMessage",
+        "title": "%command.history.copyMessage%",
+        "category": "Git Forge"
       }
     ],
     "menus": {
@@ -135,6 +189,107 @@
         {
           "command": "gitForge.copySha",
           "when": "false"
+        },
+        {
+          "command": "gitForge.showFileHistory",
+          "when": "gitForge.active && config.gitForge.history.enabled"
+        },
+        {
+          "command": "gitForge.showLineHistory",
+          "when": "gitForge.active && config.gitForge.history.enabled && editorIsOpen"
+        },
+        {
+          "command": "gitForge.history.pin",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.history.unpin",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.history.refresh",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.history.openRevision",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.history.compareWithWorking",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.history.copySha",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.history.copyMessage",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "gitForge.history.pin",
+          "when": "view == gitForge.history && !gitForge.history.pinned",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitForge.history.unpin",
+          "when": "view == gitForge.history && gitForge.history.pinned",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitForge.history.refresh",
+          "when": "view == gitForge.history",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gitForge.history.openRevision",
+          "when": "view == gitForge.history && viewItem =~ /^gitForge\\.commit/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "gitForge.history.compareWithWorking",
+          "when": "view == gitForge.history && viewItem == gitForge.commit",
+          "group": "1_open@2"
+        },
+        {
+          "command": "gitForge.history.copySha",
+          "when": "view == gitForge.history && viewItem =~ /^gitForge\\.commit/",
+          "group": "2_copy@1"
+        },
+        {
+          "command": "gitForge.history.copyMessage",
+          "when": "view == gitForge.history && viewItem =~ /^gitForge\\.commit/",
+          "group": "2_copy@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "gitForge.showLineHistory",
+          "when": "gitForge.active && config.gitForge.history.enabled && resourceScheme == file",
+          "group": "gitForge@1"
+        },
+        {
+          "command": "gitForge.showFileHistory",
+          "when": "gitForge.active && config.gitForge.history.enabled && resourceScheme == file",
+          "group": "gitForge@2"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "gitForge.showFileHistory",
+          "when": "gitForge.active && config.gitForge.history.enabled && resourceScheme == file",
+          "group": "gitForge@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "gitForge.showFileHistory",
+          "when": "gitForge.active && config.gitForge.history.enabled && !explorerResourceIsFolder",
+          "group": "gitForge@1"
         }
       ]
     },
@@ -149,6 +304,15 @@
           "highContrastLight": "#00000099"
         }
       }
-    ]
+    ],
+    "views": {
+      "scm": [
+        {
+          "id": "gitForge.history",
+          "name": "%view.history%",
+          "when": "gitForge.active && config.gitForge.history.enabled"
+        }
+      ]
+    }
   }
 }

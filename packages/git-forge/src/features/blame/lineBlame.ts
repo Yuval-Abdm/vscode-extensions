@@ -31,7 +31,7 @@ export class LineBlame implements vscode.Disposable {
   constructor(service: BlameService, repos: Repos) {
     this.#service = service;
     this.#status.name = vscode.l10n.t('Git Forge blame');
-    this.#status.command = 'gitForge.showLineCommit';
+    this.#status.command = 'gitForge.blame.statusClick';
     this.#disposables = [
       this.#decoration,
       this.#status,
@@ -51,6 +51,12 @@ export class LineBlame implements vscode.Disposable {
         if (e.affectsConfiguration('gitForge.blame')) this.#schedule();
       }),
       vscode.commands.registerCommand('gitForge.showLineCommit', () => this.#showLineCommit()),
+      // Clic sur la barre d'état : historique de la ligne si la vue Historique est active, sinon le commit.
+      vscode.commands.registerCommand('gitForge.blame.statusClick', () =>
+        vscode.commands.executeCommand(
+          vscode.workspace.getConfiguration('gitForge').get<boolean>('history.enabled', true) ? 'gitForge.showLineHistory' : 'gitForge.showLineCommit',
+        ),
+      ),
     ];
     this.#schedule();
   }

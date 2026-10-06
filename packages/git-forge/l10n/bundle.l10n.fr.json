@@ -11,5 +11,12 @@
   "Git Forge needs the built-in Git extension.": "Git Forge a besoin de l'extension Git intégrée.",
   "Git Forge is inactive: Git was not found.": "Git Forge est inactif : Git est introuvable.",
   "Git Forge is inactive: the built-in Git extension is disabled (git.enabled).": "Git Forge est inactif : l'extension Git intégrée est désactivée (git.enabled).",
-  "Git Forge could not start: {0}": "Git Forge n'a pas pu démarrer : {0}"
+  "Git Forge could not start: {0}": "Git Forge n'a pas pu démarrer : {0}",
+  "Load more…": "Charger la suite…",
+  "{0}, lines {1}–{2}": "{0}, lignes {1}–{2}",
+  "{0} (pinned)": "{0} (épinglé)",
+  "Open a file tracked by Git to see its history.": "Ouvrez un fichier suivi par Git pour voir son historique.",
+  "No commits for this file.": "Aucun commit pour ce fichier.",
+  "{0} ({1} ↔ working tree)": "{0} ({1} ↔ fichier actuel)",
+  "Commit message copied.": "Message du commit copié."
 }
