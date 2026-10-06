@@ -71,6 +71,6 @@
   "viewsContainer.gitForge": "Git Forge",
   "view.graph": "Graphe",
   "config.commit.enabled": "Affiche la vue Commit (indexer les fichiers, message conventionnel, pull, commit et push) en haut de la barre latérale Git Forge.",
-  "config.commit.pullBeforeCommit": "Dans la vue Commit, lance `git pull --rebase --autostash` avant de commiter.",
+  "config.commit.pullBeforeCommit": "Dans la vue Commit, faire un pull de la branche courante (`git pull --rebase`) avant de commiter ; vos modifications sont mises de côté puis remises exactement, fichiers indexés compris.",
   "view.commit": "Commit"
 }

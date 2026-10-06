@@ -6,7 +6,7 @@
 
 ## Features
 
-Everything lives in its own **Git Forge** icon of the activity bar: Graph, Conflicts (only while a merge, rebase, cherry-pick or revert is in progress), File History, then Compare, Stashes and Worktrees (collapsed). VS Code's Source Control panel is left untouched. The blame stays in the editor and the status bar.
+Everything lives in its own **Git Forge** icon of the activity bar: Commit, Graph, Conflicts (only while a merge, rebase, cherry-pick or revert is in progress), File History, then Compare, Stashes and Worktrees (collapsed). VS Code's Source Control panel is left untouched. The blame stays in the editor and the status bar.
 
 
 - **Current line blame**: author, relative date and commit message at the end of the line you are on, shown after a short pause. Lines you added or changed and did not commit yet show *You • Uncommitted changes* — the blame follows your unsaved edits.
@@ -20,6 +20,7 @@ Everything lives in its own **Git Forge** icon of the activity bar: Graph, Confl
 - **Compare** view: pick two references — branch, remote branch, tag, commit SHA or the working tree — and see the commits and a tree of the changed files; click a file for its diff. From the common ancestor (`A...B`, what the right side changed) or direct (`A..B`), swap sides in one click. With [FTP SFTP Deploy](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.ftp-sftp-deploy) installed, **Deploy These Files** uploads the current version of every changed file (deleted files are never sent), after a confirmation that names the server.
 - **Stashes** view: every stash and its files (untracked ones included), diff on click, apply, pop, delete; **Stash All Changes** includes untracked files.
 - **Worktrees** view: every worktree of the repository; create one from an existing or a new branch, open it in a new window, remove it (with an explicit confirmation if it has changes).
+- **Commit** view, at the top of the Git Forge sidebar: the files of the active editor's repository, staged and unstaged (**+** / **−** on hover, for a file or a whole group; click a file for its diff). Pick a conventional commit type from the list (✨ feat, 🐛 fix, ♻️ refactor, ⚡ perf, 📝 docs…, each with its description), an optional scope and **!** for a breaking change: the prefix is written at the start of the message, and typing it by hand works too. **Commit** or **Commit & Push** (Ctrl+Enter commits); a counter shows the summary length. **Pull before commit** (on by default) pulls with `--rebase` first: your changes are set aside and restored exactly, staged files included. Conflicted files cannot be staged from here, and the commit is refused while a rebase, cherry-pick or revert is in progress.
 - **Commit graph**, in its own **Git Forge** icon of the activity bar (the graph of the active editor's repository, compact: graph, colored branch labels and messages; author and date on hover), or in an editor tab (*Show Graph*, or ⤢ in the sidebar): every branch, remote branch and tag, or the current branch only; search by message, author, SHA or branch (Enter jumps to the next match); select a commit to see its full message and files, double-click a file for its diff. Right-click a commit: checkout (detached), create a branch or a tag here, compare with HEAD or with the selected commit, copy the SHA. Right-click a branch: checkout, Merge Locally into the current branch, delete (with a clear warning when it is not merged). Loads 500 commits at a time and only draws what is visible, so large repositories stay smooth.
 - **Guided operations** (right-click a commit in the graph or the File History view), each one explained before it runs:
   - **Cherry-pick** and **Revert**: the confirmation names the commit and the branch; a merge commit is applied relative to its first parent; conflicts open the Conflicts view.
@@ -44,6 +45,8 @@ Measured on a synthetic repository of 10,000 commits (`npm run bench` in `packag
 | `gitForge.conflicts.enabled` | `true` | Conflicts view |
 | `gitForge.merge.enabled` | `true` | Merge Locally command |
 | `gitForge.compare.enabled` | `true` | Compare, Stashes and Worktrees views |
+| `gitForge.commit.enabled` | `true` | Commit view |
+| `gitForge.commit.pullBeforeCommit` | `true` | Pull (`--rebase`) before committing from the Commit view |
 | `gitForge.graph.enabled` | `true` | Commit graph |
 | `gitForge.operations.enabled` | `true` | Cherry-pick, revert, reset and interactive rebase in the commit menus |
 | `gitForge.rebaseEditor` | `false` | Open `git rebase -i` todo lists in Git Forge's editor |

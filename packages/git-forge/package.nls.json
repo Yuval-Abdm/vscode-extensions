@@ -71,6 +71,6 @@
   "viewsContainer.gitForge": "Git Forge",
   "view.graph": "Graph",
   "config.commit.enabled": "Show the Commit view (stage files, conventional message, pull, commit and push) at the top of the Git Forge sidebar.",
-  "config.commit.pullBeforeCommit": "In the Commit view, run `git pull --rebase --autostash` before committing.",
+  "config.commit.pullBeforeCommit": "In the Commit view, pull the current branch (`git pull --rebase`) before committing; your changes are set aside and restored exactly, staged files included.",
   "view.commit": "Commit"
 }

@@ -2,6 +2,8 @@
 
 ## 1.0.0
 
+- Commit view at the top of the sidebar: stage and unstage files, conventional commit types with icons and descriptions, optional scope and breaking change, pull (`--rebase`) before committing that keeps staged files exactly, Commit or Commit & Push.
+- New activity bar icon and logo.
 - Everything in its own activity bar container (Git Forge icon): commit graph styled with colored lanes and branch labels (also in an editor tab), Conflicts, File History, Compare, Stashes and Worktrees; VS Code's Source Control panel is left untouched.
 - First stable release: inline blame, file and line history, conflicts view and local merge, compare / stashes / worktrees with deploy, commit graph, guided cherry-pick / revert / reset / interactive rebase.
 - Performance measured on 10,000 commits (`npm run bench`).
