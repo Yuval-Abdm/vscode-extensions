@@ -245,6 +245,8 @@ export class GraphSession implements vscode.Disposable {
       branch: vscode.l10n.t('branch'),
       remote: vscode.l10n.t('remote branch'),
       tag: vscode.l10n.t('tag'),
+      laneBranch: vscode.l10n.t('Branch line: {0} (each color follows one branch)'),
+      laneUnknown: vscode.l10n.t('Branch line without a known name (each color follows one branch; this one was deleted or merged)'),
     };
     const json = JSON.stringify(strings).replace(/</g, '\\u003c');
     const text = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');

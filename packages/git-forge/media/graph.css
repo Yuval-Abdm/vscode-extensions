@@ -143,6 +143,7 @@ body.sidebar #toolbar label {
   display: none;
 }
 #details .meta {
+  overflow-wrap: anywhere;
   color: var(--vscode-descriptionForeground);
   margin-bottom: 6px;
 }
@@ -152,6 +153,9 @@ body.sidebar #toolbar label {
   margin: 0 0 8px;
 }
 #details .file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 2px 0;
   cursor: pointer;
 }

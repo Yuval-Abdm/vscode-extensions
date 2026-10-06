@@ -6,6 +6,8 @@
   const root = strings.root;
   const ROW = 22;
   const LANE = 12;
+  /** Marge à gauche du graphe, pour l'éloigner du bord de la vue. */
+  const PAD = 10;
   const RADIUS = 3.5;
   // Couleurs vives des branches (lignes, points et étiquettes), dans l'esprit de GitLens.
   const COLORS = ['#3794ff', '#e05fbd', '#45c46b', '#f0883e', '#b180d7', '#e5c07b', '#4ec9b0', '#f14c4c'];
@@ -24,6 +26,8 @@
   let loading = false;
   let selected = -1;
   let maxWidth = 1;
+  /** Nom de branche de chaque voie, par couleur (appris au fil des lignes chargées). */
+  let laneNames = {};
   let matches = new Set();
   let matchOrder = [];
   let matchIndex = -1;
@@ -37,11 +41,22 @@
     return node;
   }
 
+  function graphWidth() {
+    return PAD + maxWidth * LANE + LANE / 2;
+  }
+
   function graphCell(row) {
     const svg = document.createElementNS(SVG, 'svg');
-    svg.setAttribute('width', String(maxWidth * LANE + LANE));
+    svg.setAttribute('width', String(graphWidth()));
     svg.setAttribute('height', String(ROW));
-    const x = (column) => LANE / 2 + column * LANE;
+    const x = (column) => PAD + LANE / 2 + column * LANE;
+    // Survol : la branche de la voie (une couleur = une branche), sur chaque trait et sur le point du commit.
+    const tip = (node, lane) => {
+      const title = document.createElementNS(SVG, 'title');
+      title.textContent = laneNames[lane] ? strings.laneBranch.replace('{0}', laneNames[lane]) : strings.laneUnknown;
+      node.appendChild(title);
+    };
+    tip(svg, row.color);
     const segment = (x1, y1, x2, y2, lane) => {
       const path = document.createElementNS(SVG, 'path');
       const mid = (y1 + y2) / 2;
@@ -50,6 +65,7 @@
       path.setAttribute('stroke-width', '1.6');
       path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('fill', 'none');
+      tip(path, lane);
       svg.appendChild(path);
     };
     for (const edge of row.up) segment(x(edge.from), 0, x(edge.to), ROW / 2, edge.color);
@@ -63,6 +79,7 @@
     dot.style.fill = merge ? 'var(--vscode-editor-background)' : color(row.color);
     dot.setAttribute('stroke', color(row.color));
     dot.setAttribute('stroke-width', '1.6');
+    tip(dot, row.color);
     svg.appendChild(dot);
     // HEAD : anneau autour du point.
     if (row.refs.some((ref) => ref.current || ref.kind === 'head')) {
@@ -144,7 +161,7 @@
 
   function render() {
     spacer.style.height = `${rows.length * ROW}px`;
-    document.documentElement.style.setProperty('--graph-width', `${maxWidth * LANE + LANE}px`);
+    document.documentElement.style.setProperty('--graph-width', `${graphWidth()}px`);
     const first = Math.max(0, Math.floor(list.scrollTop / ROW) - 10);
     const last = Math.min(rows.length, Math.ceil((list.scrollTop + list.clientHeight) / ROW) + 10);
     viewport.replaceChildren(...rows.slice(first, last).map((row, i) => renderRow(row, first + i)));
@@ -253,6 +270,7 @@
         const previous = selected >= 0 ? rows[selected].sha : undefined;
         rows = [];
         maxWidth = 1;
+        laneNames = {};
         selected = -1;
         rows = message.rows;
         if (previous) selected = rows.findIndex((row) => row.sha === previous);
@@ -260,7 +278,10 @@
       } else {
         rows = rows.concat(message.rows);
       }
-      for (const row of message.rows) maxWidth = Math.max(maxWidth, row.width);
+      for (const row of message.rows) {
+        maxWidth = Math.max(maxWidth, row.width);
+        if (row.names) Object.assign(laneNames, row.names);
+      }
       hasMore = message.hasMore;
       loading = false;
       allToggle.checked = message.all;

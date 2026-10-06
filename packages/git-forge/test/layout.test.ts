@@ -68,3 +68,41 @@ describe('placement du graphe', () => {
     ]);
   });
 });
+
+describe('nom des voies (couleurs) du graphe', () => {
+  type Ref = { name: string; kind: 'head' | 'branch' | 'remote' | 'tag' };
+  const n = (sha: string, parents: string[], refs: Ref[] = [], summary = '') => ({ sha, parents, refs, summary });
+  /** Noms appris au fil des lignes, par couleur. */
+  const learned = (rows: GraphRow[]) => Object.assign({}, ...rows.map((r) => r.names ?? {})) as Record<number, string>;
+
+  it('branche locale préférée à la distante, branche mergée tirée du message de merge', () => {
+    const rows = new GraphLayout().add([
+      n('M', ['c3', 'f1'], [{ name: 'origin/main', kind: 'remote' }, { name: 'main', kind: 'branch' }], "Merge branch 'feature' into main"),
+      n('f1', ['c2']),
+      n('c3', ['c2']),
+      n('c2', []),
+    ]);
+    const names = learned(rows);
+    assert.equal(names[rows[0].color], 'main');
+    assert.equal(names[rows[1].color], 'feature');
+    assert.equal(names[rows[2].color], 'main');
+  });
+
+  it('voie sans nom au départ : prend la branche du premier commit étiqueté ; tag ignoré', () => {
+    const rows = new GraphLayout().add([
+      n('x', ['y'], [{ name: 'v1', kind: 'tag' }]),
+      n('y', ['z'], [{ name: 'origin/dev', kind: 'remote' }]),
+      n('z', [], [{ name: 'other', kind: 'branch' }]),
+    ]);
+    assert.equal(rows[0].names, undefined);
+    assert.deepEqual(rows[1].names, { [rows[0].color]: 'origin/dev' });
+    assert.equal(rows[2].names, undefined, 'une voie nommée garde son nom');
+  });
+
+  it('pull request GitHub et branche de suivi distante', () => {
+    const pr = new GraphLayout().add([n('M', ['a', 'b'], [], 'Merge pull request #12 from yuval/fix-dates'), n('b', ['a']), n('a', [])]);
+    assert.equal(learned(pr)[pr[1].color], 'fix-dates');
+    const remote = new GraphLayout().add([n('M', ['a', 'b'], [], "Merge remote-tracking branch 'origin/devya'"), n('b', ['a']), n('a', [])]);
+    assert.equal(learned(remote)[remote[1].color], 'origin/devya');
+  });
+});

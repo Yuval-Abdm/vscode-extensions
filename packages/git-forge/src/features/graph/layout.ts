@@ -1,6 +1,7 @@
 // Placement du graphe des commits (sans dépendance à VS Code). Les commits arrivent enfants avant parents ; chaque
 // colonne (« voie ») attend un commit précis. Pour chaque ligne : colonne du commit, segments entrants (du haut de la
-// ligne vers le milieu) et sortants (du milieu vers le bas), avec la couleur de leur voie.
+// ligne vers le milieu) et sortants (du milieu vers le bas), avec la couleur de leur voie. Chaque voie a sa couleur
+// (jamais réutilisée) et, quand on peut le savoir, le nom de sa branche : affiché au survol du graphe.
 
 export interface Edge {
   from: number;
@@ -15,11 +16,36 @@ export interface GraphRow {
   down: Edge[];
   /** Nombre de colonnes occupées sur cette ligne. */
   width: number;
+  /** Noms de branche appris sur cette ligne, par couleur de voie. */
+  names?: Record<number, string>;
 }
 
 interface Lane {
   sha: string;
   color: number;
+  name?: string;
+}
+
+export interface LayoutCommit {
+  sha: string;
+  parents: readonly string[];
+  refs?: readonly { name: string; kind: string }[];
+  summary?: string;
+}
+
+/** Branche portée par un commit : locale de préférence, sinon distante (les tags ne nomment pas de voie). */
+function branchOf(commit: LayoutCommit): string | undefined {
+  const refs = commit.refs ?? [];
+  return (refs.find((ref) => ref.kind === 'branch') ?? refs.find((ref) => ref.kind === 'remote'))?.name;
+}
+
+/** Branche mergée, d'après le message de merge de git ou de GitHub. */
+export function mergedBranch(summary: string | undefined): string | undefined {
+  if (!summary) return undefined;
+  const git = /^Merge (?:remote-tracking )?branch '([^']+)'/.exec(summary);
+  if (git) return git[1];
+  const pullRequest = /^Merge pull request #\d+ from [^/\s]+\/(\S+)/.exec(summary);
+  return pullRequest?.[1];
 }
 
 export class GraphLayout {
@@ -27,7 +53,7 @@ export class GraphLayout {
   #lanes: (Lane | null)[] = [];
   #nextColor = 0;
 
-  add(commits: readonly { sha: string; parents: readonly string[] }[]): GraphRow[] {
+  add(commits: readonly LayoutCommit[]): GraphRow[] {
     return commits.map((commit) => this.#place(commit));
   }
 
@@ -36,15 +62,23 @@ export class GraphLayout {
     return index < 0 ? this.#lanes.length : index;
   }
 
-  #place(commit: { sha: string; parents: readonly string[] }): GraphRow {
+  #place(commit: LayoutCommit): GraphRow {
     const lanes = this.#lanes;
+    let names: Record<number, string> | undefined;
+    const learn = (lane: Lane, name: string | undefined) => {
+      if (lane.name || !name) return;
+      lane.name = name;
+      (names ??= {})[lane.color] = name;
+    };
     let column = lanes.findIndex((lane) => lane?.sha === commit.sha);
     const isTip = column < 0;
     if (isTip) {
       column = this.#free();
       lanes[column] = { sha: commit.sha, color: this.#nextColor++ };
     }
-    const color = (lanes[column] as Lane).color;
+    const own = lanes[column] as Lane;
+    learn(own, branchOf(commit));
+    const color = own.color;
 
     // Segments entrants : voies qui attendaient ce commit (elles le rejoignent), autres voies (elles passent).
     const up: Edge[] = [];
@@ -68,7 +102,7 @@ export class GraphLayout {
         lanes[column] = null;
         down.push({ from: column, to: existing, color: (lanes[existing] as Lane).color });
       } else {
-        lanes[column] = { sha: first, color };
+        lanes[column] = { sha: first, color, name: own.name };
         down.push({ from: column, to: column, color });
       }
     }
@@ -79,6 +113,7 @@ export class GraphLayout {
         lanes[index] = { sha: parent, color: this.#nextColor++ };
         created.add(index);
       }
+      learn(lanes[index] as Lane, mergedBranch(commit.summary));
       down.push({ from: column, to: index, color: (lanes[index] as Lane).color });
     }
     // Voies qui passent : ouvertes avant cette ligne et toujours ouvertes après (hors la colonne du commit et les
@@ -89,6 +124,6 @@ export class GraphLayout {
     }
     while (lanes.length && lanes[lanes.length - 1] === null) lanes.pop();
     const width = Math.max(column, ...up.map((e) => Math.max(e.from, e.to)), ...down.map((e) => Math.max(e.from, e.to))) + 1;
-    return { column, color, up, down, width };
+    return names ? { column, color, up, down, width, names } : { column, color, up, down, width };
   }
 }
