@@ -24,3 +24,16 @@ export function decodeRevision(query: string): RevisionRef | undefined {
   }
   return undefined;
 }
+
+/** Arguments des commandes de commit (sérialisables en JSON pour les liens du survol). */
+export interface CommitFileArgs {
+  root: string;
+  sha: string;
+  /** Chemin du fichier dans ce commit. */
+  path: string;
+  /** Parent ; absent si le fichier est ajouté par ce commit (côté gauche vide). */
+  previousSha?: string;
+  previousPath?: string;
+  /** Fichier supprimé par ce commit : côté droit vide. */
+  deleted?: boolean;
+}

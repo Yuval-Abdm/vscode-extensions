@@ -4,7 +4,9 @@ import path from 'node:path';
 import * as vscode from 'vscode';
 import type { GitCommands } from '../git/commands.ts';
 import type { BlameCommit } from '../git/parsers/blame.ts';
-import { decodeRevision, encodeRevision, type RevisionRef } from './revisionRef.ts';
+import { decodeRevision, encodeRevision, type CommitFileArgs, type RevisionRef } from './revisionRef.ts';
+
+export type { CommitFileArgs } from './revisionRef.ts';
 
 export const SCHEME = 'git-forge';
 
@@ -27,15 +29,6 @@ export class RevisionProvider implements vscode.TextDocumentContentProvider {
   }
 }
 
-/** Arguments des commandes de commit (sérialisables en JSON pour les liens du survol). */
-export interface CommitFileArgs {
-  root: string;
-  sha: string;
-  path: string;
-  previousSha?: string;
-  previousPath?: string;
-}
-
 export function commitFileArgs(root: string, commit: BlameCommit): CommitFileArgs {
   return { root, sha: commit.sha, path: commit.filename, previousSha: commit.previous?.sha, previousPath: commit.previous?.filename };
 }
@@ -44,7 +37,7 @@ export function registerRevisionCommands(): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('gitForge.diffWithPrevious', (args: CommitFileArgs) => {
       const left = revisionUri({ root: args.root, path: args.previousPath ?? args.path, sha: args.previousSha ?? '' });
-      const right = revisionUri({ root: args.root, path: args.path, sha: args.sha });
+      const right = revisionUri({ root: args.root, path: args.path, sha: args.deleted ? '' : args.sha });
       const title = vscode.l10n.t('{0} ({1}^ ↔ {1})', path.posix.basename(args.path), args.sha.slice(0, 7));
       return vscode.commands.executeCommand('vscode.diff', left, right, title);
     }),

@@ -1,8 +1,7 @@
 // Blame des documents ouverts, mis en cache par (fichier, HEAD, version du document). Sans dépendance à VS Code.
-import path from 'node:path';
 import { Lru } from '../../git/cache.ts';
 import type { GitCommands } from '../../git/commands.ts';
-import type { RepoLocator } from '../../git/locator.ts';
+import { relativePath, type RepoLocator } from '../../git/locator.ts';
 import { isUncommitted, type BlameCommit, type BlameResult } from '../../git/parsers/blame.ts';
 import { CancelledError, GitError } from '../../git/runner.ts';
 
@@ -29,11 +28,6 @@ export interface LineInfo {
   head: string;
   commit: BlameCommit;
   uncommitted: boolean;
-}
-
-/** Chemin relatif à la racine du dépôt, séparateurs `/`. */
-export function relativePath(root: string, fileName: string): string {
-  return path.relative(root, fileName).split(path.sep).join('/');
 }
 
 export class BlameService {
