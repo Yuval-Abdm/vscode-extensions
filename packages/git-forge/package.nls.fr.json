@@ -67,5 +67,7 @@
   "command.cherryPick": "Cherry-pick sur la branche courante…",
   "command.revert": "Revert (nouveau commit)…",
   "command.reset": "Reset de la branche courante sur ce commit…",
-  "command.interactiveRebase": "Rebase interactif à partir d'ici…"
+  "command.interactiveRebase": "Rebase interactif à partir d'ici…",
+  "viewsContainer.gitForge": "Git Forge",
+  "view.graph": "Graphe"
 }

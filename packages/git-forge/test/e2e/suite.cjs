@@ -199,6 +199,17 @@ test('graphe : tous les commits chargés, copier un SHA depuis le menu', async (
   graph.panel.dispose();
 });
 
+test('graphe dans la barre latérale (conteneur Git Forge) : commits chargés, menu sur la vue', async () => {
+  await vscode.commands.executeCommand('gitForge.graphView.focus');
+  const graph = api.feature('graph');
+  const total = Number(gitIn('rev-list', '--branches', '--remotes', '--tags', 'HEAD', '--count').trim());
+  await waitFor(() => (graph.sidebar.session && graph.sidebar.session.rows.length === total) || undefined, 'lignes de la vue latérale');
+  assert.equal(graph.sidebar.session.root, WS);
+  const sha = graph.sidebar.session.rows[1].sha;
+  await vscode.commands.executeCommand('gitForge.graph.copySha', { webview: 'gitForge.graphView', root: WS, sha });
+  assert.equal(await vscode.env.clipboard.readText(), sha);
+});
+
 test('cherry-pick puis revert sans confirmation, reset soft avec sauvegarde', async () => {
   const ops = await waitFor(() => api.feature('operations'), 'fonction operations');
   gitIn('switch', '-q', '-c', 'pick-source');

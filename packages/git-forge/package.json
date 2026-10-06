@@ -418,6 +418,12 @@
         "command": "gitForge.interactiveRebase",
         "title": "%command.interactiveRebase%",
         "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graphView.refresh",
+        "title": "%command.history.refresh%",
+        "category": "Git Forge",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -637,6 +643,10 @@
         {
           "command": "gitForge.interactiveRebase",
           "when": "false"
+        },
+        {
+          "command": "gitForge.graphView.refresh",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -704,6 +714,16 @@
           "command": "gitForge.worktree.add",
           "when": "view == gitForge.worktrees",
           "group": "navigation@1"
+        },
+        {
+          "command": "gitForge.graphView.refresh",
+          "when": "view == gitForge.graphView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitForge.showGraph",
+          "when": "view == gitForge.graphView",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -894,67 +914,67 @@
       "webview/context": [
         {
           "command": "gitForge.graph.checkoutCommit",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit'",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit'",
           "group": "1_checkout@1"
         },
         {
           "command": "gitForge.graph.createBranch",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit'",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit'",
           "group": "2_create@1"
         },
         {
           "command": "gitForge.graph.createTag",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit'",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit'",
           "group": "2_create@2"
         },
         {
           "command": "gitForge.graph.compareWithHead",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.compare.enabled",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit' && config.gitForge.compare.enabled",
           "group": "3_compare@1"
         },
         {
           "command": "gitForge.graph.compareWithSelected",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.compare.enabled",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit' && config.gitForge.compare.enabled",
           "group": "3_compare@2"
         },
         {
           "command": "gitForge.graph.copySha",
-          "when": "webviewId == 'gitForge.graph' && webviewSection =~ /^(commit|branch)$/",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection =~ /^(commit|branch)$/",
           "group": "9_copy@1"
         },
         {
           "command": "gitForge.graph.checkoutBranch",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'branch'",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'branch'",
           "group": "1_checkout@1"
         },
         {
           "command": "gitForge.graph.mergeBranch",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'branch' && config.gitForge.merge.enabled",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'branch' && config.gitForge.merge.enabled",
           "group": "2_merge@1"
         },
         {
           "command": "gitForge.graph.deleteBranch",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'branch'",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'branch'",
           "group": "3_delete@1"
         },
         {
           "command": "gitForge.cherryPick",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.operations.enabled",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit' && config.gitForge.operations.enabled",
           "group": "4_operations@1"
         },
         {
           "command": "gitForge.revert",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.operations.enabled",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit' && config.gitForge.operations.enabled",
           "group": "4_operations@2"
         },
         {
           "command": "gitForge.reset",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.operations.enabled",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit' && config.gitForge.operations.enabled",
           "group": "4_operations@3"
         },
         {
           "command": "gitForge.interactiveRebase",
-          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.operations.enabled",
+          "when": "webviewId =~ /^gitForge\\.graph(View)?$/ && webviewSection == 'commit' && config.gitForge.operations.enabled",
           "group": "4_operations@4"
         }
       ]
@@ -1001,6 +1021,14 @@
           "when": "gitForge.active && config.gitForge.compare.enabled",
           "visibility": "collapsed"
         }
+      ],
+      "gitForge": [
+        {
+          "type": "webview",
+          "id": "gitForge.graphView",
+          "name": "%view.graph%",
+          "when": "gitForge.active && config.gitForge.graph.enabled"
+        }
       ]
     },
     "customEditors": [
@@ -1014,6 +1042,15 @@
         ],
         "priority": "option"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitForge",
+          "title": "%viewsContainer.gitForge%",
+          "icon": "media/activity.svg"
+        }
+      ]
+    }
   }
 }

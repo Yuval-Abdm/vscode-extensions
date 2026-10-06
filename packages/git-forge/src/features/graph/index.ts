@@ -1,13 +1,24 @@
-// Fonction « graph » : un onglet de graphe par dépôt, et les commandes de ses menus contextuels (webview/context).
+// Fonction « graph » : vue Graph de la barre latérale (conteneur Git Forge), un onglet de graphe par dépôt, et les
+// commandes de leurs menus contextuels (webview/context).
 import * as vscode from 'vscode';
 import type { GitCommands } from '../../git/commands.ts';
 import type { Repos } from '../../git/repos.ts';
 import { pickRepo } from '../../shared/pickRepo.ts';
 import { errorText } from '../../shared/errors.ts';
 import { GraphPanel } from './panel.ts';
+import { GraphSidebar } from './sidebar.ts';
+
+/** Ce qu'utilisent les menus : un onglet ou la vue latérale. */
+interface GraphHost {
+  readonly root: string;
+  readonly selected: string | undefined;
+  reload(): Promise<void>;
+}
 
 /** Contexte reçu d'un menu contextuel de la webview (data-vscode-context). */
 interface MenuContext {
+  /** Identifiant de la webview d'où vient le menu (ajouté par VS Code). */
+  webview?: string;
   root?: string;
   sha?: string;
   branch?: string;
@@ -22,13 +33,18 @@ export class GraphFeature implements vscode.Disposable {
   readonly #panels = new Map<string, GraphPanel>();
   readonly #disposables: vscode.Disposable[];
   #active: GraphPanel | undefined;
+  readonly sidebar: GraphSidebar;
 
   constructor(git: GitCommands, repos: Repos, extensionUri: vscode.Uri) {
     this.#git = git;
     this.#repos = repos;
     this.#extensionUri = extensionUri;
     const command = (id: string, run: (...args: never[]) => unknown) => vscode.commands.registerCommand(id, run);
+    this.sidebar = new GraphSidebar(git, repos, extensionUri, (root) => this.open(root));
     this.#disposables = [
+      this.sidebar,
+      vscode.window.registerWebviewViewProvider('gitForge.graphView', this.sidebar),
+      command('gitForge.graphView.refresh', () => this.sidebar.session?.reload()),
       command('gitForge.showGraph', async () => {
         const root = await pickRepo(this.#repos);
         if (root) this.open(root);
@@ -100,21 +116,29 @@ export class GraphFeature implements vscode.Disposable {
   }
 
   /** Graphe d'où vient le menu : celui du dépôt `ctx.root`, sinon le dernier actif. */
-  #panelOf(ctx: MenuContext): GraphPanel | undefined {
-    return (ctx?.root && this.#panels.get(ctx.root)) || this.#active;
+  #panelOf(ctx: MenuContext): GraphHost | undefined {
+    const side = this.sidebar.session;
+    if (ctx?.root) {
+      // Menu de la vue latérale, sinon de l'onglet du dépôt ctx.root.
+      if (ctx.webview === 'gitForge.graphView' && side?.root === ctx.root) return side;
+      const tab = this.#panels.get(ctx.root);
+      if (tab) return tab;
+      if (side?.root === ctx.root) return side;
+    }
+    return this.#active ?? side;
   }
 
-  #withPanel(ctx: MenuContext, run: (panel: GraphPanel, sha: string) => unknown): unknown {
+  #withPanel(ctx: MenuContext, run: (panel: GraphHost, sha: string) => unknown): unknown {
     const panel = this.#panelOf(ctx);
     if (panel && ctx?.sha) return run(panel, ctx.sha);
   }
 
-  #withBranch(ctx: MenuContext, run: (panel: GraphPanel, branch: string) => unknown): unknown {
+  #withBranch(ctx: MenuContext, run: (panel: GraphHost, branch: string) => unknown): unknown {
     const panel = this.#panelOf(ctx);
     if (panel && ctx?.branch) return run(panel, ctx.branch);
   }
 
-  async #run(panel: GraphPanel, action: () => Promise<void>): Promise<void> {
+  async #run(panel: GraphHost, action: () => Promise<void>): Promise<void> {
     try {
       await action();
     } catch (err) {
@@ -123,7 +147,7 @@ export class GraphFeature implements vscode.Disposable {
     await panel.reload();
   }
 
-  async #checkoutCommit(panel: GraphPanel, sha: string): Promise<void> {
+  async #checkoutCommit(panel: GraphHost, sha: string): Promise<void> {
     const checkout = vscode.l10n.t('Checkout');
     const choice = await vscode.window.showWarningMessage(
       vscode.l10n.t('Check out {0}? HEAD will be detached: create a branch to keep new commits.', sha.slice(0, 8)),
@@ -133,7 +157,7 @@ export class GraphFeature implements vscode.Disposable {
     if (choice === checkout) await this.#run(panel, () => this.#git.checkoutDetached(panel.root, sha));
   }
 
-  async #create(panel: GraphPanel, sha: string, kind: 'branch' | 'tag'): Promise<void> {
+  async #create(panel: GraphHost, sha: string, kind: 'branch' | 'tag'): Promise<void> {
     const name = await vscode.window.showInputBox({
       title: kind === 'branch' ? vscode.l10n.t('New branch at {0}', sha.slice(0, 8)) : vscode.l10n.t('New tag at {0}', sha.slice(0, 8)),
       // Nom vérifié par git lui-même (check-ref-format).
@@ -143,7 +167,7 @@ export class GraphFeature implements vscode.Disposable {
     await this.#run(panel, () => (kind === 'branch' ? this.#git.createBranch(panel.root, name, sha) : this.#git.createTag(panel.root, name, sha)));
   }
 
-  async #deleteBranch(panel: GraphPanel, branch: string): Promise<void> {
+  async #deleteBranch(panel: GraphHost, branch: string): Promise<void> {
     const sha = await this.#git.revParse(panel.root, `refs/heads/${branch}`);
     if (!sha) return;
     const merged = await this.#git.isAncestor(panel.root, sha, 'HEAD');

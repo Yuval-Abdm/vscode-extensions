@@ -214,5 +214,9 @@
   "Merge conflicts: resolve them, then commit the merge. {0} was not deleted: delete it once the merge is committed.": "Conflits de merge : résolvez-les, puis commitez le merge. {0} n'a pas été supprimée : supprimez-la une fois le merge commité.",
   "{0} is already in {1}: nothing to cherry-pick.": "{0} est déjà dans {1} : rien à cherry-picker.",
   "mine": "le mien",
-  "theirs": "le leur"
+  "theirs": "le leur",
+  "Open in an editor tab": "Ouvrir dans un onglet de l'éditeur",
+  "branch": "branche",
+  "remote branch": "branche distante",
+  "tag": "tag"
 }

@@ -12,13 +12,18 @@ body {
 }
 #toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 6px 10px;
+  gap: 8px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--vscode-panel-border);
 }
+body.sidebar #toolbar label {
+  font-size: 0.9em;
+}
 #search {
-  flex: 0 1 320px;
+  flex: 1 1 160px;
+  min-width: 0;
   padding: 3px 6px;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
@@ -39,7 +44,7 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  height: 24px;
+  height: 22px;
   display: flex;
   align-items: center;
   white-space: nowrap;
@@ -61,8 +66,8 @@ body {
   background: var(--vscode-list-activeSelectionBackground);
 }
 .graph {
-  flex: 0 0 var(--graph-width, 28px);
-  height: 24px;
+  flex: 0 0 var(--graph-width, 24px);
+  height: 22px;
 }
 .message {
   flex: 1 1 auto;
@@ -85,26 +90,36 @@ body {
   color: var(--vscode-descriptionForeground);
 }
 .ref {
-  display: inline-block;
-  margin-right: 4px;
-  padding: 0 5px;
-  border-radius: 3px;
-  font-size: 0.9em;
-  line-height: 16px;
-  color: var(--vscode-badge-foreground);
-  background: var(--vscode-badge-background);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 5px;
+  padding: 0 7px 0 5px;
+  border: 1px solid;
+  border-radius: 9px;
+  font-size: 0.88em;
+  line-height: 15px;
+  color: var(--vscode-foreground);
+  vertical-align: middle;
 }
 .ref.remote {
-  opacity: 0.75;
-}
-.ref.tag {
-  background: var(--vscode-charts-yellow, #b89500);
-  color: #000;
+  border-style: dashed;
 }
 .ref.current,
 .ref.head {
   font-weight: 700;
-  outline: 1px solid var(--vscode-focusBorder);
+}
+.ref-icon {
+  flex: 0 0 auto;
+}
+/* Vue étroite (barre latérale) : graphe, étiquettes et message seulement ; le reste dans l'infobulle. */
+@media (max-width: 560px) {
+  .row.header,
+  .author,
+  .date,
+  .sha {
+    display: none;
+  }
 }
 #list {
   position: relative;
@@ -119,6 +134,7 @@ body {
 }
 #details {
   flex: 0 0 35%;
+  max-height: 45%;
   overflow: auto;
   padding: 8px 12px;
   border-top: 1px solid var(--vscode-panel-border);
