@@ -23,6 +23,8 @@ export class LineBlame implements vscode.Disposable {
   #abort: AbortController | undefined;
   #abortFile: string | undefined;
   #shown: { editor: vscode.TextEditor; info: LineInfo; text: string } | undefined;
+  /** HEAD du dépôt lors du dernier calcul (même sans résultat : HEAD pas encore lu par vscode.git…). */
+  #attemptHead: string | undefined;
 
   constructor(service: BlameService, repos: Repos) {
     this.#service = service;
@@ -39,9 +41,9 @@ export class LineBlame implements vscode.Disposable {
         if (e.document === vscode.window.activeTextEditor?.document && e.contentChanges.length) this.#schedule();
       }),
       repos.onDidChange(() => {
-        // Nouveau commit, checkout… : le blame affiché est périmé.
-        const shown = this.#shown;
-        if (shown && this.#service.head(shown.editor.document.fileName) !== shown.info.head) this.#schedule();
+        // Nouveau commit, checkout, ou HEAD enfin connu à l'ouverture du dépôt : le calcul précédent est périmé.
+        const editor = vscode.window.activeTextEditor;
+        if (editor && this.#service.head(editor.document.fileName) !== this.#attemptHead) this.#schedule();
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('gitForge.blame')) this.#schedule();
@@ -80,6 +82,7 @@ export class LineBlame implements vscode.Disposable {
     const doc = editor.document;
     const line = editor.selection.active.line;
     const version = doc.version;
+    this.#attemptHead = this.#service.head(doc.fileName);
     // Changer de fichier annule le calcul en cours de l'ancien.
     if (this.#abortFile !== doc.fileName || !this.#abort) {
       this.#abort?.abort();
