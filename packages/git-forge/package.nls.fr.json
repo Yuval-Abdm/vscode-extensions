@@ -50,5 +50,14 @@
   "command.stash.drop": "Supprimer le stash",
   "command.worktree.add": "Nouveau worktree…",
   "command.worktree.open": "Ouvrir dans une nouvelle fenêtre",
-  "command.worktree.remove": "Supprimer le worktree"
+  "command.worktree.remove": "Supprimer le worktree",
+  "config.graph.enabled": "Ajoute le graphe des commits (commande Afficher le graphe et bouton dans la barre de titre du Contrôle de code source).",
+  "command.showGraph": "Afficher le graphe",
+  "command.graph.checkoutCommit": "Checkout (HEAD détaché)…",
+  "command.graph.createBranch": "Créer une branche ici…",
+  "command.graph.createTag": "Créer un tag ici…",
+  "command.graph.compareWithHead": "Comparer avec HEAD",
+  "command.graph.checkoutBranch": "Checkout de la branche",
+  "command.graph.mergeBranch": "Merger en local dans la branche courante…",
+  "command.graph.deleteBranch": "Supprimer la branche…"
 }

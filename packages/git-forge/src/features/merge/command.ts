@@ -47,15 +47,16 @@ export class MergeCommand implements vscode.Disposable {
     this.#git = git;
     this.#repos = repos;
     this.#state = state;
-    this.#command = vscode.commands.registerCommand('gitForge.mergeLocal', () => this.run());
+    this.#command = vscode.commands.registerCommand('gitForge.mergeLocal', (preset?: { root?: string; source?: string }) => this.run(preset));
   }
 
   dispose(): void {
     this.#command.dispose();
   }
 
-  async run(): Promise<void> {
-    const root = await pickRepo(this.#repos);
+  /** `preset` : dépôt et branche source déjà choisis (menu d'une branche du graphe). */
+  async run(preset?: { root?: string; source?: string }): Promise<void> {
+    const root = preset?.root ?? (await pickRepo(this.#repos));
     if (!root) return;
     const status = await this.#git.status(root);
     let target = status.branch.head;
@@ -67,7 +68,11 @@ export class MergeCommand implements vscode.Disposable {
       if (!picked) return;
       target = picked.branch;
     }
-    let source: string | undefined;
+    let source: string | undefined = preset?.source;
+    if (source && source === target) {
+      void vscode.window.showErrorMessage(vscode.l10n.t('{0} is the current branch: pick another branch to merge into it.', source));
+      return;
+    }
     while (!source) {
       const into: string = target;
       const change = { label: `$(arrow-swap) ${vscode.l10n.t('Change target branch…')}`, alwaysShow: true, branch: undefined };

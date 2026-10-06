@@ -6,6 +6,7 @@ import { HistoryView } from './features/history/view.ts';
 import { ConflictsView } from './features/conflicts/view.ts';
 import { MergeCommand } from './features/merge/command.ts';
 import { CompareFeature } from './features/compare/index.ts';
+import { GraphFeature } from './features/graph/index.ts';
 import { GitCommands } from './git/commands.ts';
 import type { API, GitExtension } from './git/gitApi.ts';
 import { Repos } from './git/repos.ts';
@@ -22,6 +23,7 @@ interface Services {
   git: GitCommands;
   repos: Repos;
   state: vscode.Memento;
+  extensionUri: vscode.Uri;
 }
 
 const FEATURES: Record<string, (services: Services) => vscode.Disposable> = {
@@ -30,6 +32,7 @@ const FEATURES: Record<string, (services: Services) => vscode.Disposable> = {
   conflicts: ({ git, repos, state }) => new ConflictsView(git, repos, state),
   merge: ({ git, repos, state }) => new MergeCommand(git, repos, state),
   compare: ({ git, repos }) => new CompareFeature(git, repos),
+  graph: ({ git, repos, extensionUri }) => new GraphFeature(git, repos, extensionUri),
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<GitForgeApi> {
@@ -97,7 +100,7 @@ async function setup(context: vscode.ExtensionContext, gitApi: API, live: Map<st
     for (const [key, create] of Object.entries(FEATURES)) {
       const enabled = config.get<boolean>(`${key}.enabled`, true);
       const current = live.get(key);
-      if (enabled && !current) live.set(key, create({ git, repos, state: context.workspaceState }));
+      if (enabled && !current) live.set(key, create({ git, repos, state: context.workspaceState, extensionUri: context.extensionUri }));
       else if (!enabled && current) {
         current.dispose();
         live.delete(key);

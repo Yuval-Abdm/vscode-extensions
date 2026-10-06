@@ -104,6 +104,11 @@
           "type": "boolean",
           "default": true,
           "description": "%config.compare.enabled%"
+        },
+        "gitForge.graph.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.graph.enabled%"
         }
       }
     },
@@ -332,6 +337,52 @@
         "title": "%command.worktree.remove%",
         "category": "Git Forge",
         "icon": "$(trash)"
+      },
+      {
+        "command": "gitForge.showGraph",
+        "title": "%command.showGraph%",
+        "category": "Git Forge",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitForge.graph.checkoutCommit",
+        "title": "%command.graph.checkoutCommit%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graph.createBranch",
+        "title": "%command.graph.createBranch%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graph.createTag",
+        "title": "%command.graph.createTag%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graph.compareWithHead",
+        "title": "%command.graph.compareWithHead%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graph.copySha",
+        "title": "%command.copySha%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graph.checkoutBranch",
+        "title": "%command.graph.checkoutBranch%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graph.mergeBranch",
+        "title": "%command.graph.mergeBranch%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.graph.deleteBranch",
+        "title": "%command.graph.deleteBranch%",
+        "category": "Git Forge"
       }
     ],
     "menus": {
@@ -494,6 +545,42 @@
         },
         {
           "command": "gitForge.worktree.remove",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.showGraph",
+          "when": "gitForge.active && config.gitForge.graph.enabled"
+        },
+        {
+          "command": "gitForge.graph.checkoutCommit",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.graph.createBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.graph.createTag",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.graph.compareWithHead",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.graph.copySha",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.graph.checkoutBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.graph.mergeBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.graph.deleteBranch",
           "when": "false"
         }
       ],
@@ -727,6 +814,53 @@
           "command": "gitForge.mergeLocal",
           "when": "gitForge.active && config.gitForge.merge.enabled && scmProvider == git",
           "group": "navigation@10"
+        },
+        {
+          "command": "gitForge.showGraph",
+          "when": "gitForge.active && config.gitForge.graph.enabled && scmProvider == git",
+          "group": "navigation@11"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "gitForge.graph.checkoutCommit",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit'",
+          "group": "1_checkout@1"
+        },
+        {
+          "command": "gitForge.graph.createBranch",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit'",
+          "group": "2_create@1"
+        },
+        {
+          "command": "gitForge.graph.createTag",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit'",
+          "group": "2_create@2"
+        },
+        {
+          "command": "gitForge.graph.compareWithHead",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'commit' && config.gitForge.compare.enabled",
+          "group": "3_compare@1"
+        },
+        {
+          "command": "gitForge.graph.copySha",
+          "when": "webviewId == 'gitForge.graph' && webviewSection =~ /^(commit|branch)$/",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "gitForge.graph.checkoutBranch",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'branch'",
+          "group": "1_checkout@1"
+        },
+        {
+          "command": "gitForge.graph.mergeBranch",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'branch' && config.gitForge.merge.enabled",
+          "group": "2_merge@1"
+        },
+        {
+          "command": "gitForge.graph.deleteBranch",
+          "when": "webviewId == 'gitForge.graph' && webviewSection == 'branch'",
+          "group": "3_delete@1"
         }
       ]
     },
