@@ -4,6 +4,7 @@ import path from 'node:path';
 import { parseBlameIncremental, type BlameResult } from './parsers/blame.ts';
 import { LOG_FORMAT, parseHunks, parseLog, parseNameStatus, type FileChange, type Hunk, type LogEntry } from './parsers/log.ts';
 import { parseStatusV2, type Status } from './parsers/status.ts';
+import { parseWorktrees, type Worktree } from './parsers/worktree.ts';
 import { GitError, type GitRunner } from './runner.ts';
 
 /** Chemins affichés tels quels (accents, espaces), sans échappement. */
@@ -22,6 +23,9 @@ export interface Page {
 function pageArgs(page: Page): string[] {
   return [`--skip=${page.skip ?? 0}`, `--max-count=${page.limit ?? 50}`];
 }
+
+/** git stash utilise en interne le pathspec « :/ », que GIT_LITERAL_PATHSPECS=1 casse (fichiers non suivis oubliés). */
+const STASH_ENV = { GIT_LITERAL_PATHSPECS: '0' };
 
 /** Aucune commande d'écriture n'ouvre d'éditeur. */
 const NO_EDITOR = { GIT_EDITOR: 'true', GIT_MERGE_AUTOEDIT: 'no', GIT_SEQUENCE_EDITOR: 'true' };
@@ -45,6 +49,31 @@ export interface Operation {
   /** Merge : première ligne de MERGE_MSG ; rebase : branche rebasée. */
   label?: string;
 }
+
+export interface RefInfo {
+  /** Nom court : `main`, `origin/main`, `v1`. */
+  name: string;
+  kind: 'branch' | 'remote' | 'tag';
+  sha: string;
+}
+
+export interface StashEntry {
+  /** `stash@{0}`… */
+  ref: string;
+  sha: string;
+  time: number;
+  message: string;
+}
+
+export interface StashFile {
+  change: FileChange;
+  /** Fichier non suivi, gardé dans le troisième parent du stash. */
+  untracked: boolean;
+}
+
+export type CompareMode = 'merge-base' | 'direct';
+
+export type { Worktree };
 
 export class GitCommands {
   readonly runner: GitRunner;
@@ -238,7 +267,7 @@ export class GitCommands {
   }
 
   async stashPush(root: string, message: string, includeUntracked = false): Promise<void> {
-    await this.runner.write(root, ['stash', 'push', '--quiet', ...(includeUntracked ? ['--include-untracked'] : []), '-m', message]);
+    await this.runner.write(root, ['stash', 'push', '--quiet', ...(includeUntracked ? ['--include-untracked'] : []), '-m', message], { env: STASH_ENV });
   }
 
   /** Remplace un fichier en conflit par sa version « mienne » ou « leur ». */
@@ -267,5 +296,94 @@ export class GitCommands {
 
   async abortOperation(root: string, kind: OperationKind): Promise<void> {
     await this.runner.write(root, [kind, '--abort'], { env: NO_EDITOR });
+  }
+
+  async refs(root: string): Promise<RefInfo[]> {
+    const { stdout } = await this.runner.read(root, ['for-each-ref', '--format=%(refname)%00%(objectname)', 'refs/heads', 'refs/remotes', 'refs/tags']);
+    const refs: RefInfo[] = [];
+    for (const line of stdout.split('\n')) {
+      const [ref, sha] = line.split('\0');
+      if (!ref || /^refs\/remotes\/[^/]+\/HEAD$/.test(ref)) continue;
+      if (ref.startsWith('refs/heads/')) refs.push({ name: ref.slice(11), kind: 'branch', sha });
+      else if (ref.startsWith('refs/remotes/')) refs.push({ name: ref.slice(13), kind: 'remote', sha });
+      else if (ref.startsWith('refs/tags/')) refs.push({ name: ref.slice(10), kind: 'tag', sha });
+    }
+    return refs;
+  }
+
+  async mergeBase(root: string, a: string, b: string): Promise<string | undefined> {
+    try {
+      return (await this.runner.read(root, ['merge-base', a, b])).stdout.trim() || undefined;
+    } catch (err) {
+      if (err instanceof GitError) return undefined;
+      throw err;
+    }
+  }
+
+  /**
+   * Fichiers modifiés entre `left` et `right` (l'arbre de travail si `right` est undefined). En mode 'merge-base',
+   * depuis l'ancêtre commun (ce que `right` a changé), ou `left` s'il n'y en a pas. `base` : SHA du côté gauche.
+   */
+  async compareFiles(root: string, left: string, right: string | undefined, mode: CompareMode): Promise<{ base: string; changes: FileChange[] }> {
+    const from = (mode === 'merge-base' && (await this.mergeBase(root, left, right ?? 'HEAD'))) || left;
+    const args = [...RAW_PATHS, 'diff', '--no-color', '--no-ext-diff', '--name-status', '-M', from, ...(right ? [right] : [])];
+    const { stdout } = await this.runner.read(root, args);
+    return { base: (await this.revParse(root, from)) ?? from, changes: parseNameStatus(stdout) };
+  }
+
+  /** Commits de `right` (HEAD par défaut) absents de `left`, du plus récent au plus ancien. */
+  async commitsBetween(root: string, left: string, right: string | undefined, limit = 500): Promise<LogEntry[]> {
+    const args = [...LOG, `--max-count=${limit}`, `${left}..${right ?? 'HEAD'}`];
+    return parseLog((await this.runner.read(root, args)).stdout);
+  }
+
+  async stashes(root: string): Promise<StashEntry[]> {
+    const { stdout } = await this.runner.read(root, ['stash', 'list', '--format=%gd%x00%H%x00%at%x00%gs']);
+    return stdout
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [ref, sha, time, message] = line.split('\0');
+        return { ref, sha, time: Number(time), message };
+      });
+  }
+
+  /** Fichiers d'un stash : suivis (diff avec son premier parent) puis non suivis (troisième parent). */
+  async stashFiles(root: string, stash: StashEntry): Promise<StashFile[]> {
+    const tracked = parseNameStatus(
+      (await this.runner.read(root, [...RAW_PATHS, 'diff', '--no-color', '--no-ext-diff', '--name-status', '-M', `${stash.sha}^1`, stash.sha])).stdout,
+    );
+    const untrackedSha = await this.revParse(root, `${stash.sha}^3`);
+    const untracked = untrackedSha
+      ? parseNameStatus((await this.runner.read(root, [...RAW_PATHS, 'diff-tree', '--no-color', '--root', '--no-commit-id', '-r', '--name-status', untrackedSha])).stdout)
+      : [];
+    return [...tracked.map((change) => ({ change, untracked: false })), ...untracked.map((change) => ({ change, untracked: true }))];
+  }
+
+  async stashApply(root: string, ref: string, pop: boolean): Promise<'applied' | 'conflicts'> {
+    try {
+      await this.runner.write(root, ['stash', pop ? 'pop' : 'apply', '--quiet', ref], { env: STASH_ENV });
+      return 'applied';
+    } catch (err) {
+      if (err instanceof GitError && (await this.status(root)).conflicts.length) return 'conflicts';
+      throw err;
+    }
+  }
+
+  async stashDrop(root: string, ref: string): Promise<void> {
+    await this.runner.write(root, ['stash', 'drop', '--quiet', ref]);
+  }
+
+  async worktrees(root: string): Promise<Worktree[]> {
+    return parseWorktrees((await this.runner.read(root, ['worktree', 'list', '--porcelain'])).stdout);
+  }
+
+  /** Nouveau worktree dans `dir` : sur la branche existante `branch`, ou sur une nouvelle branche `branch` si `create`. */
+  async worktreeAdd(root: string, dir: string, branch: string, create: boolean): Promise<void> {
+    await this.runner.write(root, create ? ['worktree', 'add', '--quiet', '-b', branch, dir] : ['worktree', 'add', '--quiet', dir, branch]);
+  }
+
+  async worktreeRemove(root: string, dir: string, force: boolean): Promise<void> {
+    await this.runner.write(root, ['worktree', 'remove', ...(force ? ['--force'] : []), dir]);
   }
 }
