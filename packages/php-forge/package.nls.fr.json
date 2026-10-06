@@ -18,7 +18,7 @@
   "phpForge.externalGlobals.description": "Variables définies hors du code analysé (`auto_prepend_file`, framework), jamais signalées comme non définies, par exemple `$config`.",
   "phpForge.showIncludeTree.title": "Afficher l'arbre des inclusions",
   "phpForge.showIncluders.title": "Afficher les fichiers qui incluent ce fichier",
-  "phpForge.includeTree.name": "Arbre des inclusions",
+  "phpForge.includeTree.name": "Arbre des inclusions (PHP Forge)",
   "phpForge.diagnostics.scope.description": "`workspace` : tous les fichiers du projet sont analysés en arrière-plan et leurs problèmes listés ; `openFiles` : seulement les fichiers ouverts.",
   "phpForge.diagnostics.rules.description": "Niveau de chaque diagnostic, par code : `error`, `warning`, `information`, `hint` ou `off`, par exemple `{ \"undefined-variable\": \"error\", \"unused-use\": \"off\" }`.",
   "phpForge.libraryPaths.description": "Globs des dossiers librairie : indexés (complétion, navigation) mais jamais diagnostiqués. Les dossiers qui ont leur propre `composer.json` sont aussi des librairies.",
@@ -46,7 +46,7 @@
   "phpForge.showImpact.title": "Afficher l'impact des fichiers modifiés",
   "phpForge.refreshImpact.title": "Actualiser l'impact",
   "phpForge.deployChanged.title": "Déployer les fichiers modifiés",
-  "phpForge.impact.name": "Impact PHP",
+  "phpForge.impact.name": "Impact PHP (PHP Forge)",
   "phpForge.deploy.checkErrors.description": "Avant **Déployer les fichiers modifiés**, avertir quand un fichier à déployer a des erreurs dans la vue Problèmes.",
   "phpForge.selectPhpVersion.title": "Choisir la version de PHP"
 }
