@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- Compare view: two references or a reference and the working tree, from the common ancestor or direct; commits and file tree; diff on click; deploy the changed files with FTP SFTP Deploy.
+- Stashes view: stashes and their files (untracked included), apply, pop, delete, stash all changes.
+- Worktrees view: create from an existing or new branch, open in a new window, remove.
+
 ## 0.3.0
 
 - Conflicts view: conflicted files and blocks, keep mine / theirs / both per block or per file, 3-way merge editor, mark as resolved, finish or abort the merge, rebase, cherry-pick or revert.

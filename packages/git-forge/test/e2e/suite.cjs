@@ -153,6 +153,39 @@ test('merge local en conflit, résolu dans la vue Conflicts, branche supprimée 
   assert.equal(gitIn('status', '--porcelain').trim(), '');
 });
 
+test('comparer deux commits, puis avec l’arbre de travail', async () => {
+  const feature = await waitFor(() => api.feature('compare'), 'fonction compare');
+  await feature.compare.compare({ root: WS, left: SHAS.first, right: SHAS.second, mode: 'direct' });
+  assert.deepEqual(feature.compare.result.changes, [{ status: 'M', path: 'a.txt' }]);
+  assert.deepEqual(feature.compare.result.commits.map((e) => e.summary), ['second commit']);
+  require('fs').writeFileSync(path.join(WS, 'b.txt'), 'new\n');
+  gitIn('add', 'b.txt');
+  await feature.compare.compare({ root: WS, left: 'HEAD', mode: 'direct' });
+  assert.deepEqual(feature.compare.result.changes, [{ status: 'A', path: 'b.txt' }]);
+  gitIn('rm', '-q', '--cached', 'b.txt');
+  require('fs').unlinkSync(path.join(WS, 'b.txt'));
+});
+
+test('stash : créer, lister, pop', async () => {
+  const { stashes } = api.feature('compare');
+  require('fs').writeFileSync(path.join(WS, 'a.txt'), 'stash me\n');
+  await stashes.push(WS, 'e2e stash');
+  assert.equal(gitIn('status', '--porcelain').trim(), '');
+  await waitFor(() => stashes.stashes.length === 1 || undefined, 'un stash');
+  assert.match(stashes.stashes[0].message, /e2e stash/);
+  await stashes.apply({ type: 'stash', root: WS, stash: stashes.stashes[0] }, true);
+  assert.equal(require('fs').readFileSync(path.join(WS, 'a.txt'), 'utf8'), 'stash me\n');
+  await waitFor(() => stashes.stashes.length === 0 || undefined, 'stash consommé');
+  gitIn('checkout', '--', 'a.txt');
+});
+
+test('worktrees : le dépôt principal est listé', async () => {
+  const { worktrees } = api.feature('compare');
+  await worktrees.refresh();
+  assert.equal(worktrees.worktrees.length, 1);
+  assert.equal(worktrees.worktrees[0].branch, 'main');
+});
+
 test('désactivée par réglage, puis réactivée', async () => {
   const config = vscode.workspace.getConfiguration('gitForge');
   await config.update('blame.enabled', false, vscode.ConfigurationTarget.Global);

@@ -2,7 +2,7 @@
 
 **Free and lightweight Git tools for VS Code: inline blame, file history, conflict resolution, local merge and commit graph — no account, no paid tier, nothing you did not ask for.**
 
-> Preview (0.3). Interface in English and French (follows the VS Code display language).
+> Preview (0.4). Interface in English and French (follows the VS Code display language).
 
 ## Features
 
@@ -14,6 +14,9 @@
 - **Line History**: select lines and run *Show Line History* (editor context menu), or click the blame in the status bar: only the commits that changed those lines.
 - **Conflicts** view (Source Control panel), shown during a merge, rebase, cherry-pick or revert with conflicts: every conflicted file and every conflict block in it. Click a block to jump to it; **Keep Mine**, **Keep Theirs** or **Keep Both** for that block, or for the whole file; open VS Code's 3-way merge editor; **Mark as Resolved** (refused while conflict markers remain). Files deleted on one side can be kept or deleted. **Finish** commits the merge (or continues the rebase / cherry-pick / revert); **Abort** cancels it.
 - **Merge Locally** (button in the Source Control title bar): pick the branch to merge into the current one (or change the target). Git Forge fetches, fast-forwards the target **and** the source to their remote branches (never a hidden merge: diverged branches stop everything), then merges. Options, remembered: delete the merged branch locally, also on the remote, always create a merge commit (`--no-ff`). Uncommitted changes can be stashed first. On conflicts, the Conflicts view opens and the branch is deleted when you finish.
+- **Compare** view: pick two references — branch, remote branch, tag, commit SHA or the working tree — and see the commits and a tree of the changed files; click a file for its diff. From the common ancestor (`A...B`, what the right side changed) or direct (`A..B`), swap sides in one click. With [FTP SFTP Deploy](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.ftp-sftp-deploy) installed, **Deploy These Files** uploads the current version of every changed file (deleted files are never sent), after a confirmation that names the server.
+- **Stashes** view: every stash and its files (untracked ones included), diff on click, apply, pop, delete; **Stash All Changes** includes untracked files.
+- **Worktrees** view: every worktree of the repository; create one from an existing or a new branch, open it in a new window, remove it (with an explicit confirmation if it has changes).
 
 ## Settings
 
@@ -26,6 +29,7 @@
 | `gitForge.history.enabled` | `true` | File History view |
 | `gitForge.conflicts.enabled` | `true` | Conflicts view |
 | `gitForge.merge.enabled` | `true` | Merge Locally command |
+| `gitForge.compare.enabled` | `true` | Compare, Stashes and Worktrees views |
 
 Every feature can be turned off: nothing is registered for a disabled feature.
 
@@ -35,4 +39,4 @@ Git, and VS Code's built-in Git extension (enabled by default). Git Forge uses t
 
 ## Roadmap
 
-Branch comparison with stash and worktrees, commit graph, guided cherry-pick / revert / reset / interactive rebase.
+Commit graph, guided cherry-pick / revert / reset / interactive rebase.
