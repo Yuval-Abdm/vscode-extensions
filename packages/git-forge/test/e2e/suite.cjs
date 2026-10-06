@@ -91,6 +91,31 @@ test('comparer avec la révision précédente', async () => {
   await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
 });
 
+test('historique du fichier', async () => {
+  await vscode.commands.executeCommand('gitForge.showFileHistory', file);
+  const view = await waitFor(() => api.feature('history'), 'vue historique');
+  await waitFor(() => view.entries.length === 2 || undefined, 'deux commits');
+  assert.deepEqual(view.entries.map((e) => e.summary), ['second commit', 'first commit']);
+  assert.deepEqual(view.entries[0].files, [{ status: 'M', path: 'a.txt' }]);
+});
+
+test("historique d'une ligne", async () => {
+  await cursorAt(0);
+  await vscode.commands.executeCommand('gitForge.showLineHistory');
+  const view = api.feature('history');
+  await waitFor(() => (view.target && view.target.kind === 'lines' && view.entries.length === 1 && view.entries[0].summary === 'first commit') || undefined, 'ligne 1 : un commit');
+  assert.deepEqual([view.target.start, view.target.end], [1, 1]);
+});
+
+test("ouvrir un diff depuis l'historique ne change pas le fichier suivi", async () => {
+  const view = api.feature('history');
+  const target = view.target;
+  await vscode.commands.executeCommand('gitForge.diffWithPrevious', { root: WS, sha: SHAS.second, path: 'a.txt', previousSha: SHAS.first, previousPath: 'a.txt' });
+  await new Promise((r) => setTimeout(r, 600));
+  assert.strictEqual(view.target, target);
+  await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+});
+
 test('désactivée par réglage, puis réactivée', async () => {
   const config = vscode.workspace.getConfiguration('gitForge');
   await config.update('blame.enabled', false, vscode.ConfigurationTarget.Global);
