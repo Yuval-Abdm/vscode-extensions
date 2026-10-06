@@ -24,11 +24,9 @@ export interface TestRepo {
   dispose(): void;
 }
 
-export function makeRepo(): TestRepo {
-  const root = mkdtempSync(path.join(tmpdir(), 'git-forge-test-'));
+function wrap(root: string): TestRepo {
   const run = (args: string[], env: Record<string, string> = {}) =>
     execFileSync('git', args, { cwd: root, encoding: 'utf8', env: { ...process.env, ...env } });
-  run(['init', '-q', '-b', 'main']);
   run(['config', 'user.name', 'Test User']);
   run(['config', 'user.email', 'test@example.com']);
   run(['config', 'commit.gpgsign', 'false']);
@@ -52,5 +50,39 @@ export function makeRepo(): TestRepo {
       return run(['rev-parse', 'HEAD']).trim();
     },
     dispose: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+export function makeRepo(): TestRepo {
+  const root = mkdtempSync(path.join(tmpdir(), 'git-forge-test-'));
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });
+  return wrap(root);
+}
+
+export interface TestRemote {
+  /** Chemin du dépôt nu, utilisable comme URL de remote. */
+  url: string;
+  /** Nouveau clone (remote « origin »). */
+  clone(): TestRepo;
+  dispose(): void;
+}
+
+export function makeRemote(): TestRemote {
+  const url = mkdtempSync(path.join(tmpdir(), 'git-forge-remote-'));
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main'], { cwd: url });
+  const clones: TestRepo[] = [];
+  return {
+    url,
+    clone() {
+      const root = mkdtempSync(path.join(tmpdir(), 'git-forge-clone-'));
+      execFileSync('git', ['clone', '-q', url, root], { stdio: 'ignore' });
+      const repo = wrap(root);
+      clones.push(repo);
+      return repo;
+    },
+    dispose() {
+      for (const repo of clones) repo.dispose();
+      rmSync(url, { recursive: true, force: true });
+    },
   };
 }
