@@ -7,14 +7,17 @@ import type { RebaseItem } from './rebaseModel.ts';
 
 type Incoming = { type: 'ready' } | { type: 'start'; items: RebaseItem[] } | { type: 'cancel' };
 
-/** Remplit `panel` avec l'éditeur ; résout avec la liste validée, ou undefined si abandonné. */
+/**
+ * Remplit `panel` avec l'éditeur ; résout avec la liste validée, 'abort' (bouton Annuler / Abandonner) ou undefined
+ * (onglet fermé sans décision).
+ */
 export function runRebaseEditor(
   panel: vscode.WebviewPanel,
   extensionUri: vscode.Uri,
   title: string,
   items: RebaseItem[],
   editMessages: boolean,
-): Promise<RebaseItem[] | undefined> {
+): Promise<RebaseItem[] | 'abort' | undefined> {
   const media = vscode.Uri.joinPath(extensionUri, 'media');
   panel.webview.options = { enableScripts: true, localResourceRoots: [media] };
   panel.webview.html = html(panel.webview, media, title, editMessages);
@@ -23,12 +26,12 @@ export function runRebaseEditor(
       panel.webview.onDidReceiveMessage((message: Incoming) => {
         if (message.type === 'ready') void panel.webview.postMessage({ type: 'items', items, editMessages });
         else if (message.type === 'start') done(message.items);
-        else done(undefined);
+        else done('abort');
       }),
       panel.onDidDispose(() => done(undefined)),
     ];
     let settled = false;
-    function done(result: RebaseItem[] | undefined): void {
+    function done(result: RebaseItem[] | 'abort' | undefined): void {
       if (settled) return;
       settled = true;
       for (const subscription of subscriptions) subscription.dispose();
@@ -40,7 +43,9 @@ export function runRebaseEditor(
 export function openRebasePanel(extensionUri: vscode.Uri, title: string, items: RebaseItem[]): Promise<RebaseItem[] | undefined> {
   const panel = vscode.window.createWebviewPanel('gitForge.rebase', title, vscode.ViewColumn.Active, {});
   panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'icon.png');
-  return runRebaseEditor(panel, extensionUri, title, items, true).finally(() => panel.dispose());
+  return runRebaseEditor(panel, extensionUri, title, items, true)
+    .then((result) => (result === 'abort' ? undefined : result))
+    .finally(() => panel.dispose());
 }
 
 function html(webview: vscode.Webview, media: vscode.Uri, title: string, editMessages: boolean): string {

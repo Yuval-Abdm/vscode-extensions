@@ -21,9 +21,10 @@
     let head = index - 1;
     while (head > 0 && ['squash', 'fixup', 'drop'].includes(items[head].action)) head--;
     if (head < 0) return items[index].message;
-    const parts = [items[head].newMessage ?? items[head].message];
+    const first = items[head];
+    const parts = [first.action === 'reword' && first.newMessage !== undefined ? first.newMessage : first.message];
     for (let i = head + 1; i <= index; i++) {
-      if (items[i].action === 'squash') parts.push(i === index ? items[i].message : (items[i].newMessage ?? items[i].message));
+      if (items[i].action === 'squash') parts.push(items[i].message);
     }
     return parts.join('\n\n');
   }
@@ -44,8 +45,10 @@
         }
         select.addEventListener('change', () => {
           item.action = select.value;
+          // Le message saisi pour une autre action n'est jamais repris.
+          item.newMessage = undefined;
           if (item.action === 'squash' && editMessages) item.newMessage = squashMessage(index);
-          if (item.action === 'reword' && item.newMessage === undefined) item.newMessage = item.message;
+          if (item.action === 'reword') item.newMessage = item.message;
           render();
         });
         row.appendChild(select);
@@ -68,7 +71,14 @@
           dragged = index;
           row.classList.add('dragging');
         });
-        row.addEventListener('dragend', () => row.classList.remove('dragging'));
+        row.addEventListener('dragend', () => {
+          row.classList.remove('dragging');
+          dragged = -1;
+          if (row.querySelector('textarea')) row.draggable = false;
+        });
+        row.addEventListener('mouseup', () => {
+          if (row.querySelector('textarea')) row.draggable = false;
+        });
         row.addEventListener('dragover', (event) => {
           event.preventDefault();
           row.classList.add('over');

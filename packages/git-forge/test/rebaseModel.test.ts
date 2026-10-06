@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildTodo, parseTodo, serializeTodo, squashMessage, validateRebase, type RebaseItem } from '../src/features/operations/rebaseModel.ts';
+import {
+  amendScript,
+  buildTodo,
+  cleanupMessage,
+  parseTodo,
+  serializeTodo,
+  shellQuote,
+  squashMessage,
+  validateRebase,
+  type Amend,
+  type RebaseItem,
+} from '../src/features/operations/rebaseModel.ts';
 
 const item = (sha: string, action: RebaseItem['action'], message = `msg ${sha}`, newMessage?: string): RebaseItem => ({
   sha,
   summary: message.split('\n')[0],
   message,
+  ident: `A <a@x> ${sha.charCodeAt(0)}`,
   action,
   newMessage,
 });
@@ -18,13 +30,15 @@ describe('rebase interactif : modèle', () => {
     assert.equal(validateRebase([item('a', 'pick'), item('b', 'squash')]), undefined);
   });
 
-  it('message proposé pour un squash : tête du groupe (éventuellement reformulée) et squash précédents, sans les fixup', () => {
+  it('message proposé pour un squash : tête du groupe (reformulée seulement si reword), squash du groupe, sans les fixup', () => {
     const items = [item('a', 'reword', 'A', 'A2'), item('b', 'fixup', 'B'), item('c', 'squash', 'C'), item('d', 'squash', 'D')];
     assert.equal(squashMessage(items, 2), 'A2\n\nC');
     assert.equal(squashMessage(items, 3), 'A2\n\nC\n\nD');
+    // newMessage resté d'une ancienne action : ignoré pour une tête en pick.
+    assert.equal(squashMessage([item('a', 'pick', 'A', 'stale'), item('b', 'squash', 'B')], 1), 'A\n\nB');
   });
 
-  it('liste de tâches : reword et squash via exec, ordre conservé', () => {
+  it('liste de tâches : reword et squash via un script, message attendu enchaîné, ordre conservé', () => {
     const items = [
       item('a', 'pick'),
       item('b', 'reword', 'B', 'B new'),
@@ -32,34 +46,38 @@ describe('rebase interactif : modèle', () => {
       item('d', 'fixup'),
       item('e', 'edit'),
       item('f', 'drop'),
-      item('g', 'reword', 'G', 'G'),
+      item('g', 'reword', 'G', 'G  \n'),
     ];
-    const files: string[] = [];
-    const todo = buildTodo(items, (index, message) => {
-      files.push(`${index}:${message}`);
-      return `/tmp/m${index}`;
+    const amends: Amend[] = [];
+    const todo = buildTodo(items, (amend) => {
+      amends.push(amend);
+      return `/tmp/x y/amend-${amend.index}.sh`;
     });
     assert.equal(
       todo,
-      [
-        'pick a',
-        'pick b',
-        'exec git commit --amend --allow-empty --quiet -F "/tmp/m1"',
-        'fixup c',
-        'exec git commit --amend --allow-empty --quiet -F "/tmp/m2"',
-        'fixup d',
-        'edit e',
-        'drop f',
-        'pick g',
-      ].join('\n'),
+      ['pick a', 'pick b', "exec sh '/tmp/x y/amend-1.sh'", 'fixup c', "exec sh '/tmp/x y/amend-2.sh'", 'fixup d', 'edit e', 'drop f', 'pick g'].join('\n'),
     );
-    assert.deepEqual(files, ['1:B new', '2:B new + C']);
+    assert.deepEqual(
+      amends.map((a) => [a.sha, a.ident, a.expected, a.message]),
+      [
+        ['b', items[1].ident, 'B', 'B new'],
+        ['c', items[1].ident, 'B new', 'B new + C'],
+      ],
+    );
+  });
+
+  it('script : chemins et identité entre apostrophes, nettoyage des espaces seulement', () => {
+    const script = amendScript({ index: 0, sha: 'abc', ident: "O'Brien <o@x> 1", expected: 'x', message: 'y' }, "/tmp/$x/it's.txt", '/tmp/e.txt');
+    assert.ok(script.includes(`= 'O'\\''Brien <o@x> 1'`));
+    assert.ok(script.includes(`-F '/tmp/$x/it'\\''s.txt'`));
+    assert.ok(script.includes('--cleanup=whitespace'));
+    assert.equal(shellQuote('a b'), "'a b'");
+    assert.equal(cleanupMessage('\n\nTitle  \n\n\n\nBody\t\n# kept\n\n'), 'Title\n\nBody\n# kept');
   });
 
   it('git-rebase-todo : lecture (abréviations, commentaires) et écriture ; commandes non prises en charge', () => {
     const text = 'pick 1111111 First\nr 2222222 Second one\n\n# Rebase 0000..2222 onto 0000\n# Commands:\n';
-    const items = parseTodo(text);
-    assert.deepEqual(items, [
+    assert.deepEqual(parseTodo(text), [
       { action: 'pick', sha: '1111111', summary: 'First' },
       { action: 'reword', sha: '2222222', summary: 'Second one' },
     ]);

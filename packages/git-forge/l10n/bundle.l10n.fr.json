@@ -198,5 +198,9 @@
   "The rebase stopped on conflicts: resolve them in the Conflicts view, then finish.": "Le rebase s'est arrêté sur des conflits : résolvez-les dans la vue Conflits, puis terminez.",
   "The rebase stopped so you can amend the commit: change your files, commit (amend), then Finish in the Conflicts view.": "Le rebase s'est arrêté pour que vous modifiiez le commit : changez vos fichiers, commitez (amend), puis Terminer dans la vue Conflits.",
   "Rebase failed: {0}": "Échec du rebase : {0}",
-  "Interactive rebase": "Rebase interactif"
+  "Interactive rebase": "Rebase interactif",
+  "Rebase done, but your uncommitted changes conflict with the result: resolve them in the Conflicts view. They are also kept in the stash list.": "Rebase terminé, mais vos modifications non commitées entrent en conflit avec le résultat : résolvez-les dans la vue Conflits. Elles sont aussi gardées dans la liste des stashs.",
+  "The branch changed since the rebase editor was opened: nothing was done, open it again.": "La branche a changé depuis l'ouverture de l'éditeur de rebase : rien n'a été fait, rouvrez-le.",
+  "git-rebase-todo files are already associated with the editor \"{0}\" (workbench.editorAssociations): remove that entry to use Git Forge's rebase editor.": "Les fichiers git-rebase-todo sont déjà associés à l'éditeur « {0} » (workbench.editorAssociations) : retirez cette entrée pour utiliser l'éditeur de rebase de Git Forge.",
+  "This rebase has already started: abort it from the Conflicts view (Abort). The list was not changed.": "Ce rebase a déjà commencé : abandonnez-le depuis la vue Conflits (Abandonner). La liste n'a pas été modifiée."
 }

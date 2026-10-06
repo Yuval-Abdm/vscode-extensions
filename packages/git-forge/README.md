@@ -23,6 +23,7 @@
   - **Reset**: soft, mixed or hard, each explained in one line. Hard lists the uncommitted changes that will be lost and asks twice. A backup tag `git-forge/backup/…` is created on the current commit before any reset that could lose work.
   - **Interactive rebase**: an editor lists the commits after the chosen one (oldest first): drag to reorder, pick / reword / edit / squash / fixup / drop, edit the messages in place. Uncommitted changes are stashed and restored; a stop (conflict, edit) is finished from the Conflicts view.
   - With `gitForge.rebaseEditor` on and VS Code as your Git editor, `git rebase -i` started in a terminal opens the same editor.
+  - Good to know: backup tags are ordinary local tags (`git push --tags` would publish them; delete them with `git tag -d` when you no longer need them). An interactive rebase also creates one. Stacked branches are not moved by the rebase editor (`rebase.updateRefs` is not applied).
 
 ## Settings
 

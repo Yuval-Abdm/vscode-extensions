@@ -1,12 +1,14 @@
 // Fonction « operations » : cherry-pick, revert, reset et rebase interactif depuis le graphe et l'historique ; éditeur
 // personnalisé des fichiers git-rebase-todo (gitForge.rebaseEditor).
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import * as vscode from 'vscode';
 import type { GitCommands } from '../../git/commands.ts';
 import type { LogEntry } from '../../git/parsers/log.ts';
 import type { Repos } from '../../git/repos.ts';
 import { errorText } from '../merge/command.ts';
 import { runRebaseEditor, openRebasePanel } from './rebasePanel.ts';
-import { itemsFromCommits, runInteractiveRebase } from './rebaseRun.ts';
+import { itemsFromCommits, RebaseChangedError, runInteractiveRebase } from './rebaseRun.ts';
 import { parseTodo, serializeTodo, type RebaseItem } from './rebaseModel.ts';
 
 /** Argument des commandes : contexte d'un menu du graphe ({ root, sha }) ou nœud de l'historique ({ root, entry }). */
@@ -150,14 +152,23 @@ export class OperationsFeature implements vscode.Disposable {
       );
       if (choice !== go) return;
     }
+    // État à l'ouverture de l'éditeur : le lancement est refusé si HEAD ou la branche ont changé entre-temps.
+    const guard = { head, branch: (await this.#git.status(root)).branch.head };
     const items = await openRebasePanel(this.#extensionUri, vscode.l10n.t('Interactive rebase onto {0}', base.slice(0, 8)), itemsFromCommits(commits.filter((c) => c.parents.length <= 1)));
     if (!items) return;
     try {
-      const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Rebasing…') }, () =>
-        runInteractiveRebase(this.#git, root, base, items),
-      );
+      const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Rebasing…') }, async () => {
+        // Sauvegarde avant de réécrire l'historique (commits supprimés, fusionnés, merges aplatis).
+        await this.#git.backupTag(root);
+        return runInteractiveRebase(this.#git, root, base, items, guard);
+      });
       if (result === 'done') void vscode.window.showInformationMessage(vscode.l10n.t('Rebase done.'));
-      else {
+      else if (result === 'autostash-conflicts') {
+        void vscode.window.showWarningMessage(
+          vscode.l10n.t('Rebase done, but your uncommitted changes conflict with the result: resolve them in the Conflicts view. They are also kept in the stash list.'),
+        );
+        void vscode.commands.executeCommand('gitForge.conflicts.focus');
+      } else {
         const conflicts = (await this.#git.status(root)).conflicts.length;
         void vscode.window.showWarningMessage(
           conflicts
@@ -167,7 +178,9 @@ export class OperationsFeature implements vscode.Disposable {
         void vscode.commands.executeCommand('gitForge.conflicts.focus');
       }
     } catch (err) {
-      void vscode.window.showErrorMessage(vscode.l10n.t('Rebase failed: {0}', errorText(err)));
+      void vscode.window.showErrorMessage(
+        err instanceof RebaseChangedError ? vscode.l10n.t('The branch changed since the rebase editor was opened: nothing was done, open it again.') : vscode.l10n.t('Rebase failed: {0}', errorText(err)),
+      );
     }
   }
 
@@ -183,8 +196,14 @@ export class OperationsFeature implements vscode.Disposable {
     const wanted = vscode.workspace.getConfiguration('gitForge').get<boolean>('rebaseEditor', false);
     const workbench = vscode.workspace.getConfiguration('workbench');
     const associations = { ...workbench.inspect<Record<string, string>>('editorAssociations')?.globalValue };
-    const ours = associations[TODO_ASSOCIATION] === TODO_EDITOR;
+    const current = associations[TODO_ASSOCIATION];
+    const ours = current === TODO_EDITOR;
     if (wanted === ours) return;
+    if (wanted && current !== undefined) {
+      // Association déjà choisie par l'utilisateur (autre extension) : jamais écrasée.
+      void vscode.window.showWarningMessage(vscode.l10n.t('git-rebase-todo files are already associated with the editor "{0}" (workbench.editorAssociations): remove that entry to use Git Forge\'s rebase editor.', current));
+      return;
+    }
     if (wanted) associations[TODO_ASSOCIATION] = TODO_EDITOR;
     else delete associations[TODO_ASSOCIATION];
     await workbench.update('editorAssociations', associations, vscode.ConfigurationTarget.Global);
@@ -202,15 +221,29 @@ class RebaseTodoEditor implements vscode.CustomTextEditorProvider {
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     const todo = parseTodo(document.getText());
     if (!todo) {
-      // Commandes non prises en charge (exec, label, merge…) : éditeur de texte.
-      panel.dispose();
+      // Commandes non prises en charge (exec, label, update-ref…) : éditeur de texte, ouvert avant de fermer celui-ci
+      // (sinon `code --wait` rendrait la main à git avec la liste non modifiée).
       await vscode.commands.executeCommand('vscode.openWith', document.uri, 'default');
+      panel.dispose();
       return;
     }
-    const items: RebaseItem[] = todo.map((item) => ({ ...item, message: item.summary }));
+    const items: RebaseItem[] = todo.map((item) => ({ ...item, message: item.summary, ident: '' }));
     const result = await runRebaseEditor(panel, this.#extensionUri, vscode.l10n.t('Interactive rebase'), items, false);
-    // Liste vide : git abandonne le rebase (« Nothing to do »).
-    const text = result ? serializeTodo(result.map((item) => ({ action: item.action, sha: item.sha, summary: item.summary }))) : '';
+    // Onglet fermé sans décision : fichier inchangé (git continue avec la liste telle quelle).
+    if (result === undefined) return;
+    let text: string;
+    if (result === 'abort') {
+      // Liste vide : git abandonne un rebase qui commence (« Nothing to do »). Pendant un rebase déjà commencé
+      // (--edit-todo, arrêt en cours), elle supprimerait les commits restants : on n'y touche pas.
+      if (existsSync(path.join(path.dirname(document.uri.fsPath), 'done'))) {
+        void vscode.window.showWarningMessage(vscode.l10n.t('This rebase has already started: abort it from the Conflicts view (Abort). The list was not changed.'));
+        panel.dispose();
+        return;
+      }
+      text = '';
+    } else {
+      text = serializeTodo(result.map((item) => ({ action: item.action, sha: item.sha, summary: item.summary })));
+    }
     const edit = new vscode.WorkspaceEdit();
     edit.replace(document.uri, document.validateRange(new vscode.Range(0, 0, Number.MAX_SAFE_INTEGER, 0)), text);
     await vscode.workspace.applyEdit(edit);

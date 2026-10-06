@@ -80,6 +80,8 @@ export interface RebaseCommit {
   summary: string;
   /** Message complet. */
   message: string;
+  /** Auteur et date : « nom <e-mail> secondes ». */
+  ident: string;
 }
 
 export type CompareMode = 'merge-base' | 'direct';
@@ -491,12 +493,12 @@ export class GitCommands {
 
   /** Commits de `base`..HEAD, du plus ancien au plus récent, avec leur message complet. */
   async commitsForRebase(root: string, base: string): Promise<RebaseCommit[]> {
-    const args = ['log', '--no-color', '--no-show-signature', '--reverse', '--format=%x00%H%x00%P%x00%s%x00%B', `${base}..HEAD`, '--'];
+    const args = ['log', '--no-color', '--no-show-signature', '--reverse', '--format=%x00%H%x00%P%x00%an <%ae> %at%x00%s%x00%B', `${base}..HEAD`, '--'];
     const fields = (await this.runner.read(root, args)).stdout.split('\0');
     const commits: RebaseCommit[] = [];
-    for (let i = 1; i + 3 < fields.length; i += 4) {
-      const [sha, parents, summary, message] = fields.slice(i, i + 4);
-      commits.push({ sha, parents: parents ? parents.split(' ') : [], summary, message: message.trim() });
+    for (let i = 1; i + 4 < fields.length; i += 5) {
+      const [sha, parents, ident, summary, message] = fields.slice(i, i + 5);
+      commits.push({ sha, parents: parents ? parents.split(' ') : [], ident, summary, message: message.replace(/\n+$/, '') });
     }
     return commits;
   }
@@ -542,16 +544,24 @@ export class GitCommands {
     return name;
   }
 
+  /** Dossier .git du dépôt (ou du worktree). */
+  async gitDir(root: string): Promise<string> {
+    return (await this.runner.read(root, ['rev-parse', '--absolute-git-dir'])).stdout.trim();
+  }
+
   /**
-   * `git rebase -i --autostash base` avec la liste de tâches `todoFile` (copiée par GIT_SEQUENCE_EDITOR) ; 'stopped'
-   * si le rebase s'arrête (conflit, edit).
+   * `git rebase -i --autostash base [branch]` avec la liste de tâches `todoFile` (copiée par GIT_SEQUENCE_EDITOR) ;
+   * 'stopped' si le rebase s'arrête (conflit, edit) ; 'autostash-conflicts' si le rebase est fait mais que les
+   * modifications mises de côté n'ont pas pu être réappliquées sans conflit (elles restent aussi dans le stash).
    */
-  async rebaseInteractive(root: string, base: string, todoFile: string): Promise<'done' | 'stopped'> {
-    const env = { ...NO_EDITOR, GIT_SEQUENCE_EDITOR: `cp "${todoFile.replace(/\\/g, '/')}"` };
+  async rebaseInteractive(root: string, base: string, todoFile: string, branch?: string): Promise<'done' | 'stopped' | 'autostash-conflicts'> {
+    const quoted = `'${todoFile.replace(/'/g, `'\\''`)}'`;
+    const env = { ...NO_EDITOR, GIT_SEQUENCE_EDITOR: `cp ${quoted}` };
     try {
-      await this.runner.write(root, ['rebase', '-i', '--autostash', base], { env });
+      await this.runner.write(root, ['rebase', '-i', '--autostash', '--reschedule-failed-exec', base, ...(branch ? [branch] : [])], { env });
       // Un arrêt sur « edit » sort avec le code 0 : le rebase est toujours en cours.
-      return (await this.operation(root))?.kind === 'rebase' ? 'stopped' : 'done';
+      if ((await this.operation(root))?.kind === 'rebase') return 'stopped';
+      return (await this.status(root)).conflicts.length ? 'autostash-conflicts' : 'done';
     } catch (err) {
       if (err instanceof GitError && (await this.operation(root))?.kind === 'rebase') return 'stopped';
       throw err;

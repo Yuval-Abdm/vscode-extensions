@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { itemsFromCommits, runInteractiveRebase } from '../src/features/operations/rebaseRun.ts';
+import { itemsFromCommits, RebaseChangedError, runInteractiveRebase } from '../src/features/operations/rebaseRun.ts';
 import { GitCommands } from '../src/git/commands.ts';
 import { GitRunner } from '../src/git/runner.ts';
 import { makeRepo, type TestRepo } from './helpers/repo.ts';
@@ -70,6 +70,70 @@ describe('rebase interactif', () => {
       const items = itemsFromCommits(await git.commitsForRebase(repo.root, base)).map((item) => ({ ...item, action: 'drop' as const }));
       await assert.rejects(runInteractiveRebase(git, repo.root, base, items), /empty/);
       assert.equal(subjects(repo).length, 5);
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('commit passé (skip) après un conflit : son nouveau message n’est appliqué à aucun autre commit', async () => {
+    const repo = makeRepo();
+    try {
+      repo.write('f', '0\n');
+      const base = repo.commit('base');
+      repo.write('f', '1\n');
+      repo.commit('A');
+      repo.write('f', '2\n');
+      repo.commit('B');
+      const [a, b] = itemsFromCommits(await git.commitsForRebase(repo.root, base));
+      // B d'abord : il entre en conflit sur la base ; on le passe.
+      assert.equal(await runInteractiveRebase(git, repo.root, base, [{ ...b, action: 'reword', newMessage: 'B reworded' }, a]), 'stopped');
+      await git.skipOperation(repo.root, 'rebase');
+      assert.equal(await git.operation(repo.root), undefined);
+      assert.deepEqual(subjects(repo), ['A', 'base']);
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('HEAD ou branche changés depuis l’ouverture de l’éditeur : refus, rien de modifié', async () => {
+    const { repo, base } = fourCommits();
+    try {
+      const head = repo.git('rev-parse', 'HEAD').trim();
+      const items = itemsFromCommits(await git.commitsForRebase(repo.root, base));
+      repo.write('late', 'x\n');
+      repo.commit('late commit');
+      await assert.rejects(runInteractiveRebase(git, repo.root, base, items, { head, branch: 'main' }), RebaseChangedError);
+      assert.equal(subjects(repo)[0], 'late commit');
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('modifications mises de côté en conflit à la fin : signalé', async () => {
+    const repo = makeRepo();
+    try {
+      repo.write('f', '0\n');
+      const base = repo.commit('base');
+      repo.write('f', '1\n');
+      repo.commit('A');
+      repo.write('g', 'g\n');
+      repo.commit('B');
+      repo.write('f', '1 then dirty\n');
+      const [a, b] = itemsFromCommits(await git.commitsForRebase(repo.root, base));
+      assert.equal(await runInteractiveRebase(git, repo.root, base, [{ ...a, action: 'drop' }, b]), 'autostash-conflicts');
+      assert.deepEqual(subjects(repo), ['B', 'base']);
+      assert.ok(repo.git('stash', 'list').includes('autostash'));
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('lignes « # » d’un message reformulé gardées', async () => {
+    const { repo, base } = fourCommits();
+    try {
+      const [c1, ...rest] = itemsFromCommits(await git.commitsForRebase(repo.root, base));
+      await runInteractiveRebase(git, repo.root, base, [{ ...c1, action: 'reword', newMessage: 'c1 bis\n\n# issue 12' }, ...rest]);
+      assert.equal(repo.git('log', '-1', '--format=%B', 'HEAD~3').trim(), 'c1 bis\n\n# issue 12');
     } finally {
       repo.dispose();
     }
