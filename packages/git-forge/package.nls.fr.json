@@ -34,5 +34,21 @@
   "command.conflicts.openMergeEditor": "Ouvrir dans l'éditeur de fusion à 3 voies",
   "command.conflicts.markResolved": "Marquer comme résolu",
   "command.conflicts.keepFile": "Garder le fichier",
-  "command.conflicts.deleteFile": "Supprimer le fichier"
+  "command.conflicts.deleteFile": "Supprimer le fichier",
+  "config.compare.enabled": "Affiche les vues Comparer, Stashs et Worktrees dans le panneau Contrôle de code source.",
+  "view.compare": "Comparer",
+  "view.stashes": "Stashs",
+  "view.worktrees": "Worktrees",
+  "command.compareReferences": "Comparer des références…",
+  "command.compare.swap": "Inverser les côtés",
+  "command.compare.toggleMode": "Basculer : depuis l'ancêtre commun / direct",
+  "command.compare.clear": "Effacer la comparaison",
+  "command.compare.deploy": "Déployer ces fichiers (FTP SFTP Deploy)",
+  "command.stash.push": "Mettre de côté toutes les modifications…",
+  "command.stash.apply": "Appliquer le stash",
+  "command.stash.pop": "Appliquer et supprimer le stash (pop)",
+  "command.stash.drop": "Supprimer le stash",
+  "command.worktree.add": "Nouveau worktree…",
+  "command.worktree.open": "Ouvrir dans une nouvelle fenêtre",
+  "command.worktree.remove": "Supprimer le worktree"
 }

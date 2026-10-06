@@ -34,5 +34,21 @@
   "command.conflicts.openMergeEditor": "Open in 3-Way Merge Editor",
   "command.conflicts.markResolved": "Mark as Resolved",
   "command.conflicts.keepFile": "Keep the File",
-  "command.conflicts.deleteFile": "Delete the File"
+  "command.conflicts.deleteFile": "Delete the File",
+  "config.compare.enabled": "Show the Compare, Stashes and Worktrees views in the Source Control panel.",
+  "view.compare": "Compare",
+  "view.stashes": "Stashes",
+  "view.worktrees": "Worktrees",
+  "command.compareReferences": "Compare References…",
+  "command.compare.swap": "Swap Sides",
+  "command.compare.toggleMode": "Toggle: From Common Ancestor / Direct",
+  "command.compare.clear": "Clear Comparison",
+  "command.compare.deploy": "Deploy These Files (FTP SFTP Deploy)",
+  "command.stash.push": "Stash All Changes…",
+  "command.stash.apply": "Apply Stash",
+  "command.stash.pop": "Pop Stash",
+  "command.stash.drop": "Delete Stash",
+  "command.worktree.add": "New Worktree…",
+  "command.worktree.open": "Open in New Window",
+  "command.worktree.remove": "Remove Worktree"
 }

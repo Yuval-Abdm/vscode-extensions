@@ -15,3 +15,10 @@ export async function pickRepo(repos: Repos): Promise<string | undefined> {
   );
   return picked?.root;
 }
+
+/** Dépôt de l'éditeur actif, sinon le premier dépôt ouvert. */
+export function currentRoot(repos: Repos): string | undefined {
+  const editor = vscode.window.activeTextEditor;
+  const active = editor?.document.uri.scheme === 'file' ? repos.locate(editor.document.fileName)?.root : undefined;
+  return active ?? repos.roots()[0];
+}

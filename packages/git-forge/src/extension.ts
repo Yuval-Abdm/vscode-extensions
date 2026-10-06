@@ -5,6 +5,7 @@ import { BlameFeature } from './features/blame/index.ts';
 import { HistoryView } from './features/history/view.ts';
 import { ConflictsView } from './features/conflicts/view.ts';
 import { MergeCommand } from './features/merge/command.ts';
+import { CompareFeature } from './features/compare/index.ts';
 import { GitCommands } from './git/commands.ts';
 import type { API, GitExtension } from './git/gitApi.ts';
 import { Repos } from './git/repos.ts';
@@ -28,6 +29,7 @@ const FEATURES: Record<string, (services: Services) => vscode.Disposable> = {
   history: ({ git, repos }) => new HistoryView(git, repos),
   conflicts: ({ git, repos, state }) => new ConflictsView(git, repos, state),
   merge: ({ git, repos, state }) => new MergeCommand(git, repos, state),
+  compare: ({ git, repos }) => new CompareFeature(git, repos),
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<GitForgeApi> {

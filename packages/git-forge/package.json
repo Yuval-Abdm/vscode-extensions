@@ -99,6 +99,11 @@
           "type": "boolean",
           "default": true,
           "description": "%config.merge.enabled%"
+        },
+        "gitForge.compare.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.compare.enabled%"
         }
       }
     },
@@ -250,6 +255,83 @@
         "command": "gitForge.conflicts.deleteFile",
         "title": "%command.conflicts.deleteFile%",
         "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.compareReferences",
+        "title": "%command.compareReferences%",
+        "category": "Git Forge",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "gitForge.compare.swap",
+        "title": "%command.compare.swap%",
+        "category": "Git Forge",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "gitForge.compare.toggleMode",
+        "title": "%command.compare.toggleMode%",
+        "category": "Git Forge",
+        "icon": "$(git-pull-request-go-to-changes)"
+      },
+      {
+        "command": "gitForge.compare.clear",
+        "title": "%command.compare.clear%",
+        "category": "Git Forge",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "gitForge.compare.deploy",
+        "title": "%command.compare.deploy%",
+        "category": "Git Forge",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "gitForge.compare.show",
+        "title": "%command.compareReferences%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.stash.push",
+        "title": "%command.stash.push%",
+        "category": "Git Forge",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitForge.stash.apply",
+        "title": "%command.stash.apply%",
+        "category": "Git Forge",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitForge.stash.pop",
+        "title": "%command.stash.pop%",
+        "category": "Git Forge",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "gitForge.stash.drop",
+        "title": "%command.stash.drop%",
+        "category": "Git Forge",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitForge.worktree.add",
+        "title": "%command.worktree.add%",
+        "category": "Git Forge",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitForge.worktree.open",
+        "title": "%command.worktree.open%",
+        "category": "Git Forge",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "gitForge.worktree.remove",
+        "title": "%command.worktree.remove%",
+        "category": "Git Forge",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -361,6 +443,58 @@
         {
           "command": "gitForge.conflicts.deleteFile",
           "when": "false"
+        },
+        {
+          "command": "gitForge.compareReferences",
+          "when": "gitForge.active && config.gitForge.compare.enabled"
+        },
+        {
+          "command": "gitForge.stash.push",
+          "when": "gitForge.active && config.gitForge.compare.enabled"
+        },
+        {
+          "command": "gitForge.worktree.add",
+          "when": "gitForge.active && config.gitForge.compare.enabled"
+        },
+        {
+          "command": "gitForge.compare.swap",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.compare.toggleMode",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.compare.clear",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.compare.deploy",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.compare.show",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.stash.apply",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.stash.pop",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.stash.drop",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.worktree.open",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.worktree.remove",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -393,6 +527,41 @@
           "command": "gitForge.conflicts.refresh",
           "when": "view == gitForge.conflicts",
           "group": "navigation@3"
+        },
+        {
+          "command": "gitForge.compareReferences",
+          "when": "view == gitForge.compare",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitForge.compare.swap",
+          "when": "view == gitForge.compare && gitForge.compare.active",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitForge.compare.toggleMode",
+          "when": "view == gitForge.compare && gitForge.compare.active",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitForge.compare.deploy",
+          "when": "view == gitForge.compare && gitForge.compare.active && gitForge.deployAvailable",
+          "group": "navigation@4"
+        },
+        {
+          "command": "gitForge.compare.clear",
+          "when": "view == gitForge.compare && gitForge.compare.active",
+          "group": "navigation@5"
+        },
+        {
+          "command": "gitForge.stash.push",
+          "when": "view == gitForge.stashes",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitForge.worktree.add",
+          "when": "view == gitForge.worktrees",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
@@ -485,6 +654,46 @@
           "command": "gitForge.conflicts.deleteFile",
           "when": "view == gitForge.conflicts && viewItem =~ /^gitForge\\.conflictFile\\.(deleted|gone)$/",
           "group": "1_keep@2"
+        },
+        {
+          "command": "gitForge.stash.apply",
+          "when": "view == gitForge.stashes && viewItem == gitForge.stash",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitForge.stash.pop",
+          "when": "view == gitForge.stashes && viewItem == gitForge.stash",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitForge.stash.drop",
+          "when": "view == gitForge.stashes && viewItem == gitForge.stash",
+          "group": "inline@3"
+        },
+        {
+          "command": "gitForge.stash.apply",
+          "when": "view == gitForge.stashes && viewItem == gitForge.stash",
+          "group": "1_stash@1"
+        },
+        {
+          "command": "gitForge.stash.pop",
+          "when": "view == gitForge.stashes && viewItem == gitForge.stash",
+          "group": "1_stash@2"
+        },
+        {
+          "command": "gitForge.stash.drop",
+          "when": "view == gitForge.stashes && viewItem == gitForge.stash",
+          "group": "1_stash@3"
+        },
+        {
+          "command": "gitForge.worktree.open",
+          "when": "view == gitForge.worktrees && viewItem =~ /^gitForge\\.worktree/",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitForge.worktree.remove",
+          "when": "view == gitForge.worktrees && viewItem == gitForge.worktree",
+          "group": "inline@2"
         }
       ],
       "editor/context": [
@@ -544,6 +753,24 @@
           "id": "gitForge.history",
           "name": "%view.history%",
           "when": "gitForge.active && config.gitForge.history.enabled"
+        },
+        {
+          "id": "gitForge.compare",
+          "name": "%view.compare%",
+          "when": "gitForge.active && config.gitForge.compare.enabled",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "gitForge.stashes",
+          "name": "%view.stashes%",
+          "when": "gitForge.active && config.gitForge.compare.enabled",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "gitForge.worktrees",
+          "name": "%view.worktrees%",
+          "when": "gitForge.active && config.gitForge.compare.enabled",
+          "visibility": "collapsed"
         }
       ]
     }
