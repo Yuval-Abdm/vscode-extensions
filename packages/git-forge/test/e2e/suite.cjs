@@ -219,6 +219,30 @@ test('cherry-pick puis revert sans confirmation, reset soft avec sauvegarde', as
   gitIn('branch', '-q', '-D', 'pick-source');
 });
 
+test('cherry-pick d’un commit déjà dans HEAD : refusé, aucune opération en cours', async () => {
+  const ops = api.feature('operations');
+  const before = gitIn('rev-parse', 'HEAD').trim();
+  await ops.cherryPick(WS, gitIn('rev-parse', 'HEAD~1').trim(), false);
+  assert.equal(gitIn('rev-parse', 'HEAD').trim(), before);
+  assert.equal(gitIn('status', '--porcelain').trim(), '');
+});
+
+test('chaque fonction : désactivée puis réactivée, ses commandes fonctionnent encore', async () => {
+  const config = vscode.workspace.getConfiguration('gitForge');
+  for (const key of ['history', 'conflicts', 'merge', 'compare', 'graph', 'operations']) {
+    await config.update(`${key}.enabled`, false, vscode.ConfigurationTarget.Global);
+    await waitFor(() => api.feature(key) === undefined || undefined, `${key} désactivée`);
+    await config.update(`${key}.enabled`, undefined, vscode.ConfigurationTarget.Global);
+    await waitFor(() => api.feature(key), `${key} réactivée`);
+  }
+  await vscode.commands.executeCommand('gitForge.showFileHistory', file);
+  await waitFor(() => api.feature('history').entries.length > 0 || undefined, 'historique après réactivation');
+  await vscode.commands.executeCommand('gitForge.conflicts.refresh');
+  await vscode.commands.executeCommand('gitForge.showGraph');
+  await waitFor(() => (api.feature('graph').panel && api.feature('graph').panel.rows.length > 0) || undefined, 'graphe après réactivation');
+  api.feature('graph').panel.dispose();
+});
+
 test('désactivée par réglage, puis réactivée', async () => {
   const config = vscode.workspace.getConfiguration('gitForge');
   await config.update('blame.enabled', false, vscode.ConfigurationTarget.Global);

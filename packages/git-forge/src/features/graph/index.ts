@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import type { GitCommands } from '../../git/commands.ts';
 import type { Repos } from '../../git/repos.ts';
 import { pickRepo } from '../../shared/pickRepo.ts';
-import { errorText } from '../merge/command.ts';
+import { errorText } from '../../shared/errors.ts';
 import { GraphPanel } from './panel.ts';
 
 /** Contexte reçu d'un menu contextuel de la webview (data-vscode-context). */

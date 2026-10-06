@@ -6,7 +6,7 @@ import type { Repos } from '../../git/repos.ts';
 import { relativeTime } from '../../shared/dates.ts';
 import { currentRoot } from '../../shared/pickRepo.ts';
 import { revisionUri } from '../../shared/revisions.ts';
-import { errorText } from '../merge/command.ts';
+import { errorText, showConflictsView, whereToFinish } from '../../shared/errors.ts';
 
 const REFRESH_DELAY = 300;
 
@@ -90,7 +90,8 @@ export class StashView implements vscode.TreeDataProvider<Node>, vscode.Disposab
       if (result === 'applied-without-index') {
         void vscode.window.showWarningMessage(vscode.l10n.t('The stash was applied, but its staged changes could not be restored as staged: they are now unstaged.'));
       } else if (result === 'conflicts') {
-        void vscode.window.showWarningMessage(vscode.l10n.t('The stash was applied with conflicts: resolve them in the Conflicts view. The stash was kept.'));
+        void vscode.window.showWarningMessage(vscode.l10n.t('The stash was applied with conflicts: resolve them {0}. The stash was kept.', whereToFinish()));
+        void showConflictsView();
       }
     } catch (err) {
       void vscode.window.showErrorMessage(errorText(err));

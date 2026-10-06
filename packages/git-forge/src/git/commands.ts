@@ -28,6 +28,9 @@ function pageArgs(page: Page): string[] {
 /** git stash utilise en interne le pathspec « :/ », que GIT_LITERAL_PATHSPECS=1 casse (fichiers non suivis oubliés). */
 const STASH_ENV = { GIT_LITERAL_PATHSPECS: '0' };
 
+/** Délai maximal d'une commande réseau : elle bloquerait sinon toutes les écritures du dépôt (file d'attente). */
+const NETWORK_TIMEOUT = 120_000;
+
 /** Aucune commande d'écriture n'ouvre d'éditeur. */
 const NO_EDITOR = { GIT_EDITOR: 'true', GIT_MERGE_AUTOEDIT: 'no', GIT_SEQUENCE_EDITOR: 'true' };
 
@@ -214,7 +217,7 @@ export class GitCommands {
   }
 
   async fetchRemote(root: string, remote: string): Promise<void> {
-    await this.runner.write(root, ['fetch', '--quiet', remote]);
+    await this.runner.write(root, ['fetch', '--quiet', remote], { timeoutMs: NETWORK_TIMEOUT });
   }
 
   async checkout(root: string, branch: string): Promise<void> {
@@ -271,12 +274,12 @@ export class GitCommands {
 
   /** Supprime `ref` (refs/heads/…) sur le remote, seulement s'il pointe encore sur `expectedSha`. */
   async pushDelete(root: string, remote: string, ref: string, expectedSha: string): Promise<void> {
-    await this.runner.write(root, ['push', '--quiet', `--force-with-lease=${ref}:${expectedSha}`, remote, `:${ref}`]);
+    await this.runner.write(root, ['push', '--quiet', `--force-with-lease=${ref}:${expectedSha}`, remote, `:${ref}`], { timeoutMs: NETWORK_TIMEOUT });
   }
 
   /** Pousse `branch` vers sa branche distante (nom distant éventuellement différent). */
   async pushBranch(root: string, remote: string, branch: string, ref: string): Promise<void> {
-    await this.runner.write(root, ['push', '--quiet', remote, `refs/heads/${branch}:${ref}`]);
+    await this.runner.write(root, ['push', '--quiet', remote, `refs/heads/${branch}:${ref}`], { timeoutMs: NETWORK_TIMEOUT });
   }
 
   async stashPush(root: string, message: string, includeUntracked = false): Promise<void> {

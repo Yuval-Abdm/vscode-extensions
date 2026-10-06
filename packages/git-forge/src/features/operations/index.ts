@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import type { GitCommands } from '../../git/commands.ts';
 import type { LogEntry } from '../../git/parsers/log.ts';
 import type { Repos } from '../../git/repos.ts';
-import { errorText } from '../merge/command.ts';
+import { errorText, showConflictsView, whereToFinish } from '../../shared/errors.ts';
 import { runRebaseEditor, openRebasePanel } from './rebasePanel.ts';
 import { itemsFromCommits, RebaseChangedError, runInteractiveRebase } from './rebaseRun.ts';
 import { parseTodo, serializeTodo, type RebaseItem } from './rebaseModel.ts';
@@ -15,7 +15,7 @@ import { parseTodo, serializeTodo, type RebaseItem } from './rebaseModel.ts';
 type Target = { root?: string; sha?: string; entry?: LogEntry };
 
 const TODO_ASSOCIATION = 'git-rebase-todo';
-const TODO_EDITOR = 'gitForge.rebaseTodo';
+export const TODO_EDITOR = 'gitForge.rebaseTodo';
 
 export class OperationsFeature implements vscode.Disposable {
   readonly #git: GitCommands;
@@ -26,19 +26,21 @@ export class OperationsFeature implements vscode.Disposable {
     this.#git = git;
     this.#extensionUri = extensionUri;
     const command = (id: string, run: (target: Target) => unknown) =>
-      vscode.commands.registerCommand(id, (target: Target) => {
+      vscode.commands.registerCommand(id, async (target: Target) => {
         const root = target?.root;
         const sha = target?.sha ?? target?.entry?.sha;
-        if (root && sha) return run({ root, sha });
+        if (!root || !sha) return;
+        try {
+          await run({ root, sha });
+        } catch (err) {
+          void vscode.window.showErrorMessage(errorText(err));
+        }
       });
     this.#disposables = [
       command('gitForge.cherryPick', ({ root, sha }) => this.cherryPick(root as string, sha as string, true)),
       command('gitForge.revert', ({ root, sha }) => this.revert(root as string, sha as string, true)),
       command('gitForge.reset', ({ root, sha }) => this.reset(root as string, sha as string)),
       command('gitForge.interactiveRebase', ({ root, sha }) => this.interactiveRebase(root as string, sha as string)),
-      vscode.window.registerCustomEditorProvider(TODO_EDITOR, new RebaseTodoEditor(extensionUri), {
-        webviewOptions: { retainContextWhenHidden: true },
-      }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('gitForge.rebaseEditor')) void this.#syncAssociation();
       }),
@@ -63,6 +65,10 @@ export class OperationsFeature implements vscode.Disposable {
     const commit = await this.#git.commit(root, sha);
     if (!commit) return;
     const branch = (await this.#git.status(root)).branch.head ?? 'HEAD';
+    if (kind === 'cherry-pick' && (await this.#git.isAncestor(root, commit.sha, 'HEAD'))) {
+      void vscode.window.showInformationMessage(vscode.l10n.t('{0} is already in {1}: nothing to cherry-pick.', sha.slice(0, 8), branch));
+      return;
+    }
     const merge = commit.parents.length > 1;
     if (confirm) {
       const run = kind === 'cherry-pick' ? vscode.l10n.t('Cherry-pick') : vscode.l10n.t('Revert');
@@ -83,11 +89,11 @@ export class OperationsFeature implements vscode.Disposable {
     if (result === 'done') {
       void vscode.window.showInformationMessage(kind === 'cherry-pick' ? vscode.l10n.t('Cherry-picked {0}.', sha.slice(0, 8)) : vscode.l10n.t('Reverted {0}.', sha.slice(0, 8)));
     } else if (result === 'conflicts') {
-      void vscode.window.showWarningMessage(vscode.l10n.t('Conflicts: resolve them in the Conflicts view, then finish.'));
-      void vscode.commands.executeCommand('gitForge.conflicts.focus');
+      void vscode.window.showWarningMessage(vscode.l10n.t('Conflicts: resolve them {0}, then finish.', whereToFinish()));
+      void showConflictsView();
     } else {
-      void vscode.window.showWarningMessage(vscode.l10n.t('Nothing to apply: the changes of {0} are already there. Skip or abort it in the Conflicts view.', sha.slice(0, 8)));
-      void vscode.commands.executeCommand('gitForge.conflicts.focus');
+      void vscode.window.showWarningMessage(vscode.l10n.t('Nothing to apply: the changes of {0} are already there. Skip or abort it {1}.', sha.slice(0, 8), whereToFinish()));
+      void showConflictsView();
     }
   }
 
@@ -158,24 +164,23 @@ export class OperationsFeature implements vscode.Disposable {
     if (!items) return;
     try {
       const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Rebasing…') }, async () => {
-        // Sauvegarde avant de réécrire l'historique (commits supprimés, fusionnés, merges aplatis).
-        await this.#git.backupTag(root);
-        return runInteractiveRebase(this.#git, root, base, items, guard);
+        // Sauvegarde (après les vérifications) avant de réécrire l'historique : commits supprimés, fusionnés, merges aplatis.
+        return runInteractiveRebase(this.#git, root, base, items, guard, true);
       });
       if (result === 'done') void vscode.window.showInformationMessage(vscode.l10n.t('Rebase done.'));
       else if (result === 'autostash-conflicts') {
         void vscode.window.showWarningMessage(
-          vscode.l10n.t('Rebase done, but your uncommitted changes conflict with the result: resolve them in the Conflicts view. They are also kept in the stash list.'),
+          vscode.l10n.t('Rebase done, but your uncommitted changes conflict with the result: resolve them {0}. They are also kept in the stash list.', whereToFinish()),
         );
-        void vscode.commands.executeCommand('gitForge.conflicts.focus');
+        void showConflictsView();
       } else {
         const conflicts = (await this.#git.status(root)).conflicts.length;
         void vscode.window.showWarningMessage(
           conflicts
-            ? vscode.l10n.t('The rebase stopped on conflicts: resolve them in the Conflicts view, then finish.')
-            : vscode.l10n.t('The rebase stopped so you can amend the commit: change your files, commit (amend), then Finish in the Conflicts view.'),
+            ? vscode.l10n.t('The rebase stopped on conflicts: resolve them {0}, then finish.', whereToFinish())
+            : vscode.l10n.t('The rebase stopped so you can amend the commit: change your files, commit (amend), then finish it {0}.', whereToFinish()),
         );
-        void vscode.commands.executeCommand('gitForge.conflicts.focus');
+        void showConflictsView();
       }
     } catch (err) {
       void vscode.window.showErrorMessage(
@@ -187,7 +192,7 @@ export class OperationsFeature implements vscode.Disposable {
   async #busy(root: string): Promise<boolean> {
     const operation = await this.#git.operation(root);
     if (!operation) return false;
-    void vscode.window.showErrorMessage(vscode.l10n.t('An operation is in progress ({0}): finish or abort it first (Conflicts view).', operation.kind));
+    void vscode.window.showErrorMessage(vscode.l10n.t('An operation is in progress ({0}): finish or abort it first, {1}.', operation.kind, whereToFinish()));
     return true;
   }
 
@@ -211,7 +216,7 @@ export class OperationsFeature implements vscode.Disposable {
 }
 
 /** Éditeur personnalisé d'un git-rebase-todo (`git rebase -i` lancé ailleurs, avec VS Code comme éditeur de git). */
-class RebaseTodoEditor implements vscode.CustomTextEditorProvider {
+export class RebaseTodoEditor implements vscode.CustomTextEditorProvider {
   readonly #extensionUri: vscode.Uri;
 
   constructor(extensionUri: vscode.Uri) {
@@ -236,7 +241,7 @@ class RebaseTodoEditor implements vscode.CustomTextEditorProvider {
       // Liste vide : git abandonne un rebase qui commence (« Nothing to do »). Pendant un rebase déjà commencé
       // (--edit-todo, arrêt en cours), elle supprimerait les commits restants : on n'y touche pas.
       if (existsSync(path.join(path.dirname(document.uri.fsPath), 'done'))) {
-        void vscode.window.showWarningMessage(vscode.l10n.t('This rebase has already started: abort it from the Conflicts view (Abort). The list was not changed.'));
+        void vscode.window.showWarningMessage(vscode.l10n.t('This rebase has already started: abort it {0}. The list was not changed.', whereToFinish()));
         panel.dispose();
         return;
       }

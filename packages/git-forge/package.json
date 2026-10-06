@@ -838,11 +838,6 @@
           "group": "inline@2"
         },
         {
-          "command": "gitForge.cherryPick",
-          "when": "view == gitForge.history && viewItem == gitForge.commit && config.gitForge.operations.enabled",
-          "group": "3_operations@1"
-        },
-        {
           "command": "gitForge.revert",
           "when": "view == gitForge.history && viewItem == gitForge.commit && config.gitForge.operations.enabled",
           "group": "3_operations@2"

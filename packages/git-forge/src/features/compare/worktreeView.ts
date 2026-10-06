@@ -8,7 +8,7 @@ import type { GitCommands, Worktree } from '../../git/commands.ts';
 import type { Repos } from '../../git/repos.ts';
 import { GitError } from '../../git/runner.ts';
 import { currentRoot } from '../../shared/pickRepo.ts';
-import { errorText } from '../merge/command.ts';
+import { errorText } from '../../shared/errors.ts';
 
 const REFRESH_DELAY = 300;
 

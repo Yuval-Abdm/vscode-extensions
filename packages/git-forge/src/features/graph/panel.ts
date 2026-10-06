@@ -9,7 +9,7 @@ import type { FileChange } from '../../git/parsers/log.ts';
 import type { Repos } from '../../git/repos.ts';
 import { absoluteDate, relativeTime } from '../../shared/dates.ts';
 import { changeDiffArgs } from '../history/model.ts';
-import { errorText } from '../merge/command.ts';
+import { errorText } from '../../shared/errors.ts';
 import { GraphLayout, type GraphRow } from './layout.ts';
 
 const PAGE = 500;

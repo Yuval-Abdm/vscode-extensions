@@ -7,7 +7,7 @@ import { ConflictsView } from './features/conflicts/view.ts';
 import { MergeCommand } from './features/merge/command.ts';
 import { CompareFeature } from './features/compare/index.ts';
 import { GraphFeature } from './features/graph/index.ts';
-import { OperationsFeature } from './features/operations/index.ts';
+import { OperationsFeature, RebaseTodoEditor, TODO_EDITOR } from './features/operations/index.ts';
 import { GitCommands } from './git/commands.ts';
 import type { API, GitExtension } from './git/gitApi.ts';
 import { Repos } from './git/repos.ts';
@@ -46,6 +46,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<GitFor
       live.clear();
     },
   });
+
+  // Éditeur des git-rebase-todo : enregistré tout de suite, sans attendre de dépôt (git rebase -i peut l'ouvrir dans
+  // une fenêtre sans dépôt, ou avant que vscode.git ait trouvé les dépôts). Il n'utilise pas git.
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(TODO_EDITOR, new RebaseTodoEditor(context.extensionUri), {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+  );
 
   const extension = vscode.extensions.getExtension<GitExtension>('vscode.git');
   const gitExtension = extension && (extension.isActive ? extension.exports : await extension.activate());
@@ -89,7 +97,12 @@ async function setup(context: vscode.ExtensionContext, gitApi: API, live: Map<st
       context.subscriptions.push(listener);
     });
   }
-  const git = new GitCommands(new GitRunner(gitApi.git.path));
+  // Commandes git en échec : commande et sortie d'erreur brute dans le canal « Git Forge ».
+  const log = vscode.window.createOutputChannel('Git Forge', { log: true });
+  const runner = new GitRunner(gitApi.git.path);
+  runner.onFailure = (args, stderr) => log.warn(`git ${args.join(' ')}\n${stderr.trim()}`);
+  context.subscriptions.push(log);
+  const git = new GitCommands(runner);
   const repos = new Repos(gitApi);
   context.subscriptions.push(
     repos,

@@ -6,6 +6,8 @@ export interface RunOptions {
   input?: string;
   signal?: AbortSignal;
   env?: Record<string, string>;
+  /** Délai maximal (commandes réseau) : au-delà, git est arrêté et la promesse rejetée avec TimeoutError. */
+  timeoutMs?: number;
 }
 
 export interface RunResult {
@@ -27,6 +29,17 @@ export class GitError extends Error {
     this.exitCode = exitCode;
     this.stderr = stderr;
     this.stdout = stdout;
+  }
+}
+
+/** La commande a dépassé son délai maximal (réseau bloqué, demande d'identifiants sans réponse…). */
+export class TimeoutError extends Error {
+  readonly args: string[];
+
+  constructor(args: string[], timeoutMs: number) {
+    super(`git ${args.join(' ')}: no answer after ${Math.round(timeoutMs / 1000)} s`);
+    this.name = 'TimeoutError';
+    this.args = args;
   }
 }
 
@@ -54,9 +67,21 @@ export function runGit(gitPath: string, cwd: string, args: string[], options: Ru
     child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
     child.stdin.on('error', () => {}); // git peut fermer son entrée avant de tout lire (EPIPE)
-    child.on('error', (error) => reject(signal?.aborted ? new CancelledError() : error));
+    let timedOut = false;
+    const timer = options.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          child.kill();
+        }, options.timeoutMs)
+      : undefined;
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      reject(signal?.aborted ? new CancelledError() : error);
+    });
     child.on('close', (code) => {
+      clearTimeout(timer);
       if (signal?.aborted) return reject(new CancelledError());
+      if (timedOut) return reject(new TimeoutError(args, options.timeoutMs as number));
       const stdout = Buffer.concat(out).toString('utf8');
       const stderr = Buffer.concat(err).toString('utf8');
       if (code === 0) resolve({ stdout, stderr });
@@ -99,14 +124,25 @@ export class GitRunner {
     this.gitPath = gitPath;
   }
 
+  /** Appelé pour chaque commande en échec (canal de sortie « Git Forge »). */
+  onFailure: ((args: string[], stderr: string) => void) | undefined;
+
+  #report<T>(args: string[], pending: Promise<T>): Promise<T> {
+    return pending.catch((err: unknown) => {
+      if (err instanceof GitError) this.onFailure?.(args, err.stderr);
+      else if (err instanceof TimeoutError || (err instanceof Error && !(err instanceof CancelledError))) this.onFailure?.(args, err.message);
+      throw err;
+    });
+  }
+
   read(cwd: string, args: string[], options?: RunOptions): Promise<RunResult> {
     // Lecture en arrière-plan : pas de verrou index.lock pris par git status pendant que l'utilisateur travaille.
     const env = { GIT_OPTIONAL_LOCKS: '0', ...options?.env };
-    return limiter(this.#reads, cwd, 4).run(() => runGit(this.gitPath, cwd, args, { ...options, env }));
+    return this.#report(args, limiter(this.#reads, cwd, 4).run(() => runGit(this.gitPath, cwd, args, { ...options, env })));
   }
 
   write(cwd: string, args: string[], options?: RunOptions): Promise<RunResult> {
-    return limiter(this.#writes, cwd, 1).run(() => runGit(this.gitPath, cwd, args, options));
+    return this.#report(args, limiter(this.#writes, cwd, 1).run(() => runGit(this.gitPath, cwd, args, options)));
   }
 }
 

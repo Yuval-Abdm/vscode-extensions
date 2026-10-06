@@ -7,8 +7,9 @@ import type { GitCommands, Operation, OperationKind } from '../../git/commands.t
 import type { ConflictFile, ConflictKind } from '../../git/parsers/status.ts';
 import type { Repos } from '../../git/repos.ts';
 import { GitError } from '../../git/runner.ts';
-import { errorText, pendingDeletes, reportMerged, setPendingDelete } from '../merge/command.ts';
-import { firstLine, settlePendingDelete } from '../merge/flow.ts';
+import { errorText } from '../../shared/errors.ts';
+import { pendingDeletes, reportMerged, setPendingDelete } from '../merge/command.ts';
+import { settlePendingDelete } from '../merge/flow.ts';
 import { findConflicts, hasConflictMarkers, resolveBlock, type Choice, type ConflictBlock } from './markers.ts';
 
 const REFRESH_DELAY = 200;
@@ -64,8 +65,8 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
       command('gitForge.conflicts.markResolved', (node: ConflictNode) => this.#markResolved(node)),
       command('gitForge.conflicts.keepFile', (node: ConflictNode) => this.#run(() => this.#git.add(node.root, node.conflict.path))),
       command('gitForge.conflicts.deleteFile', (node: ConflictNode) => this.#deleteFile(node)),
-      command('gitForge.conflicts.finish', () => this.finish()),
-      command('gitForge.conflicts.abort', () => this.abort()),
+      command('gitForge.conflicts.finish', () => this.finish().catch((err: unknown) => vscode.window.showErrorMessage(errorText(err)))),
+      command('gitForge.conflicts.abort', () => this.abort().catch((err: unknown) => vscode.window.showErrorMessage(errorText(err)))),
     ];
     void this.refresh();
   }
@@ -92,7 +93,7 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
     if (node.type === 'block') {
       const item = new vscode.TreeItem(vscode.l10n.t('Conflict {0}', node.index + 1));
       item.description = vscode.l10n.t('lines {0}–{1}', node.block.start + 1, node.block.end + 1);
-      item.tooltip = `${node.block.oursLabel || 'ours'} ↔ ${node.block.theirsLabel || 'theirs'}`;
+      item.tooltip = `${node.block.oursLabel || vscode.l10n.t('mine')} ↔ ${node.block.theirsLabel || vscode.l10n.t('theirs')}`;
       item.iconPath = new vscode.ThemeIcon('git-merge');
       item.contextValue = 'gitForge.conflictBlock';
       item.command = {
@@ -334,7 +335,7 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
     try {
       await action();
     } catch (err) {
-      void vscode.window.showErrorMessage(err instanceof GitError ? firstLine(err.stderr) || err.message : errorText(err));
+      void vscode.window.showErrorMessage(errorText(err));
     }
     await this.refresh();
   }

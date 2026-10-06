@@ -25,6 +25,7 @@ export interface API {
   readonly git: { readonly path: string };
   readonly repositories: Repository[];
   readonly onDidOpenRepository: Event<Repository>;
+  readonly onDidCloseRepository: Event<Repository>;
   getRepository(uri: Uri): Repository | null;
 }
 

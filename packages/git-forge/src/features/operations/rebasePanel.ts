@@ -3,6 +3,7 @@
 // git-rebase-todo d'un `git rebase -i` lancé ailleurs (éditeur personnalisé, actions seulement).
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
+import { whereToFinish } from '../../shared/errors.ts';
 import type { RebaseItem } from './rebaseModel.ts';
 
 type Incoming = { type: 'ready' } | { type: 'start'; items: RebaseItem[] } | { type: 'cancel' };
@@ -67,7 +68,7 @@ function html(webview: vscode.Webview, media: vscode.Uri, title: string, editMes
   };
   const json = JSON.stringify(strings).replace(/</g, '\\u003c');
   const note = editMessages
-    ? vscode.l10n.t('Oldest commit at the top. Drag the handle to reorder. Uncommitted changes are stashed and restored. If the rebase stops (conflict, edit), finish it in the Conflicts view.')
+    ? vscode.l10n.t('Oldest commit at the top. Drag the handle to reorder. Uncommitted changes are stashed and restored. If the rebase stops (conflict, edit), finish it {0}.', whereToFinish())
     : vscode.l10n.t('Oldest commit at the top. Drag the handle to reorder. Messages of reword and squash are asked by git afterwards.');
   return `<!DOCTYPE html>
 <html lang="${text(vscode.env.language)}">

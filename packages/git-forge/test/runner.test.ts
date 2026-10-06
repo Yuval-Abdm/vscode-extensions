@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
-import { CancelledError, GitError, GitRunner, Limiter, runGit } from '../src/git/runner.ts';
+import { CancelledError, GitError, GitRunner, Limiter, runGit, TimeoutError } from '../src/git/runner.ts';
 import { makeRepo } from './helpers/repo.ts';
 
 describe('runGit', () => {
@@ -74,5 +74,22 @@ describe('GitRunner', () => {
     const runner = new GitRunner('git');
     await runner.write(repo.root, ['config', 'gitforge.test', 'yes']);
     assert.equal((await runner.read(repo.root, ['config', 'gitforge.test'])).stdout.trim(), 'yes');
+  });
+});
+
+describe('délai maximal', () => {
+  it('commande trop longue : arrêtée, TimeoutError', async () => {
+    const start = Date.now();
+    await assert.rejects(runGit('sleep', '/', ['5'], { timeoutMs: 100 }), TimeoutError);
+    assert.ok(Date.now() - start < 2000);
+  });
+
+  it('échec signalé au journal du runner', async () => {
+    const runner = new GitRunner('git');
+    const failures: string[] = [];
+    runner.onFailure = (args, stderr) => failures.push(`${args.join(' ')}|${stderr.trim()}`);
+    await assert.rejects(runner.read('/', ['rev-parse', '--verify', 'nope']));
+    assert.equal(failures.length, 1);
+    assert.match(failures[0], /^rev-parse --verify nope\|/);
   });
 });

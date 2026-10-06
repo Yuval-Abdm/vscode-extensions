@@ -34,6 +34,7 @@ export async function runInteractiveRebase(
   base: string,
   items: readonly RebaseItem[],
   guard?: RebaseGuard,
+  backup = false,
 ): Promise<'done' | 'stopped' | 'autostash-conflicts'> {
   const invalid = validateRebase(items);
   if (invalid) throw new Error(invalid === 'empty' ? 'empty rebase: every commit is dropped' : 'squash or fixup cannot come first');
@@ -41,6 +42,7 @@ export async function runInteractiveRebase(
   const branch = (await git.status(root)).branch.head;
   if (guard && ((await git.revParse(root, 'HEAD')) !== guard.head || branch !== guard.branch)) throw new RebaseChangedError();
 
+  if (backup) await git.backupTag(root);
   const gitDir = await git.gitDir(root);
   // Aucun rebase en cours : les dossiers des rebases précédents ne servent plus.
   for (const name of readdirSync(gitDir)) {

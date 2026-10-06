@@ -11,7 +11,7 @@ import { deployApi, deployInstalled } from '../../shared/deploy.ts';
 import { pickRef } from '../../shared/pickRef.ts';
 import { pickRepo } from '../../shared/pickRepo.ts';
 import { revisionUri } from '../../shared/revisions.ts';
-import { errorText } from '../merge/command.ts';
+import { errorText } from '../../shared/errors.ts';
 import { buildFileTree, diffSides, type FolderEntry, type TreeEntry } from './model.ts';
 
 export interface CompareSpec {

@@ -4,8 +4,10 @@ import * as vscode from 'vscode';
 import type { GitCommands } from '../../git/commands.ts';
 import type { Repos } from '../../git/repos.ts';
 import { pickRepo } from '../../shared/pickRepo.ts';
+import { errorText, showConflictsView, whereToFinish } from '../../shared/errors.ts';
+
+export { errorText } from '../../shared/errors.ts';
 import { firstLine, mergeLocal, type DeleteMode, type MergeOptions, type MergeOutcome, type MergeStep, type PendingDelete } from './flow.ts';
-import { GitError } from '../../git/runner.ts';
 
 /** Suppressions de branche demandées pendant un merge resté en conflit, par dépôt (traitées par la vue Conflicts). */
 const PENDING_DELETES = 'gitForge.pendingMergeDeletes';
@@ -47,7 +49,13 @@ export class MergeCommand implements vscode.Disposable {
     this.#git = git;
     this.#repos = repos;
     this.#state = state;
-    this.#command = vscode.commands.registerCommand('gitForge.mergeLocal', (preset?: { root?: string; source?: string }) => this.run(preset));
+    this.#command = vscode.commands.registerCommand('gitForge.mergeLocal', async (preset?: { root?: string; source?: string }) => {
+      try {
+        await this.run(preset);
+      } catch (err) {
+        void vscode.window.showErrorMessage(errorText(err));
+      }
+    });
   }
 
   dispose(): void {
@@ -130,7 +138,7 @@ export class MergeCommand implements vscode.Disposable {
     }
     switch (outcome.kind) {
       case 'busy':
-        void vscode.window.showErrorMessage(vscode.l10n.t('An operation is in progress ({0}): finish or abort it first (Conflicts view).', outcome.operation));
+        void vscode.window.showErrorMessage(vscode.l10n.t('An operation is in progress ({0}): finish or abort it first, {1}.', outcome.operation, whereToFinish()));
         break;
       case 'unknown-branch':
         void vscode.window.showErrorMessage(vscode.l10n.t('Unknown branch: {0}', outcome.branch));
@@ -171,16 +179,21 @@ export class MergeCommand implements vscode.Disposable {
         );
         break;
       case 'conflicts': {
-        const pending: PendingDelete | undefined =
-          options.deleteSource === 'none'
-            ? undefined
-            : { root, source: options.source, target, sourceSha: outcome.sourceSha, mode: options.deleteSource };
-        await setPendingDelete(this.#state, root, pending);
         if (vscode.workspace.getConfiguration('gitForge').get<boolean>('conflicts.enabled', true)) {
+          // La vue Conflicts supprimera la branche quand le merge sera commité.
+          const pending: PendingDelete | undefined =
+            options.deleteSource === 'none'
+              ? undefined
+              : { root, source: options.source, target, sourceSha: outcome.sourceSha, mode: options.deleteSource };
+          await setPendingDelete(this.#state, root, pending);
           void vscode.window.showWarningMessage(vscode.l10n.t('Merge conflicts: resolve them in the Conflicts view, then finish the merge.'));
-          void vscode.commands.executeCommand('gitForge.conflicts.focus');
+          void showConflictsView();
         } else {
-          void vscode.window.showWarningMessage(vscode.l10n.t('Merge conflicts: resolve them, then commit the merge.'));
+          void vscode.window.showWarningMessage(
+            options.deleteSource === 'none'
+              ? vscode.l10n.t('Merge conflicts: resolve them, then commit the merge.')
+              : vscode.l10n.t('Merge conflicts: resolve them, then commit the merge. {0} was not deleted: delete it once the merge is committed.', options.source),
+          );
         }
         break;
       }
@@ -204,7 +217,7 @@ export async function reportMerged(
   const parts = [outcome.upToDate ? vscode.l10n.t('{0} was already merged into {1}.', source, target) : vscode.l10n.t('Merged {0} into {1}.', source, target)];
   if (outcome.deleted === 'local') parts.push(vscode.l10n.t('{0} deleted.', source));
   if (outcome.deleted === 'remote') parts.push(vscode.l10n.t('{0} deleted locally and on the remote.', source));
-  const upstream = (await git.branches(root)).find((b) => b.name === target)?.upstream;
+  const upstream = (await git.branches(root).catch(() => [])).find((b) => b.name === target)?.upstream;
   const push = vscode.l10n.t('Push');
   const choice = await (upstream && !outcome.upToDate
     ? vscode.window.showInformationMessage(parts.join(' '), push)
@@ -219,7 +232,3 @@ export async function reportMerged(
   }
 }
 
-export function errorText(err: unknown): string {
-  if (err instanceof GitError) return firstLine(err.stderr) || err.message;
-  return err instanceof Error ? err.message : String(err);
-}

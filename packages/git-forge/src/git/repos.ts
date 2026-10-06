@@ -9,11 +9,23 @@ export class Repos implements RepoLocator, vscode.Disposable {
   readonly onDidChange = this.#changed.event;
   readonly #disposables: vscode.Disposable[] = [this.#changed];
 
+  /** Écoute de chaque dépôt ouvert, retirée à sa fermeture. */
+  readonly #watched = new Map<Repository, vscode.Disposable>();
+
   constructor(api: API) {
     this.#api = api;
-    const watch = (repo: Repository) => this.#disposables.push(repo.state.onDidChange(() => this.#changed.fire(repo)));
+    const watch = (repo: Repository) => {
+      if (!this.#watched.has(repo)) this.#watched.set(repo, repo.state.onDidChange(() => this.#changed.fire(repo)));
+    };
     api.repositories.forEach(watch);
-    this.#disposables.push(api.onDidOpenRepository(watch));
+    this.#disposables.push(
+      api.onDidOpenRepository(watch),
+      api.onDidCloseRepository((repo) => {
+        this.#watched.get(repo)?.dispose();
+        this.#watched.delete(repo);
+        this.#changed.fire(repo);
+      }),
+    );
   }
 
   locate(fileName: string): RepoLocation | undefined {
@@ -27,6 +39,7 @@ export class Repos implements RepoLocator, vscode.Disposable {
   }
 
   dispose(): void {
+    for (const disposable of this.#watched.values()) disposable.dispose();
     for (const disposable of this.#disposables) disposable.dispose();
   }
 }
