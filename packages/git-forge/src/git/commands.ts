@@ -5,6 +5,7 @@ import { parseBlameIncremental, type BlameResult } from './parsers/blame.ts';
 import { LOG_FORMAT, parseHunks, parseLog, parseNameStatus, type FileChange, type Hunk, type LogEntry } from './parsers/log.ts';
 import { parseStatusV2, type Status } from './parsers/status.ts';
 import { parseWorktrees, type Worktree } from './parsers/worktree.ts';
+import { GRAPH_FORMAT, parseGraphLog, type GraphCommit } from './parsers/graph.ts';
 import { GitError, type GitRunner } from './runner.ts';
 
 /** Chemins affichés tels quels (accents, espaces), sans échappement. */
@@ -422,5 +423,38 @@ export class GitCommands {
   async worktreeRemove(root: string, dir: string, force: boolean, locked = false): Promise<void> {
     const flags = locked ? ['--force', '--force'] : force ? ['--force'] : [];
     await this.runner.write(root, ['worktree', 'remove', ...flags, dir]);
+  }
+
+  /** Commits du graphe, enfants avant parents ; toutes les références (sans le stash) ou HEAD seulement. */
+  async graph(root: string, options: { skip?: number; limit?: number; all: boolean }): Promise<GraphCommit[]> {
+    const args = [
+      'log',
+      '--no-color',
+      '--no-show-signature',
+      '--topo-order',
+      '--decorate=full',
+      `--format=${GRAPH_FORMAT}`,
+      `--skip=${options.skip ?? 0}`,
+      `--max-count=${options.limit ?? 500}`,
+      ...(options.all ? ['--exclude=refs/stash', '--all'] : ['HEAD']),
+    ];
+    try {
+      return parseGraphLog((await this.runner.read(root, args)).stdout);
+    } catch (err) {
+      if (err instanceof GitError && !(await this.revParse(root, 'HEAD'))) return []; // dépôt sans commit
+      throw err;
+    }
+  }
+
+  async createBranch(root: string, name: string, sha: string): Promise<void> {
+    await this.runner.write(root, ['branch', name, sha]);
+  }
+
+  async createTag(root: string, name: string, sha: string): Promise<void> {
+    await this.runner.write(root, ['tag', name, sha]);
+  }
+
+  async checkoutDetached(root: string, sha: string): Promise<void> {
+    await this.runner.write(root, ['checkout', '--quiet', '--detach', sha]);
   }
 }
