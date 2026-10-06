@@ -6,6 +6,7 @@
 - Faster reopening: the index cache is only rewritten when a file changed, and is read and written as a stream (one line per file) while the project is listed — about 3 s instead of 6 s on a 19,000-file project, and no memory peak from a single huge document (the language server stays between 1.2 and 1.4 GB).
 - Faster references and rename on common names: files that only mention the name as a method, a property, a variable, in a comment or in HTML are no longer parsed — under 2 s for a function called in 1,000 files.
 - The interface is fully translated into French (follows the VS Code display language).
+- The PHP version in use is shown in the status bar while a PHP file is open, with where it comes from (setting, `composer.json`, `php` executable, default); click it or run **Select PHP version** to choose auto-detection or a fixed version (saved in the workspace settings).
 - Baselines no longer depend on the display language or on the list of including pages: a team mixing English and French VS Code shares the same `.vscode/php-forge-baseline.json`, and adding a page that includes a file no longer brings its hidden warnings back. Existing baselines keep working; **Update Baseline** rewrites them in the new format.
 
 ## 0.9.0 — preview

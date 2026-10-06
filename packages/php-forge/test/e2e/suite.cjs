@@ -266,6 +266,19 @@ test('vue Impact : fichier modifié non enregistré et ses pages', async () => {
   }
 });
 
+test('version de PHP : commande de choix ; réglage appliqué par le serveur', async () => {
+  assert.ok((await vscode.commands.getCommands(true)).includes('phpForge.selectPhpVersion'));
+  const doc = await vscode.workspace.openTextDocument({ language: 'php', content: '<?php\n$a = str_contains("ab", "a");\n' });
+  await vscode.window.showTextDocument(doc);
+  const config = vscode.workspace.getConfiguration('phpForge');
+  await config.update('phpVersion', '7.3', vscode.ConfigurationTarget.Workspace);
+  try {
+    await waitFor(() => vscode.languages.getDiagnostics(doc.uri).some((d) => /str_contains/.test(d.message)) || false, 'str_contains absent de PHP 7.3');
+  } finally {
+    await config.update('phpVersion', undefined, vscode.ConfigurationTarget.Workspace);
+  }
+});
+
 async function run() {
   const failures = [];
   for (const { name, fn } of tests) {

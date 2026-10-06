@@ -47,5 +47,6 @@
   "phpForge.refreshImpact.title": "Actualiser l'impact",
   "phpForge.deployChanged.title": "Déployer les fichiers modifiés",
   "phpForge.impact.name": "Impact PHP",
-  "phpForge.deploy.checkErrors.description": "Avant **Déployer les fichiers modifiés**, avertir quand un fichier à déployer a des erreurs dans la vue Problèmes."
+  "phpForge.deploy.checkErrors.description": "Avant **Déployer les fichiers modifiés**, avertir quand un fichier à déployer a des erreurs dans la vue Problèmes.",
+  "phpForge.selectPhpVersion.title": "Choisir la version de PHP"
 }

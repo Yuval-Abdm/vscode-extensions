@@ -90,7 +90,7 @@ Measured on a real legacy project (19,000 PHP files, 3,200 of them application c
 |---|---|---|
 | `phpForge.exclude` | `["**/node_modules/**", "**/.git/**"]` | Globs of files and folders that are neither indexed nor analyzed |
 | `phpForge.maxFileSize` | `2000000` | Files larger than this (bytes) are ignored |
-| `phpForge.phpVersion` | `""` (auto) | PHP version of the project; legacy projects without `composer.json` should set it (e.g. `"7.3"`) |
+| `phpForge.phpVersion` | `""` (auto) | PHP version of the project; legacy projects without `composer.json` should set it (e.g. `"7.3"`). The detected version is shown in the status bar (`PHP 7.3`) while a PHP file is open: click it, or run **PHP Forge: Select PHP version**, to switch between auto-detection and a fixed version |
 | `phpForge.stubs` | common extensions | PHP extensions whose native symbols are known |
 | `phpForge.inlayHints.parameterNames` | `true` | Parameter names before literal arguments |
 | `phpForge.inlayHints.variableTypes` | `false` | Inferred type of assigned variables |
@@ -128,6 +128,7 @@ Measured on a real legacy project (19,000 PHP files, 3,200 of them application c
 - **PHP Forge: Show Include Tree**
 - **PHP Forge: Create Baseline / Update Baseline / Clear Baseline**
 - **PHP Forge: Refresh SQL schema**
+- **PHP Forge: Select PHP version**
 - **PHP Forge: Migration report**
 - **PHP Forge: Show impact of changed files** / **Deploy changed files**
 

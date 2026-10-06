@@ -153,5 +153,11 @@
   "{0} files in merge conflict are not deployed.": "{0} fichiers en conflit de fusion ne sont pas déployés.",
   "Deploy": "Déployer",
   "Upload {0} changed files to {1}?": "Envoyer {0} fichiers modifiés vers {1} ?",
-  "{0} columns": "{0} colonnes"
+  "{0} columns": "{0} colonnes",
+  "PHP version (PHP Forge)": "Version de PHP (PHP Forge)",
+  "PHP {0} ({1}): click to change": "PHP {0} ({1}) : cliquer pour changer",
+  "Auto-detect": "Détection automatique",
+  "PHP {0}, {1}": "PHP {0}, {1}",
+  "composer.json (require.php), then the php executable, then PHP 8.3": "composer.json (require.php), puis l'exécutable php, puis PHP 8.3",
+  "PHP version of this project (checks, completion, migration)": "Version de PHP de ce projet (vérifications, complétion, migration)"
 }

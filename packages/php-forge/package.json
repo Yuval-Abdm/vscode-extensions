@@ -149,6 +149,11 @@
         "command": "phpForge.impactEntries",
         "title": "Impact entries (tests)",
         "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.selectPhpVersion",
+        "title": "%phpForge.selectPhpVersion.title%",
+        "category": "PHP Forge"
       }
     ],
     "configuration": {

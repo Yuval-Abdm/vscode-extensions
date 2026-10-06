@@ -5,6 +5,7 @@ import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerO
 import type { Level } from '../server/diagnostics/policy.ts';
 import { deployChanged, ImpactProvider } from './impactView.ts';
 import { IncludeTreeProvider } from './includeTree.ts';
+import { versionChoices } from './phpVersions.ts';
 import { mysqlDriver } from './mysql.ts';
 import { connectionKey, fetchSchema, isAccessDenied, missingFields, type ConnectionSettings } from './sqlSchema.ts';
 import { BASELINE_REQUEST, BASELINE_STATUS_NOTIFICATION, IMPACT_REQUEST, INCLUDE_TREE_REQUEST, INCLUDERS_REQUEST, MIGRATION_REPORT_REQUEST, REINDEX_REQUEST, STATUS_NOTIFICATION, type BaselineResult, type BaselineStatus, type ImpactEntry, type IncludeLink, type IncludeTree, type InitOptions, type PhpVersionSource, type Settings, type StatusParams } from '../shared/protocol.ts';
@@ -46,13 +47,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   client = new LanguageClient('phpForge', 'PHP Forge', serverOptions, clientOptions);
 
+  // Version de PHP : dans la barre d'état (visible tant qu'un fichier PHP est ouvert) et dans l'état du langage ;
+  // un clic propose la détection automatique ou une version fixe
+  let phpStatus: StatusParams | undefined;
   const status = vscode.languages.createLanguageStatusItem('phpForge.phpVersion', { language: 'php' });
   status.name = 'PHP Forge';
   status.text = 'PHP';
-  status.command = { title: vscode.l10n.t('Change'), command: 'workbench.action.openSettings', arguments: ['phpForge.phpVersion'] };
+  status.command = { title: vscode.l10n.t('Change'), command: 'phpForge.selectPhpVersion' };
+  const versionItem = vscode.window.createStatusBarItem('phpForge.phpVersionBar', vscode.StatusBarAlignment.Right, 100);
+  versionItem.name = vscode.l10n.t('PHP version (PHP Forge)');
+  versionItem.command = 'phpForge.selectPhpVersion';
+  const showVersion = (editor = vscode.window.activeTextEditor) => {
+    if (phpStatus && editor?.document.languageId === 'php') versionItem.show();
+    else versionItem.hide();
+  };
   client.onNotification(STATUS_NOTIFICATION, (params: StatusParams) => {
+    phpStatus = params;
     status.text = `PHP ${params.phpVersion}`;
     status.detail = sourceLabel(params.source);
+    versionItem.text = `PHP ${params.phpVersion}`;
+    versionItem.tooltip = vscode.l10n.t('PHP {0} ({1}): click to change', params.phpVersion, sourceLabel(params.source));
+    showVersion();
   });
   const baselineStatus = vscode.languages.createLanguageStatusItem('phpForge.baseline', { language: 'php' });
   baselineStatus.name = vscode.l10n.t('PHP Forge baseline');
@@ -87,6 +102,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     status,
+    versionItem,
+    vscode.window.onDidChangeActiveTextEditor((editor) => showVersion(editor)),
+    vscode.commands.registerCommand('phpForge.selectPhpVersion', () => selectPhpVersion(phpStatus)),
     baselineStatus,
     vscode.commands.registerCommand('phpForge.createBaseline', () => baseline('create')),
     vscode.commands.registerCommand('phpForge.updateBaseline', () => baseline('update')),
@@ -303,4 +321,21 @@ async function showMigrationReport(): Promise<void> {
   if (!report) return;
   const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: report });
   await vscode.window.showTextDocument(doc);
+}
+
+/** Détection automatique ou version fixe, enregistrée dans les réglages du workspace (`phpForge.phpVersion`). */
+async function selectPhpVersion(current: StatusParams | undefined): Promise<void> {
+  const config = vscode.workspace.getConfiguration('phpForge');
+  const configured = config.get<string>('phpVersion') ?? '';
+  const choices = versionChoices(current ?? { phpVersion: '', source: 'default' }, configured);
+  const items = choices.map((choice) => ({
+    choice,
+    label: `${choice.current ? '$(check) ' : ''}${choice.value ? `PHP ${choice.value}` : vscode.l10n.t('Auto-detect')}`,
+    description: !choice.value && choice.source && choice.source !== 'setting' && choice.detected ? vscode.l10n.t('PHP {0}, {1}', choice.detected, sourceLabel(choice.source)) : undefined,
+    detail: !choice.value ? vscode.l10n.t('composer.json (require.php), then the php executable, then PHP 8.3') : undefined,
+  }));
+  const pick = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t('PHP version of this project (checks, completion, migration)') });
+  if (!pick || pick.choice.value === configured) return;
+  const target = vscode.workspace.workspaceFolders?.length ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+  await config.update('phpVersion', pick.choice.value || undefined, target);
 }
