@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 - Commit view: click the branch to switch to another local branch, check out a remote branch (a local branch tracking it is created) or create a new branch.
 - Commit view: discard the changes of a file on hover, or of all files from the Changes header (after confirmation; new untracked files are deleted).
