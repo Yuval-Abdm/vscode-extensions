@@ -118,14 +118,16 @@ export class GitCommands {
   }
 
   async branches(root: string): Promise<LocalBranch[]> {
-    const format = '%(refname:short)%00%(objectname)%00%(upstream:short)%00%(upstream:remotename)%00%(upstream:remoteref)';
+    // lstrip=2 : « feat » même si un tag « feat » existe (refname:short donnerait « heads/feat »).
+    const format = '%(refname:lstrip=2)%00%(objectname)%00%(upstream:short)%00%(upstream:remotename)%00%(upstream:remoteref)';
     const { stdout } = await this.runner.read(root, ['for-each-ref', `--format=${format}`, 'refs/heads']);
     return stdout
       .split('\n')
       .filter(Boolean)
       .map((line) => {
         const [name, sha, upstream, remote, ref] = line.split('\0');
-        return upstream && remote && ref ? { name, sha, upstream: { name: upstream, remote, ref } } : { name, sha };
+        // remote « . » : la branche suit une autre branche locale, ce n'est pas une branche distante.
+        return upstream && remote && remote !== '.' && ref ? { name, sha, upstream: { name: upstream, remote, ref } } : { name, sha };
       });
   }
 
@@ -169,12 +171,26 @@ export class GitCommands {
     return undefined;
   }
 
-  async fetchAll(root: string): Promise<void> {
-    await this.runner.write(root, ['fetch', '--all', '--quiet']);
+  async fetchRemote(root: string, remote: string): Promise<void> {
+    await this.runner.write(root, ['fetch', '--quiet', remote]);
   }
 
   async checkout(root: string, branch: string): Promise<void> {
-    await this.runner.write(root, ['checkout', '--quiet', branch]);
+    // « -- » final : `branch` est une branche, jamais un fichier du même nom.
+    await this.runner.write(root, ['checkout', '--quiet', branch, '--']);
+  }
+
+  /** Branches extraites dans un autre worktree que `root`. */
+  async branchesCheckedOutElsewhere(root: string): Promise<Map<string, string>> {
+    const { stdout } = await this.runner.read(root, ['worktree', 'list', '--porcelain']);
+    const result = new Map<string, string>();
+    const here = (await this.runner.read(root, ['rev-parse', '--show-toplevel'])).stdout.trim();
+    let dir = '';
+    for (const line of stdout.split('\n')) {
+      if (line.startsWith('worktree ')) dir = line.slice(9);
+      else if (line.startsWith('branch refs/heads/') && path.resolve(dir) !== path.resolve(here)) result.set(line.slice(18), dir);
+    }
+    return result;
   }
 
   /** Avance la branche courante jusqu'à `ref`, seulement en fast-forward. */
@@ -187,32 +203,42 @@ export class GitCommands {
     await this.runner.write(root, ['update-ref', '-m', 'git-forge: fast-forward', `refs/heads/${branch}`, sha, oldSha]);
   }
 
+  /**
+   * Merge de la branche locale `source` (refs/heads/… : jamais un tag du même nom). --ff explicite : merge.ff=only
+   * dans la configuration ne bloque pas un merge qui demande un commit. 'conflicts' aussi quand git s'arrête avec un
+   * merge en cours sans conflit (hook pre-merge-commit…).
+   */
   async merge(root: string, source: string, options: { noFf: boolean }): Promise<'merged' | 'up-to-date' | 'conflicts'> {
-    const args = ['merge', '--no-edit', ...(options.noFf ? ['--no-ff'] : []), source];
+    const args = ['merge', '--no-edit', options.noFf ? '--no-ff' : '--ff', `refs/heads/${source}`];
     try {
       const { stdout } = await this.runner.write(root, args, { env: NO_EDITOR });
       return /Already up to date/i.test(stdout) ? 'up-to-date' : 'merged';
     } catch (err) {
-      if (err instanceof GitError && err.exitCode === 1 && (await this.status(root)).conflicts.length) return 'conflicts';
+      if (err instanceof GitError && ((await this.status(root)).conflicts.length || (await this.operation(root))?.kind === 'merge')) return 'conflicts';
       throw err;
     }
   }
 
-  /** Supprime une branche locale déjà mergée (`git branch -d`). */
+  /**
+   * Supprime une branche locale. -D : `branch -d` compare à la branche distante, pas à HEAD ; l'appelant vérifie
+   * lui-même que la branche est contenue dans HEAD.
+   */
   async deleteBranch(root: string, name: string): Promise<void> {
-    await this.runner.write(root, ['branch', '-d', name]);
+    await this.runner.write(root, ['branch', '-D', name]);
   }
 
-  async pushDelete(root: string, remote: string, branch: string): Promise<void> {
-    await this.runner.write(root, ['push', '--quiet', remote, '--delete', branch]);
+  /** Supprime `ref` (refs/heads/…) sur le remote, seulement s'il pointe encore sur `expectedSha`. */
+  async pushDelete(root: string, remote: string, ref: string, expectedSha: string): Promise<void> {
+    await this.runner.write(root, ['push', '--quiet', `--force-with-lease=${ref}:${expectedSha}`, remote, `:${ref}`]);
   }
 
-  async push(root: string): Promise<void> {
-    await this.runner.write(root, ['push', '--quiet']);
+  /** Pousse `branch` vers sa branche distante (nom distant éventuellement différent). */
+  async pushBranch(root: string, remote: string, branch: string, ref: string): Promise<void> {
+    await this.runner.write(root, ['push', '--quiet', remote, `refs/heads/${branch}:${ref}`]);
   }
 
-  async stashPush(root: string, message: string): Promise<void> {
-    await this.runner.write(root, ['stash', 'push', '--quiet', '-m', message]);
+  async stashPush(root: string, message: string, includeUntracked = false): Promise<void> {
+    await this.runner.write(root, ['stash', 'push', '--quiet', ...(includeUntracked ? ['--include-untracked'] : []), '-m', message]);
   }
 
   /** Remplace un fichier en conflit par sa version « mienne » ou « leur ». */
@@ -232,6 +258,11 @@ export class GitCommands {
   async continueOperation(root: string, kind: OperationKind): Promise<void> {
     const args = kind === 'merge' ? ['commit', '--no-edit', '--quiet'] : [kind, '--continue'];
     await this.runner.write(root, args, { env: NO_EDITOR });
+  }
+
+  /** Passe le commit courant d'un rebase, cherry-pick ou revert (résolution qui le laisse vide). */
+  async skipOperation(root: string, kind: OperationKind): Promise<void> {
+    await this.runner.write(root, [kind, '--skip'], { env: NO_EDITOR });
   }
 
   async abortOperation(root: string, kind: OperationKind): Promise<void> {

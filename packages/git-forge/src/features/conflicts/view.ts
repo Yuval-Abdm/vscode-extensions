@@ -1,13 +1,14 @@
 // Vue « Conflicts » (panneau Source Control), visible pendant un merge, un rebase, un cherry-pick ou un revert, ou
 // quand des fichiers sont en conflit : fichiers et blocs en conflit, choix du code à garder, fin ou abandon.
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import * as vscode from 'vscode';
 import type { GitCommands, Operation, OperationKind } from '../../git/commands.ts';
 import type { ConflictFile, ConflictKind } from '../../git/parsers/status.ts';
 import type { Repos } from '../../git/repos.ts';
-import { deleteSourceBranch } from '../merge/flow.ts';
-import { errorText, PENDING_DELETE, reportMerged, type PendingDelete } from '../merge/command.ts';
+import { GitError } from '../../git/runner.ts';
+import { errorText, pendingDeletes, reportMerged, setPendingDelete } from '../merge/command.ts';
+import { firstLine, settlePendingDelete } from '../merge/flow.ts';
 import { findConflicts, hasConflictMarkers, resolveBlock, type Choice, type ConflictBlock } from './markers.ts';
 
 const REFRESH_DELAY = 200;
@@ -35,6 +36,8 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
   #timer: ReturnType<typeof setTimeout> | undefined;
   #refreshing: Promise<void> | undefined;
   #again = false;
+  /** Après la première lecture seulement, l'apparition de conflits ouvre la vue (pas au démarrage). */
+  #initialized = false;
 
   constructor(git: GitCommands, repos: Repos, state: vscode.Memento) {
     this.#git = git;
@@ -59,8 +62,8 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
         vscode.commands.executeCommand('git.openMergeEditor', fileUri(node)),
       ),
       command('gitForge.conflicts.markResolved', (node: ConflictNode) => this.#markResolved(node)),
-      command('gitForge.conflicts.keepFile', (node: ConflictNode) => this.#run(node.root, () => this.#git.add(node.root, node.conflict.path))),
-      command('gitForge.conflicts.deleteFile', (node: ConflictNode) => this.#run(node.root, () => this.#git.remove(node.root, node.conflict.path))),
+      command('gitForge.conflicts.keepFile', (node: ConflictNode) => this.#run(() => this.#git.add(node.root, node.conflict.path))),
+      command('gitForge.conflicts.deleteFile', (node: ConflictNode) => this.#deleteFile(node)),
       command('gitForge.conflicts.finish', () => this.finish()),
       command('gitForge.conflicts.abort', () => this.abort()),
     ];
@@ -100,7 +103,6 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
       return item;
     }
     const { conflict } = node;
-    const textual = TEXT_KINDS.includes(conflict.kind);
     const item = new vscode.TreeItem(
       path.posix.basename(conflict.path),
       node.blocks.length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None,
@@ -108,7 +110,13 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
     const dir = path.posix.dirname(conflict.path);
     item.description = dir === '.' ? kindLabel(conflict.kind) : `${dir} · ${kindLabel(conflict.kind)}`;
     item.resourceUri = uri;
-    item.contextValue = textual ? 'gitForge.conflictFile.text' : conflict.kind.startsWith('deleted-by') ? 'gitForge.conflictFile.deleted' : 'gitForge.conflictFile.other';
+    // text : les deux versions existent (blocs, mien / leur) ; gone : supprimé des deux côtés ; deleted : une seule
+    // version existe (ajouté ou supprimé d'un côté) → garder ou supprimer le fichier.
+    item.contextValue = TEXT_KINDS.includes(conflict.kind)
+      ? 'gitForge.conflictFile.text'
+      : conflict.kind === 'both-deleted'
+        ? 'gitForge.conflictFile.gone'
+        : 'gitForge.conflictFile.deleted';
     if (conflict.kind !== 'both-deleted') item.command = { command: 'vscode.open', title: '', arguments: [uri] };
     return item;
   }
@@ -131,49 +139,73 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
   }
 
   async finish(): Promise<void> {
-    for (const state of this.#repoStates) {
-      const { root, operation } = state;
-      await saveDocumentsIn(root);
-      const left = (await this.#git.status(root)).conflicts.length;
-      if (left) {
-        void vscode.window.showWarningMessage(vscode.l10n.t('Resolve every file first ({0} left).', left));
-        continue;
-      }
-      if (!operation) {
-        void vscode.window.showInformationMessage(vscode.l10n.t('Conflicts resolved. If they came from a stash, the stash was kept.'));
-        continue;
-      }
-      try {
-        await this.#git.continueOperation(root, operation.kind);
-      } catch (err) {
-        void vscode.window.showErrorMessage(vscode.l10n.t('Could not finish the {0}: {1}', operationName(operation.kind), errorText(err)));
-        continue;
-      }
-      const pending = this.#state.get<PendingDelete>(PENDING_DELETE);
-      if (operation.kind === 'merge' && pending?.root === root) {
-        await this.#state.update(PENDING_DELETE, undefined);
-        const deleted = await deleteSourceBranch(this.#git, root, pending.source, pending.mode);
-        void reportMerged(this.#git, root, pending.source, pending.target, { upToDate: false, ...deleted });
-      } else if (operation.kind === 'merge') {
-        void vscode.window.showInformationMessage(vscode.l10n.t('Merge committed.'));
-      }
+    const state = await this.#pickState();
+    if (!state) return;
+    const { root, operation } = state;
+    await saveDocumentsIn(root);
+    const left = (await this.#git.status(root)).conflicts.length;
+    if (left) {
+      void vscode.window.showWarningMessage(vscode.l10n.t('Resolve every file first ({0} left).', left));
+      return;
+    }
+    if (!operation) {
+      void vscode.window.showInformationMessage(vscode.l10n.t('Conflicts resolved. If they came from a stash, the stash was kept.'));
+      await this.refresh();
+      return;
+    }
+    try {
+      await this.#git.continueOperation(root, operation.kind);
+      if (operation.kind === 'merge') void vscode.window.showInformationMessage(vscode.l10n.t('Merge committed.'));
+    } catch (err) {
+      await this.#afterFailedContinue(root, operation.kind, err);
     }
     await this.refresh();
   }
 
   async abort(): Promise<void> {
-    for (const { root, operation } of this.#repoStates) {
-      if (!operation) continue;
-      const abort = vscode.l10n.t('Abort');
-      const choice = await vscode.window.showWarningMessage(
-        vscode.l10n.t('Abort the {0}? The changes made while resolving conflicts are lost.', operationName(operation.kind)),
-        { modal: true },
-        abort,
-      );
-      if (choice !== abort) continue;
-      if (this.#state.get<PendingDelete>(PENDING_DELETE)?.root === root) await this.#state.update(PENDING_DELETE, undefined);
-      await this.#run(root, () => this.#git.abortOperation(root, operation.kind));
+    const state = await this.#pickState();
+    const operation = state?.operation;
+    if (!state || !operation) return;
+    const abort = vscode.l10n.t('Abort');
+    const choice = await vscode.window.showWarningMessage(
+      vscode.l10n.t('Abort the {0}? The changes made while resolving conflicts are lost.', operationName(operation.kind)),
+      { modal: true },
+      abort,
+    );
+    if (choice !== abort) return;
+    await this.#run(() => this.#git.abortOperation(state.root, operation.kind));
+  }
+
+  /** Rebase / cherry-pick / revert : un échec de --continue est souvent l'arrêt suivant, ou un commit devenu vide. */
+  async #afterFailedContinue(root: string, kind: OperationKind, err: unknown): Promise<void> {
+    const still = await this.#git.operation(root);
+    if (still?.kind === kind && (await this.#git.status(root)).conflicts.length) {
+      void vscode.window.showInformationMessage(vscode.l10n.t('Next commit of the {0}: new conflicts to resolve.', operationName(kind)));
+      return;
     }
+    const stderr = err instanceof GitError ? `${err.stdout ?? ''}\n${err.stderr}` : '';
+    if (still?.kind === kind && kind !== 'merge' && /nothing to commit|No changes|is now empty|empty/i.test(stderr)) {
+      const skip = vscode.l10n.t('Skip This Commit');
+      const choice = await vscode.window.showWarningMessage(
+        vscode.l10n.t('The resolved commit is empty (its changes are already there). Skip it?'),
+        skip,
+      );
+      if (choice === skip) await this.#run(() => this.#git.skipOperation(root, kind));
+      return;
+    }
+    void vscode.window.showErrorMessage(vscode.l10n.t('Could not finish the {0}: {1}', operationName(kind), errorText(err)));
+  }
+
+  /** Dépôt sur lequel agir : le seul en cours, sinon un choix. */
+  async #pickState(): Promise<RepoState | undefined> {
+    await this.refresh();
+    const states = this.#repoStates;
+    if (states.length <= 1) return states[0];
+    const picked = await vscode.window.showQuickPick(
+      states.map((state) => ({ label: path.basename(state.root), description: state.operation ? operationTitle(state.operation) : undefined, state })),
+      { placeHolder: vscode.l10n.t('Repository') },
+    );
+    return picked?.state;
   }
 
   #schedule(): void {
@@ -187,6 +219,7 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
 
   async #read(): Promise<void> {
     const before = this.files.length;
+    const previous = new Map(this.#repoStates.map((state) => [state.root, state]));
     const states: RepoState[] = [];
     for (const root of this.#repos.roots()) {
       try {
@@ -197,10 +230,13 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
         );
         states.push({ root, operation, files });
       } catch {
-        // dépôt en cours de modification : relu au prochain changement
+        // dépôt en cours de modification (index.lock…) : on garde son état précédent, relu au prochain changement
+        const kept = previous.get(root);
+        if (kept) states.push(kept);
       }
     }
     this.#repoStates = states;
+    await this.#settlePendingDeletes();
     const count = this.files.length;
     void vscode.commands.executeCommand('setContext', 'gitForge.conflicts.active', states.length > 0);
     const main = states.find((state) => state.operation) ?? states[0];
@@ -212,55 +248,94 @@ export class ConflictsView implements vscode.TreeDataProvider<ConflictNode>, vsc
     this.#view.message =
       main?.operation && !count ? vscode.l10n.t('All conflicts are resolved: finish the {0} with ✓ in the title bar.', operationName(main.operation.kind)) : undefined;
     this.#changed.fire(undefined);
-    if (!before && count) void vscode.commands.executeCommand('gitForge.conflicts.focus');
+    if (this.#initialized && !before && count) void vscode.commands.executeCommand('gitForge.conflicts.focus');
+    this.#initialized = true;
+  }
+
+  /** Suppressions de branche en attente : faites quand le merge est commité (ici ou ailleurs), oubliées sinon. */
+  async #settlePendingDeletes(): Promise<void> {
+    for (const pending of pendingDeletes(this.#state)) {
+      if (!this.#repos.roots().includes(pending.root)) continue;
+      let result;
+      try {
+        result = await settlePendingDelete(this.#git, pending);
+      } catch {
+        continue;
+      }
+      if (result === 'wait') continue;
+      await setPendingDelete(this.#state, pending.root, undefined);
+      if (result !== 'drop') void reportMerged(this.#git, pending.root, pending.source, pending.target, { upToDate: false, ...result });
+    }
   }
 
   async #keepBlock(node: ConflictNode, choice: Choice): Promise<void> {
     if (node.type !== 'block') return;
     const doc = await vscode.workspace.openTextDocument(fileUri(node));
-    const lines = doc.getText().split(/\r?\n/);
-    const blocks = findConflicts(lines);
-    // Le fichier a pu changer depuis l'affichage : même ligne de départ, sinon même rang.
-    const block = blocks.find((b) => b.start === node.block.start) ?? blocks[node.index];
-    if (!block) return void this.refresh();
-    const eol = doc.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
-    const replacement = resolveBlock(lines, block, choice);
-    const edit = new vscode.WorkspaceEdit();
-    if (block.end + 1 < doc.lineCount) {
-      edit.replace(doc.uri, new vscode.Range(block.start, 0, block.end + 1, 0), replacement.map((line) => line + eol).join(''));
-    } else {
-      edit.replace(doc.uri, new vscode.Range(block.start, 0, block.end, doc.lineAt(block.end).text.length), replacement.join(eol));
+    // Sans modification non enregistrée, le disque fait foi : le document n'est peut-être pas encore rechargé.
+    const text = doc.isDirty ? doc.getText() : await readFile(doc.uri.fsPath, 'utf8').catch(() => doc.getText());
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    const lines = text.split(/\r?\n/);
+    // Le fichier a pu changer depuis l'affichage : on ne touche qu'au bloc qui est toujours au même endroit.
+    const block = findConflicts(lines).find((b) => b.start === node.block.start && b.end === node.block.end);
+    if (!block) {
+      void vscode.window.showInformationMessage(vscode.l10n.t('The file changed: the conflict list was refreshed, try again.'));
+      return void this.refresh();
     }
-    await vscode.workspace.applyEdit(edit);
+    const result = [...lines.slice(0, block.start), ...resolveBlock(lines, block, choice), ...lines.slice(block.end + 1)].join(eol);
+    if (doc.isDirty) {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(doc.uri, doc.validateRange(new vscode.Range(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)), result);
+      await vscode.workspace.applyEdit(edit);
+    } else {
+      // Écrit sur le disque : VS Code recharge le document, sans conflit d'enregistrement avec la version de git.
+      await writeFile(doc.uri.fsPath, result);
+    }
     await vscode.window.showTextDocument(doc, { selection: new vscode.Range(block.start, 0, block.start, 0), preview: false });
     await this.refresh();
   }
 
+  /** Version entière « mienne » ou « leur », puis fichier marqué résolu. */
   async #keepFile(node: ConflictNode, side: 'ours' | 'theirs'): Promise<void> {
     const open = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === fileUri(node).toString());
     if (open?.isDirty) await open.save();
-    await this.#run(node.root, () => this.#git.checkoutSide(node.root, node.conflict.path, side));
+    await this.#run(async () => {
+      await this.#git.checkoutSide(node.root, node.conflict.path, side);
+      await this.#git.add(node.root, node.conflict.path);
+    });
+  }
+
+  async #deleteFile(node: ConflictNode): Promise<void> {
+    // Document ouvert et modifié : enregistré d'abord, sinon un enregistrement ultérieur recréerait le fichier.
+    const open = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === fileUri(node).toString());
+    if (open?.isDirty) await open.save();
+    await this.#run(() => this.#git.remove(node.root, node.conflict.path));
   }
 
   async #markResolved(node: ConflictNode): Promise<void> {
     if (TEXT_KINDS.includes(node.conflict.kind)) {
-      const doc = await vscode.workspace.openTextDocument(fileUri(node));
-      if (doc.isDirty) await doc.save();
-      if (hasConflictMarkers(doc.getText())) {
+      let doc: vscode.TextDocument | undefined;
+      try {
+        doc = await vscode.workspace.openTextDocument(fileUri(node));
+      } catch {
+        doc = undefined; // fichier binaire : pas de marqueurs à vérifier
+      }
+      if (doc?.isDirty) await doc.save();
+      // Texte du disque : le document ouvert n'est peut-être pas encore rechargé après l'écriture de git.
+      const text = doc ? await readFile(doc.uri.fsPath, 'utf8').catch(() => doc.getText()) : '';
+      if (hasConflictMarkers(text)) {
         void vscode.window.showWarningMessage(vscode.l10n.t('{0} still has conflict markers.', path.posix.basename(node.conflict.path)));
         return;
       }
     }
-    await this.#run(node.root, () => this.#git.add(node.root, node.conflict.path));
+    await this.#run(() => this.#git.add(node.root, node.conflict.path));
   }
 
-  async #run(root: string, action: () => Promise<void>): Promise<void> {
+  async #run(action: () => Promise<void>): Promise<void> {
     try {
       await action();
     } catch (err) {
-      void vscode.window.showErrorMessage(errorText(err));
+      void vscode.window.showErrorMessage(err instanceof GitError ? firstLine(err.stderr) || err.message : errorText(err));
     }
-    void root;
     await this.refresh();
   }
 }
@@ -269,13 +344,16 @@ function fileUri(node: ConflictNode): vscode.Uri {
   return vscode.Uri.file(path.join(node.root, node.conflict.path));
 }
 
-/** Blocs d'un fichier en conflit textuel, lus dans l'éditeur s'il est ouvert, sinon sur le disque. */
+/**
+ * Blocs d'un fichier en conflit textuel : dans l'éditeur s'il a des modifications non enregistrées, sinon sur le
+ * disque (un document ouvert n'est pas encore rechargé juste après que git a écrit le fichier).
+ */
 async function blocksOf(root: string, conflict: ConflictFile): Promise<ConflictBlock[]> {
   if (!TEXT_KINDS.includes(conflict.kind)) return [];
   const uri = vscode.Uri.file(path.join(root, conflict.path));
   const open = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri.toString());
   try {
-    const text = open ? open.getText() : await readFile(uri.fsPath, 'utf8');
+    const text = open?.isDirty ? open.getText() : await readFile(uri.fsPath, 'utf8');
     return findConflicts(text.split(/\r?\n/));
   } catch {
     return [];

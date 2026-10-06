@@ -18,13 +18,15 @@ export class GitError extends Error {
   readonly args: string[];
   readonly exitCode: number | null;
   readonly stderr: string;
+  readonly stdout: string;
 
-  constructor(args: string[], exitCode: number | null, stderr: string) {
+  constructor(args: string[], exitCode: number | null, stderr: string, stdout = '') {
     super(`git ${args.join(' ')} (${exitCode}): ${stderr.trim()}`);
     this.name = 'GitError';
     this.args = args;
     this.exitCode = exitCode;
     this.stderr = stderr;
+    this.stdout = stdout;
   }
 }
 
@@ -58,7 +60,7 @@ export function runGit(gitPath: string, cwd: string, args: string[], options: Ru
       const stdout = Buffer.concat(out).toString('utf8');
       const stderr = Buffer.concat(err).toString('utf8');
       if (code === 0) resolve({ stdout, stderr });
-      else reject(new GitError(args, code, stderr));
+      else reject(new GitError(args, code, stderr, stdout));
     });
     child.stdin.end(options.input ?? '');
   });
@@ -98,7 +100,9 @@ export class GitRunner {
   }
 
   read(cwd: string, args: string[], options?: RunOptions): Promise<RunResult> {
-    return limiter(this.#reads, cwd, 4).run(() => runGit(this.gitPath, cwd, args, options));
+    // Lecture en arrière-plan : pas de verrou index.lock pris par git status pendant que l'utilisateur travaille.
+    const env = { GIT_OPTIONAL_LOCKS: '0', ...options?.env };
+    return limiter(this.#reads, cwd, 4).run(() => runGit(this.gitPath, cwd, args, { ...options, env }));
   }
 
   write(cwd: string, args: string[], options?: RunOptions): Promise<RunResult> {

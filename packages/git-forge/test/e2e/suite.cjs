@@ -128,7 +128,7 @@ test('merge local en conflit, résolu dans la vue Conflicts, branche supprimée 
 
   const merge = await waitFor(() => api.feature('merge'), 'commande merge');
   const outcome = await merge.execute(WS, { source: 'feature', noFf: false, deleteSource: 'local' });
-  assert.deepEqual(outcome, { kind: 'conflicts' });
+  assert.equal(outcome.kind, 'conflicts');
 
   const view = api.feature('conflicts');
   await view.refresh();
@@ -143,8 +143,7 @@ test('merge local en conflit, résolu dans la vue Conflicts, branche supprimée 
 
   const [block] = view.getChildren(fileNode);
   await vscode.commands.executeCommand('gitForge.conflicts.keepTheirs', block);
-  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(WS, 'a.txt')));
-  assert.equal(doc.getText(), 'one\nTWO\nfeature\n');
+  assert.equal(require('fs').readFileSync(path.join(WS, 'a.txt'), 'utf8'), 'one\nTWO\nfeature\n');
 
   await vscode.commands.executeCommand('gitForge.conflicts.markResolved', view.files[0]);
   await waitFor(() => view.files.length === 0 || undefined, 'plus de conflit');

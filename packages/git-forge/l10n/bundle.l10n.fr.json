@@ -81,5 +81,15 @@
   "Rebase of {0}": "Rebase de {0}",
   "Rebase": "Rebase",
   "Cherry-pick": "Cherry-pick",
-  "Revert": "Revert"
+  "Revert": "Revert",
+  "An operation is in progress ({0}): finish or abort it first (Conflicts view).": "Une opération est en cours ({0}) : terminez-la ou abandonnez-la d'abord (vue Conflits).",
+  "Unknown branch: {0}": "Branche inconnue : {0}",
+  "{0} is checked out in another worktree ({1}): it cannot be updated or checked out here. Nothing was changed.": "{0} est extraite dans un autre worktree ({1}) : elle ne peut pas être mise à jour ni extraite ici. Rien n'a été modifié.",
+  "Stash failed: {0}": "Échec du stash : {0}",
+  "Your changes were stashed (untracked files included): restore them with Pop in the Stashes view, or \"git stash pop\".": "Vos modifications ont été mises de côté (fichiers non suivis compris) : récupérez-les avec Pop dans la vue Stashs, ou « git stash pop ».",
+  "Merge conflicts: resolve them, then commit the merge.": "Conflits de merge : résolvez-les, puis commitez le merge.",
+  "Next commit of the {0}: new conflicts to resolve.": "Commit suivant du {0} : de nouveaux conflits à résoudre.",
+  "Skip This Commit": "Passer ce commit",
+  "The resolved commit is empty (its changes are already there). Skip it?": "Le commit résolu est vide (ses modifications sont déjà présentes). Le passer ?",
+  "The file changed: the conflict list was refreshed, try again.": "Le fichier a changé : la liste des conflits a été actualisée, réessayez."
 }

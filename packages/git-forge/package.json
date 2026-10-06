@@ -483,7 +483,7 @@
         },
         {
           "command": "gitForge.conflicts.deleteFile",
-          "when": "view == gitForge.conflicts && viewItem == gitForge.conflictFile.deleted",
+          "when": "view == gitForge.conflicts && viewItem =~ /^gitForge\\.conflictFile\\.(deleted|gone)$/",
           "group": "1_keep@2"
         }
       ],

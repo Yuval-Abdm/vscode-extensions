@@ -39,7 +39,9 @@ describe('marqueurs de conflit', () => {
 
   it('marqueur incomplet ou ligne qui ressemble à un marqueur : pas de bloc', () => {
     assert.deepEqual(findConflicts(['<<<<<<< HEAD', 'x', '=======']), []);
-    assert.deepEqual(findConflicts(['<<<<<<<<<< not a marker', '=======', '>>>>>>> x']), []);
+    assert.deepEqual(findConflicts(['<<<<<<<x not a marker', '=======', '>>>>>>> x']), []);
+    assert.equal(findConflicts(['<<<<<<<<<< HEAD', 'a', '==========', 'b', '>>>>>>>>>> x']).length, 1);
+    assert.equal(hasConflictMarkers('a\n<<<<<<< HEAD\nb\n'), true);
     assert.equal(hasConflictMarkers('a\r\n<<<<<<< HEAD\r\nb\r\n=======\r\nc\r\n>>>>>>> x\r\n'), true);
     assert.equal(hasConflictMarkers('a\nb\n'), false);
   });
