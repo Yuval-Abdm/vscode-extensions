@@ -199,6 +199,26 @@ test('graphe : tous les commits chargés, copier un SHA depuis le menu', async (
   graph.panel.dispose();
 });
 
+test('cherry-pick puis revert sans confirmation, reset soft avec sauvegarde', async () => {
+  const ops = await waitFor(() => api.feature('operations'), 'fonction operations');
+  gitIn('switch', '-q', '-c', 'pick-source');
+  require('fs').writeFileSync(path.join(WS, 'picked.txt'), 'picked\n');
+  gitIn('add', 'picked.txt');
+  gitIn('commit', '-q', '-m', 'to pick');
+  const picked = gitIn('rev-parse', 'HEAD').trim();
+  gitIn('switch', '-q', 'main');
+  await ops.cherryPick(WS, picked, false);
+  assert.equal(gitIn('log', '-1', '--format=%s').trim(), 'to pick');
+  await ops.revert(WS, gitIn('rev-parse', 'HEAD').trim(), false);
+  assert.match(gitIn('log', '-1', '--format=%s').trim(), /^Revert "to pick"/);
+  const before = gitIn('rev-parse', 'HEAD').trim();
+  await ops.reset(WS, gitIn('rev-parse', 'HEAD~2').trim(), 'soft', false);
+  assert.equal(gitIn('rev-parse', 'HEAD').trim(), gitIn('rev-parse', `${before}~2`).trim());
+  assert.ok(gitIn('tag', '--list', 'git-forge/backup/*').trim());
+  gitIn('reset', '-q', '--hard', before);
+  gitIn('branch', '-q', '-D', 'pick-source');
+});
+
 test('désactivée par réglage, puis réactivée', async () => {
   const config = vscode.workspace.getConfiguration('gitForge');
   await config.update('blame.enabled', false, vscode.ConfigurationTarget.Global);

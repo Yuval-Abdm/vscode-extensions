@@ -2,7 +2,7 @@
 
 **Free and lightweight Git tools for VS Code: inline blame, file history, conflict resolution, local merge and commit graph — no account, no paid tier, nothing you did not ask for.**
 
-> Preview (0.5). Interface in English and French (follows the VS Code display language).
+> Preview (0.6). Interface in English and French (follows the VS Code display language).
 
 ## Features
 
@@ -18,6 +18,11 @@
 - **Stashes** view: every stash and its files (untracked ones included), diff on click, apply, pop, delete; **Stash All Changes** includes untracked files.
 - **Worktrees** view: every worktree of the repository; create one from an existing or a new branch, open it in a new window, remove it (with an explicit confirmation if it has changes).
 - **Commit graph** (*Show Graph*, or the branch button in the Source Control title bar): every branch, remote branch and tag, or the current branch only; search by message, author, SHA or branch (Enter jumps to the next match); select a commit to see its full message and files, double-click a file for its diff. Right-click a commit: checkout (detached), create a branch or a tag here, compare with HEAD or with the selected commit, copy the SHA. Right-click a branch: checkout, Merge Locally into the current branch, delete (with a clear warning when it is not merged). Loads 500 commits at a time and only draws what is visible, so large repositories stay smooth.
+- **Guided operations** (right-click a commit in the graph or the File History view), each one explained before it runs:
+  - **Cherry-pick** and **Revert**: the confirmation names the commit and the branch; a merge commit is applied relative to its first parent; conflicts open the Conflicts view.
+  - **Reset**: soft, mixed or hard, each explained in one line. Hard lists the uncommitted changes that will be lost and asks twice. A backup tag `git-forge/backup/…` is created on the current commit before any reset that could lose work.
+  - **Interactive rebase**: an editor lists the commits after the chosen one (oldest first): drag to reorder, pick / reword / edit / squash / fixup / drop, edit the messages in place. Uncommitted changes are stashed and restored; a stop (conflict, edit) is finished from the Conflicts view.
+  - With `gitForge.rebaseEditor` on and VS Code as your Git editor, `git rebase -i` started in a terminal opens the same editor.
 
 ## Settings
 
@@ -32,13 +37,11 @@
 | `gitForge.merge.enabled` | `true` | Merge Locally command |
 | `gitForge.compare.enabled` | `true` | Compare, Stashes and Worktrees views |
 | `gitForge.graph.enabled` | `true` | Commit graph |
+| `gitForge.operations.enabled` | `true` | Cherry-pick, revert, reset and interactive rebase in the commit menus |
+| `gitForge.rebaseEditor` | `false` | Open `git rebase -i` todo lists in Git Forge's editor |
 
 Every feature can be turned off: nothing is registered for a disabled feature.
 
 ## Requirements
 
 Git, and VS Code's built-in Git extension (enabled by default). Git Forge uses the Git it finds.
-
-## Roadmap
-
-Guided cherry-pick / revert / reset / interactive rebase.

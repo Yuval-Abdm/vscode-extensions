@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- Cherry-pick and revert from the graph and the File History view, merge commits relative to their first parent.
+- Reset soft / mixed / hard with explanations, a double confirmation for hard and a backup tag.
+- Interactive rebase editor: reorder, pick / reword / edit / squash / fixup / drop, messages edited in place, autostash; optional editor for `git rebase -i` started elsewhere.
+
 ## 0.5.0
 
 - Commit graph: all branches or the current one, badges for branches, remote branches, tags and HEAD, search, commit details and files with diff, context menus (checkout, create branch or tag, compare with HEAD, copy SHA, checkout / merge / delete a branch).
