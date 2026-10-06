@@ -79,3 +79,21 @@ describe('head', () => {
     }
   });
 });
+
+describe('blame : chemins entre guillemets', () => {
+  it('guillemet dans le nom : filename et previous décodés', async () => {
+    const repo = makeRepo();
+    try {
+      const git = new GitCommands(new GitRunner('git'));
+      repo.write('a"b.txt', 'one\n');
+      const first = repo.commit('first');
+      repo.write('a"b.txt', 'one\ntwo\n');
+      const second = repo.commit('second');
+      const result = await git.blame(repo.root, 'a"b.txt');
+      assert.equal(result.commits.get(first)?.filename, 'a"b.txt');
+      assert.deepEqual(result.commits.get(second)?.previous, { sha: first, filename: 'a"b.txt' });
+    } finally {
+      repo.dispose();
+    }
+  });
+});

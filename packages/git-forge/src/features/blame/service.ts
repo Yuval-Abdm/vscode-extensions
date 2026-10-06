@@ -4,12 +4,14 @@ import { Lru } from '../../git/cache.ts';
 import type { GitCommands } from '../../git/commands.ts';
 import type { RepoLocator } from '../../git/locator.ts';
 import { isUncommitted, type BlameCommit, type BlameResult } from '../../git/parsers/blame.ts';
-import { CancelledError } from '../../git/runner.ts';
+import { CancelledError, GitError } from '../../git/runner.ts';
 
 /** Ce que le service lit d'un document (vscode.TextDocument convient). */
 export interface BlameDocument {
   readonly fileName: string;
   readonly version: number;
+  /** Modifié sans être enregistré : seul cas où le blame porte sur le contenu de l'éditeur. */
+  readonly isDirty: boolean;
   readonly lineCount: number;
   getText(): string;
 }
@@ -52,6 +54,14 @@ export class BlameService {
     return this.#repos.locate(fileName)?.head;
   }
 
+  /** Oublie les blames d'un document fermé : rouvert, il repart en version 1. */
+  forget(fileName: string): void {
+    const location = this.#repos.locate(fileName);
+    if (!location) return;
+    const prefix = [location.root, relativePath(location.root, fileName), ''].join('\0');
+    for (const key of this.#blames.keys()) if (key.startsWith(prefix)) this.#blames.delete(key);
+  }
+
   /**
    * Blame du document, sur son contenu actuel. undefined si le fichier n'a pas de blame (hors dépôt, non suivi,
    * dépôt sans commit, trop long). Rejette avec CancelledError si `signal` est annulé.
@@ -65,11 +75,15 @@ export class BlameService {
     for (let attempt = 0; ; attempt++) {
       let pending = this.#blames.get(key);
       if (!pending) {
-        const started: Promise<FileBlame | undefined> = this.#git.blame(root, relPath, { contents: doc.getText(), signal }).then(
+        // Document enregistré : git lit le fichier lui-même (BOM et encodage du disque respectés).
+        const contents = doc.isDirty ? doc.getText() : undefined;
+        const started: Promise<FileBlame | undefined> = this.#git.blame(root, relPath, { contents, signal }).then(
           (result) => ({ root, relPath, head, result }),
           (err) => {
             if (err instanceof CancelledError) throw err;
-            return undefined; // non suivi, ignoré… : pas de blame
+            // Erreur git (non suivi, ignoré…) : pas de blame, mis en cache. Erreur passagère : réessayée au prochain appel.
+            if (!(err instanceof GitError) && this.#blames.get(key) === started) this.#blames.delete(key);
+            return undefined;
           },
         );
         // Un calcul annulé ne reste pas en cache.

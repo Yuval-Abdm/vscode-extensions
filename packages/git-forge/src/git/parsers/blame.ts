@@ -1,4 +1,5 @@
 // Analyse de `git blame --incremental` : pour chaque ligne du fichier, le commit qui l'a écrite.
+import { unquotePath } from './paths.ts';
 
 export interface BlameCommit {
   sha: string;
@@ -65,11 +66,11 @@ export function parseBlameIncremental(text: string): BlameResult {
         break;
       case 'previous': {
         const separator = value.indexOf(' ');
-        current.previous ??= { sha: value.slice(0, separator), filename: value.slice(separator + 1) };
+        current.previous ??= { sha: value.slice(0, separator), filename: unquotePath(value.slice(separator + 1)) };
         break;
       }
       case 'filename':
-        if (!current.filename) current.filename = value;
+        if (!current.filename) current.filename = unquotePath(value);
         break;
     }
   }

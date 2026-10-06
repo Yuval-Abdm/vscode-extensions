@@ -47,7 +47,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<GitFor
       void vscode.window.showWarningMessage(vscode.l10n.t('Git Forge is inactive: Git was not found.'));
       return;
     }
-    void setup(context, gitApi, live);
+    setup(context, gitApi, live).catch((err: unknown) => {
+      void vscode.window.showErrorMessage(vscode.l10n.t('Git Forge could not start: {0}', err instanceof Error ? err.message : String(err)));
+    });
   };
   if (gitExtension.enabled) start();
   else {

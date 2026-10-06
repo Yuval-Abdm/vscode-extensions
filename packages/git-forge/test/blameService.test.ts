@@ -15,8 +15,8 @@ class CountingGit extends GitCommands {
   }
 }
 
-function doc(fileName: string, text: string, version = 1): BlameDocument {
-  return { fileName, version, lineCount: text.split('\n').length, getText: () => text };
+function doc(fileName: string, text: string, version = 1, isDirty = version > 1): BlameDocument {
+  return { fileName, version, isDirty, lineCount: text.split('\n').length, getText: () => text };
 }
 
 describe('BlameService', () => {
@@ -111,8 +111,51 @@ describe('BlameService', () => {
     assert.equal(blame?.result.lines.length, 2);
   });
 
+  it("document enregistré : blame du fichier sur disque (BOM conservé, pas de fausse ligne non commitée)", async () => {
+    fresh();
+    repo.write('bom.txt', '\uFEFFone\ntwo\n');
+    head = repo.commit('bom');
+    const info = await service.lineInfo(doc(path.join(repo.root, 'bom.txt'), 'one\ntwo\n', 1, false), 0);
+    assert.equal(info?.uncommitted, false);
+  });
+
+  it('forget : un document rouvert (version 1 à nouveau) est recalculé', async () => {
+    fresh();
+    await service.fileBlame(doc(file, 'one\ntwo\n', 1));
+    service.forget(file);
+    await service.fileBlame(doc(file, 'one\ntwo\n', 1));
+    assert.equal(git.calls, 2);
+  });
+
+  it("erreur passagère (autre qu'une erreur git) : pas mise en cache", async () => {
+    let fail = true;
+    class FlakyGit extends GitCommands {
+      calls = 0;
+      override blame(...args: Parameters<GitCommands['blame']>) {
+        this.calls++;
+        if (fail) return Promise.reject(Object.assign(new Error('spawn EAGAIN'), { code: 'EAGAIN' }));
+        return super.blame(...args);
+      }
+    }
+    const flaky = new FlakyGit(new GitRunner('git'));
+    const local = new BlameService(flaky, locator, () => maxLines);
+    assert.equal(await local.fileBlame(doc(file, 'one\ntwo\n')), undefined);
+    fail = false;
+    assert.equal((await local.fileBlame(doc(file, 'one\ntwo\n')))?.result.lines.length, 2);
+    assert.equal(flaky.calls, 2);
+  });
+
+  it('erreur git (fichier non suivi) : mise en cache', async () => {
+    fresh();
+    repo.write('untracked2.txt', 'x\n');
+    const d = doc(path.join(repo.root, 'untracked2.txt'), 'x\n');
+    await service.fileBlame(d);
+    await service.fileBlame(d);
+    assert.equal(git.calls, 1);
+  });
+
   it('message complet mis en cache', async () => {
     fresh();
-    assert.equal(await service.message(repo.root, head as string), 'first');
+    assert.equal(await service.message(repo.root, head as string), repo.git('log', '-1', '--format=%B').trim());
   });
 });

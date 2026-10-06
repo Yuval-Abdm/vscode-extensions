@@ -25,6 +25,10 @@ export class Lru<K, V> {
     if (this.#map.size > this.#max) this.#map.delete(this.#map.keys().next().value as K);
   }
 
+  keys(): IterableIterator<K> {
+    return [...this.#map.keys()].values();
+  }
+
   delete(key: K): boolean {
     return this.#map.delete(key);
   }

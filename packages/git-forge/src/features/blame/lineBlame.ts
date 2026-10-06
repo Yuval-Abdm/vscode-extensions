@@ -21,7 +21,9 @@ export class LineBlame implements vscode.Disposable {
   readonly #disposables: vscode.Disposable[];
   #timer: ReturnType<typeof setTimeout> | undefined;
   #abort: AbortController | undefined;
-  #abortFile: string | undefined;
+  /** Fichier et version du calcul en cours : un autre fichier ou une nouvelle version l'annule. */
+  #abortKey: string | undefined;
+  #disposed = false;
   #shown: { editor: vscode.TextEditor; info: LineInfo; text: string } | undefined;
   /** HEAD du dépôt lors du dernier calcul (même sans résultat : HEAD pas encore lu par vscode.git…). */
   #attemptHead: string | undefined;
@@ -59,6 +61,7 @@ export class LineBlame implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.#disposed = true;
     clearTimeout(this.#timer);
     this.#abort?.abort();
     for (const disposable of this.#disposables) disposable.dispose();
@@ -83,11 +86,12 @@ export class LineBlame implements vscode.Disposable {
     const line = editor.selection.active.line;
     const version = doc.version;
     this.#attemptHead = this.#service.head(doc.fileName);
-    // Changer de fichier annule le calcul en cours de l'ancien.
-    if (this.#abortFile !== doc.fileName || !this.#abort) {
+    // Changer de fichier ou de version annule le calcul en cours, devenu inutile.
+    const abortKey = `${doc.fileName}\0${version}`;
+    if (this.#abortKey !== abortKey || !this.#abort) {
       this.#abort?.abort();
       this.#abort = new AbortController();
-      this.#abortFile = doc.fileName;
+      this.#abortKey = abortKey;
     }
     let info: LineInfo | undefined;
     let message = '';
@@ -99,7 +103,7 @@ export class LineBlame implements vscode.Disposable {
       throw err;
     }
     // Résultat périmé : le curseur ou le document ont changé pendant le calcul.
-    if (!info || vscode.window.activeTextEditor !== editor || editor.selection.active.line !== line || doc.version !== version) return;
+    if (this.#disposed || !info || vscode.window.activeTextEditor !== editor || editor.selection.active.line !== line || doc.version !== version) return;
     const config = vscode.workspace.getConfiguration('gitForge.blame');
     const commit = info.commit;
     const ago = relativeTime(commit.authorTime, Date.now(), vscode.env.language);
@@ -136,7 +140,9 @@ export class LineBlame implements vscode.Disposable {
 }
 
 function link(command: string, args: unknown): string {
-  return `command:${command}?${encodeURIComponent(JSON.stringify([args]))}`;
+  // Parenthèses encodées : elles termineraient le lien Markdown (chemin contenant « ) »).
+  const query = encodeURIComponent(JSON.stringify([args])).replace(/\(/g, '%28').replace(/\)/g, '%29');
+  return `command:${command}?${query}`;
 }
 
 function hover(info: LineInfo, message: string): vscode.MarkdownString {

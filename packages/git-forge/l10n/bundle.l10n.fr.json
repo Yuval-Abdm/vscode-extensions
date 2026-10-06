@@ -10,5 +10,6 @@
   "Uncommitted": "Non commité",
   "Git Forge needs the built-in Git extension.": "Git Forge a besoin de l'extension Git intégrée.",
   "Git Forge is inactive: Git was not found.": "Git Forge est inactif : Git est introuvable.",
-  "Git Forge is inactive: the built-in Git extension is disabled (git.enabled).": "Git Forge est inactif : l'extension Git intégrée est désactivée (git.enabled)."
+  "Git Forge is inactive: the built-in Git extension is disabled (git.enabled).": "Git Forge est inactif : l'extension Git intégrée est désactivée (git.enabled).",
+  "Git Forge could not start: {0}": "Git Forge n'a pas pu démarrer : {0}"
 }

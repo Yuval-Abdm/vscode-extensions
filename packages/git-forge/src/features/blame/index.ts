@@ -10,15 +10,18 @@ export class BlameFeature implements vscode.Disposable {
   readonly service: BlameService;
   readonly line: LineBlame;
   readonly file: FileBlame;
+  readonly #closed: vscode.Disposable;
 
   constructor(git: GitCommands, repos: Repos) {
     this.service = new BlameService(git, repos, () => vscode.workspace.getConfiguration('gitForge.blame').get<number>('maxLines', 20000));
     this.line = new LineBlame(this.service, repos);
     this.file = new FileBlame(this.service, repos);
+    this.#closed = vscode.workspace.onDidCloseTextDocument((doc) => this.service.forget(doc.fileName));
   }
 
   dispose(): void {
     this.line.dispose();
     this.file.dispose();
+    this.#closed.dispose();
   }
 }

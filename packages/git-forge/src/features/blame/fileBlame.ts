@@ -14,8 +14,11 @@ const REFRESH_DELAY = 300;
 
 export class FileBlame implements vscode.Disposable {
   readonly #service: BlameService;
-  readonly #enabled = new Set<string>();
+  /** Documents (URI) dont le blame est affiché, avec le HEAD de leur dernier rendu. */
+  readonly #enabled = new Map<string, string | undefined>();
   readonly #timers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Calcul en cours par document : un nouveau rendu annule le précédent. */
+  readonly #aborts = new Map<string, AbortController>();
   readonly #types = AGE_COLORS.map((borderColor) =>
     vscode.window.createTextEditorDecorationType({
       before: {
@@ -35,9 +38,22 @@ export class FileBlame implements vscode.Disposable {
       ...this.#types,
       vscode.commands.registerCommand('gitForge.toggleFileBlame', () => this.toggle()),
       vscode.window.onDidChangeVisibleTextEditors(() => this.#refreshAll()),
-      vscode.workspace.onDidChangeTextDocument((e) => this.#scheduleDocument(e.document)),
-      vscode.workspace.onDidCloseTextDocument((doc) => this.#enabled.delete(doc.uri.toString())),
-      repos.onDidChange(() => this.#refreshAll()),
+      vscode.workspace.onDidChangeTextDocument((e) => {
+        if (e.contentChanges.length) this.#scheduleDocument(e.document);
+      }),
+      vscode.workspace.onDidCloseTextDocument((doc) => {
+        const key = doc.uri.toString();
+        this.#enabled.delete(key);
+        this.#aborts.get(key)?.abort();
+        this.#aborts.delete(key);
+      }),
+      repos.onDidChange(() => {
+        // Seul un changement de HEAD (commit, checkout…) rend la marge périmée.
+        for (const editor of vscode.window.visibleTextEditors) {
+          const key = editor.document.uri.toString();
+          if (this.#enabled.has(key) && this.#service.head(editor.document.fileName) !== this.#enabled.get(key)) void this.#render(editor);
+        }
+      }),
     ];
   }
 
@@ -47,21 +63,29 @@ export class FileBlame implements vscode.Disposable {
 
   async toggle(editor = vscode.window.activeTextEditor): Promise<void> {
     if (!editor) return;
-    const key = editor.document.uri.toString();
-    if (this.#enabled.delete(key)) {
+    const doc = editor.document;
+    const key = doc.uri.toString();
+    if (this.#enabled.has(key)) {
+      this.#enabled.delete(key);
+      this.#aborts.get(key)?.abort();
       for (const shown of this.#editorsOf(key)) this.#clear(shown);
       return;
     }
-    this.#enabled.add(key);
-    if (!(await this.#render(editor)) && this.#enabled.delete(key)) {
-      void vscode.window.showInformationMessage(
+    const noBlame = () =>
+      vscode.window.showInformationMessage(
         vscode.l10n.t('No blame for this file: it is not tracked by Git, or it is too long (gitForge.blame.maxLines).'),
       );
-    }
+    // Révision ou côté gauche d'un diff : leur texte n'est pas celui du fichier sur disque.
+    if (doc.uri.scheme !== 'file') return void noBlame();
+    this.#enabled.set(key, undefined);
+    const shown = await this.#render(editor);
+    // HEAD pas encore lu par vscode.git : le blame s'affichera quand il le sera (changement de HEAD).
+    if (shown === false && this.#service.head(doc.fileName) !== undefined && this.#enabled.delete(key)) void noBlame();
   }
 
   dispose(): void {
     for (const timer of this.#timers.values()) clearTimeout(timer);
+    for (const abort of this.#aborts.values()) abort.abort();
     for (const disposable of this.#disposables) disposable.dispose();
   }
 
@@ -92,17 +116,25 @@ export class FileBlame implements vscode.Disposable {
     );
   }
 
-  /** Dessine la marge ; false s'il n'y a pas de blame pour ce fichier. */
-  async #render(editor: vscode.TextEditor): Promise<boolean> {
+  /** Dessine la marge : true si elle est dessinée, false s'il n'y a pas de blame, undefined si le rendu est périmé. */
+  async #render(editor: vscode.TextEditor): Promise<boolean | undefined> {
     const doc = editor.document;
+    const key = doc.uri.toString();
+    const version = doc.version;
+    const head = this.#service.head(doc.fileName);
+    this.#aborts.get(key)?.abort();
+    const abort = new AbortController();
+    this.#aborts.set(key, abort);
     let blame;
     try {
-      blame = await this.#service.fileBlame(doc);
+      blame = await this.#service.fileBlame(doc, abort.signal);
     } catch (err) {
-      if (err instanceof CancelledError) return false;
+      if (err instanceof CancelledError) return undefined;
       throw err;
     }
-    if (!this.isEnabled(doc.uri)) return false; // désactivé pendant le calcul
+    // Désactivé, ou document modifié pendant le calcul : un autre rendu suit.
+    if (!this.#enabled.has(key) || doc.version !== version) return undefined;
+    this.#enabled.set(key, head);
     if (!blame) {
       this.#clear(editor);
       return false;
