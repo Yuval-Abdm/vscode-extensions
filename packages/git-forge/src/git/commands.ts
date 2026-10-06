@@ -74,6 +74,14 @@ export interface StashFile {
   untracked: boolean;
 }
 
+export interface RebaseCommit {
+  sha: string;
+  parents: string[];
+  summary: string;
+  /** Message complet. */
+  message: string;
+}
+
 export type CompareMode = 'merge-base' | 'direct';
 
 export type { Worktree };
@@ -470,5 +478,82 @@ export class GitCommands {
 
   async checkoutDetached(root: string, sha: string): Promise<void> {
     await this.runner.write(root, ['checkout', '--quiet', '--detach', sha]);
+  }
+
+  async commit(root: string, ref: string): Promise<LogEntry | undefined> {
+    try {
+      return parseLog((await this.runner.read(root, [...LOG, '--max-count=1', ref, '--'])).stdout)[0];
+    } catch (err) {
+      if (err instanceof GitError) return undefined;
+      throw err;
+    }
+  }
+
+  /** Commits de `base`..HEAD, du plus ancien au plus récent, avec leur message complet. */
+  async commitsForRebase(root: string, base: string): Promise<RebaseCommit[]> {
+    const args = ['log', '--no-color', '--no-show-signature', '--reverse', '--format=%x00%H%x00%P%x00%s%x00%B', `${base}..HEAD`, '--'];
+    const fields = (await this.runner.read(root, args)).stdout.split('\0');
+    const commits: RebaseCommit[] = [];
+    for (let i = 1; i + 3 < fields.length; i += 4) {
+      const [sha, parents, summary, message] = fields.slice(i, i + 4);
+      commits.push({ sha, parents: parents ? parents.split(' ') : [], summary, message: message.trim() });
+    }
+    return commits;
+  }
+
+  /** Résultat d'un cherry-pick ou d'un revert : fait, conflits, ou arrêté sans conflit (commit devenu vide). */
+  async #apply(root: string, kind: 'cherry-pick' | 'revert', sha: string, mainline?: number): Promise<'done' | 'conflicts' | 'stopped'> {
+    const args = [kind, ...(kind === 'revert' ? ['--no-edit'] : []), ...(mainline ? ['-m', String(mainline)] : []), sha];
+    try {
+      await this.runner.write(root, args, { env: NO_EDITOR });
+      return 'done';
+    } catch (err) {
+      if (!(err instanceof GitError)) throw err;
+      if ((await this.status(root)).conflicts.length) return 'conflicts';
+      if ((await this.operation(root))?.kind === kind) return 'stopped';
+      throw err;
+    }
+  }
+
+  cherryPick(root: string, sha: string, mainline?: number): Promise<'done' | 'conflicts' | 'stopped'> {
+    return this.#apply(root, 'cherry-pick', sha, mainline);
+  }
+
+  revert(root: string, sha: string, mainline?: number): Promise<'done' | 'conflicts' | 'stopped'> {
+    return this.#apply(root, 'revert', sha, mainline);
+  }
+
+  async reset(root: string, sha: string, mode: 'soft' | 'mixed' | 'hard'): Promise<void> {
+    await this.runner.write(root, ['reset', '--quiet', `--${mode}`, sha, '--']);
+  }
+
+  /** Fichiers suivis modifiés (index ou arbre de travail) par rapport à HEAD. */
+  async changedFiles(root: string): Promise<string[]> {
+    const { stdout } = await this.runner.read(root, [...RAW_PATHS, 'diff', '--name-only', '-z', 'HEAD', '--']);
+    return stdout.split('\0').filter(Boolean);
+  }
+
+  /** Tag de sauvegarde sur HEAD (git-forge/backup/AAAAMMJJTHHMMSSZ) ; renvoie son nom. */
+  async backupTag(root: string): Promise<string> {
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+    let name = `git-forge/backup/${stamp}`;
+    for (let n = 2; await this.revParse(root, `refs/tags/${name}`); n++) name = `git-forge/backup/${stamp}-${n}`;
+    await this.runner.write(root, ['tag', name, 'HEAD']);
+    return name;
+  }
+
+  /**
+   * `git rebase -i --autostash base` avec la liste de tâches `todoFile` (copiée par GIT_SEQUENCE_EDITOR) ; 'stopped'
+   * si le rebase s'arrête (conflit, edit).
+   */
+  async rebaseInteractive(root: string, base: string, todoFile: string): Promise<'done' | 'stopped'> {
+    const env = { ...NO_EDITOR, GIT_SEQUENCE_EDITOR: `cp "${todoFile.replace(/\\/g, '/')}"` };
+    try {
+      await this.runner.write(root, ['rebase', '-i', '--autostash', base], { env });
+      return 'done';
+    } catch (err) {
+      if (err instanceof GitError && (await this.operation(root))?.kind === 'rebase') return 'stopped';
+      throw err;
+    }
   }
 }
