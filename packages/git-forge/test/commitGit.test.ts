@@ -116,3 +116,92 @@ describe('commit depuis Git Forge', () => {
     });
   });
 });
+
+describe('vue Commit : cas limites (revue)', () => {
+  /** a : branche main poussée ; b pousse un commit qui touche un autre fichier. */
+  function behindRemote() {
+    const remote = makeRemote();
+    const a = remote.clone();
+    a.write('f.txt', '1\n2\n3\n');
+    a.write('g.txt', 'g\n');
+    a.commit('base');
+    a.git('push', '-q', '-u', 'origin', 'main');
+    const b = remote.clone();
+    b.write('other.txt', 'remote\n');
+    b.commit('remote work');
+    b.git('push', '-q');
+    return { remote, a };
+  }
+
+  it('pull avant commit : indexation exacte gardée (modification, indexation partielle, nouveau fichier)', async () => {
+    const { remote, a } = behindRemote();
+    try {
+      a.write('f.txt', 'ONE\n2\n3\n');
+      a.git('add', 'f.txt');
+      a.write('f.txt', 'ONE\n2\nTHREE\n'); // partiellement indexé
+      a.write('g.txt', 'g2\n');
+      a.git('add', 'g.txt');
+      a.write('n.txt', 'new\n');
+      a.git('add', 'n.txt');
+      const before = a.git('status', '--porcelain');
+      assert.equal(await git.pullBeforeCommit(a.root), 'done');
+      assert.equal(a.git('status', '--porcelain'), before);
+      assert.equal(a.git('show', ':f.txt'), 'ONE\n2\n3\n');
+      assert.equal(a.git('log', '-1', '--format=%s').trim(), 'remote work');
+      assert.equal(a.git('stash', 'list').trim(), '');
+    } finally {
+      remote.dispose();
+    }
+  });
+
+  it('pull avant commit : modifications en conflit avec le pull → signalé, gardées dans le stash', async () => {
+    const remote = makeRemote();
+    try {
+      const a = remote.clone();
+      a.write('f.txt', '1\n');
+      a.commit('base');
+      a.git('push', '-q', '-u', 'origin', 'main');
+      const b = remote.clone();
+      b.write('f.txt', 'remote\n');
+      b.commit('remote');
+      b.git('push', '-q');
+      a.write('f.txt', 'local\n');
+      a.git('add', 'f.txt');
+      assert.equal(await git.pullBeforeCommit(a.root), 'stash-conflicts');
+      assert.ok(a.git('stash', 'list').trim());
+    } finally {
+      remote.dispose();
+    }
+  });
+
+  it('désindexer un renommage : l’ancien chemin aussi ; avant le premier commit, fichier modifié après add', async () => {
+    const repo = makeRepo();
+    try {
+      repo.write('first.txt', '1\n');
+      repo.git('add', 'first.txt');
+      repo.write('first.txt', '2\n');
+      await git.unstage(repo.root, ['first.txt']);
+      assert.deepEqual((await git.workingChanges(repo.root)).staged, []);
+      repo.git('add', 'first.txt');
+      repo.commit('base');
+      repo.git('mv', 'first.txt', 'h h.txt');
+      await git.unstage(repo.root, ['h h.txt', 'first.txt']);
+      assert.deepEqual((await git.workingChanges(repo.root)).staged, []);
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('noms de fichiers pris littéralement (x*.txt)', async () => {
+    const repo = makeRepo();
+    try {
+      repo.write('base', 'b\n');
+      repo.commit('base');
+      for (const name of ['x*.txt', 'x1.txt', 'x2.txt']) repo.write(name, 'x\n');
+      await git.stage(repo.root, ['x*.txt']);
+      assert.deepEqual((await git.workingChanges(repo.root)).staged.map((c) => c.path), ['x*.txt']);
+    } finally {
+      repo.dispose();
+    }
+  });
+});

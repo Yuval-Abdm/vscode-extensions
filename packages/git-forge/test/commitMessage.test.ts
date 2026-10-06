@@ -31,6 +31,8 @@ describe('message de commit conventionnel', () => {
     assert.equal(canCommit('fix: ', 1), false);
     assert.equal(canCommit('   ', 1), false);
     assert.equal(canCommit('fix: corrige', 0), false);
+    assert.equal(canCommit('feat: \ncorps seulement', 1), false);
+    assert.equal(writePrefix('x', { type: 'fix', scope: 'a)b(\nc', breaking: false }), 'fix(abc): x');
     assert.equal(summaryLength('fix: abc\nsuite très longue'), 8);
   });
 });

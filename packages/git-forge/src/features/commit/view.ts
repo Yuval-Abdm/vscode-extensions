@@ -3,23 +3,24 @@
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import * as vscode from 'vscode';
-import type { GitCommands } from '../../git/commands.ts';
+import { PushError, type GitCommands } from '../../git/commands.ts';
 import type { WorkingChange } from '../../git/parsers/status.ts';
 import type { Repos } from '../../git/repos.ts';
 import { errorText, showConflictsView, whereToFinish } from '../../shared/errors.ts';
-import { currentRoot } from '../../shared/pickRepo.ts';
 import { revisionUri } from '../../shared/revisions.ts';
 import { canCommit } from './message.ts';
 
 const REFRESH_DELAY = 300;
 
-type Incoming =
+/** Messages de la webview ; `root` : dépôt affiché quand l'utilisateur a agi. */
+type Incoming = { root?: string } & (
   | { type: 'ready' }
   | { type: 'stage'; paths: string[] }
   | { type: 'unstage'; paths: string[] }
   | { type: 'open'; change: WorkingChange; staged: boolean }
   | { type: 'setPull'; value: boolean }
-  | { type: 'commit'; message: string; push: boolean };
+  | { type: 'commit'; message: string; push: boolean }
+);
 
 export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable {
   readonly #git: GitCommands;
@@ -36,7 +37,10 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
     this.#extensionUri = extensionUri;
     this.#disposables = [
       vscode.window.registerWebviewViewProvider('gitForge.commitView', this),
-      repos.onDidChange(() => this.#schedule()),
+      // Seul le dépôt affiché compte (ou n'importe lequel tant qu'aucun n'est affiché).
+      repos.onDidChange((repo) => {
+        if (!this.#root || repo.rootUri.fsPath === this.#root) this.#schedule();
+      }),
       vscode.window.onDidChangeActiveTextEditor(() => this.#schedule()),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('gitForge.commit.pullBeforeCommit')) this.#schedule();
@@ -69,18 +73,33 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
     });
   }
 
+  /**
+   * Dépôt à afficher : celui du fichier de l'éditeur actif ; sinon (diff, sortie, réglages…) celui déjà affiché ; à
+   * défaut le premier dépôt ouvert.
+   */
+  #resolveRoot(): string | undefined {
+    const editor = vscode.window.activeTextEditor;
+    const active = editor?.document.uri.scheme === 'file' ? this.#repos.locate(editor.document.fileName)?.root : undefined;
+    if (active) return active;
+    if (this.#root && this.#repos.roots().includes(this.#root)) return this.#root;
+    return this.#repos.roots()[0];
+  }
+
   async refresh(): Promise<void> {
-    const root = currentRoot(this.#repos);
-    this.#root = root;
+    const root = this.#resolveRoot();
     if (!root) {
-      this.#post({ type: 'state', repo: '', branch: '', staged: [], unstaged: [], pull: this.#pull() });
+      this.#root = undefined;
+      this.#post({ type: 'state', root: '', repo: '', branch: '', staged: [], unstaged: [], pull: this.#pull() });
       return;
     }
     try {
       const [changes, status] = await Promise.all([this.#git.workingChanges(root), this.#git.status(root)]);
-      if (this.#root !== root) return;
+      if (this.#resolveRoot() !== root) return;
+      // Le dépôt n'est retenu qu'une fois lu : l'écran et les actions visent toujours le même.
+      this.#root = root;
       this.#post({
         type: 'state',
+        root,
         repo: path.basename(root),
         branch: status.branch.head ?? 'HEAD',
         upstream: status.branch.upstream,
@@ -101,16 +120,29 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
   /** Commit (et push) des fichiers indexés, après un pull --rebase si la case est cochée. */
   async commit(message: string, push: boolean): Promise<boolean> {
     const root = this.#root;
-    if (!root) return false;
+    if (!root) {
+      this.#post({ type: 'busy', busy: false });
+      return false;
+    }
     this.#post({ type: 'busy', busy: true });
     let committed = false;
     try {
       committed = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Commit') }, async (progress) => {
-        if (this.#pull()) {
+        // Rebase, cherry-pick ou revert en cours : à terminer d'abord. Un merge en cours se termine par ce commit.
+        const operation = await this.#git.operation(root);
+        if (operation && operation.kind !== 'merge') {
+          void vscode.window.showWarningMessage(vscode.l10n.t('A {0} is in progress: finish it {1} before committing here.', operation.kind, whereToFinish()));
+          return false;
+        }
+        if (this.#pull() && !operation) {
           progress.report({ message: vscode.l10n.t('Pulling (rebase)…') });
-          const pulled = await this.#git.pullRebase(root);
-          if (pulled === 'conflicts') {
-            void vscode.window.showWarningMessage(vscode.l10n.t('The pull stopped on conflicts: resolve them {0}. Nothing was committed; your message is kept.', whereToFinish()));
+          const pulled = await this.#git.pullBeforeCommit(root);
+          if (pulled === 'conflicts' || pulled === 'stash-conflicts') {
+            void vscode.window.showWarningMessage(
+              pulled === 'conflicts'
+                ? vscode.l10n.t('The pull stopped on conflicts: resolve them {0}. Your changes are kept in the stash list. Nothing was committed; your message is kept.', whereToFinish())
+                : vscode.l10n.t('The pull is done, but your changes could not be put back exactly as they were: resolve the conflicts {0} (they are also kept in the stash list). Nothing was committed; your message is kept.', whereToFinish()),
+            );
             void showConflictsView();
             return false;
           }
@@ -132,7 +164,13 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
           const target = await this.#git.pushCurrent(root);
           void vscode.window.showInformationMessage(vscode.l10n.t('Committed and pushed to {0}.', target));
         } catch (err) {
-          void vscode.window.showErrorMessage(vscode.l10n.t('Committed, but the push failed: {0}', errorText(err)));
+          const reason =
+            err instanceof PushError
+              ? err.reason === 'detached'
+                ? vscode.l10n.t('HEAD is detached: check out a branch to push.')
+                : vscode.l10n.t('This repository has no remote to push to.')
+              : errorText(err);
+          void vscode.window.showErrorMessage(vscode.l10n.t('Committed, but the push failed: {0}', reason));
         }
         return true;
       });
@@ -146,7 +184,20 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
   }
 
   async #receive(message: Incoming): Promise<void> {
+    try {
+      await this.#handle(message);
+    } catch (err) {
+      void vscode.window.showErrorMessage(errorText(err));
+    }
+  }
+
+  async #handle(message: Incoming): Promise<void> {
     const root = this.#root;
+    // Action faite sur un autre dépôt que celui retenu (affichage en retard) : ignorée, l'écran est relu.
+    if (message.type !== 'ready' && message.root !== undefined && message.root !== root) {
+      await this.refresh();
+      return;
+    }
     switch (message.type) {
       case 'ready':
         await this.refresh();
@@ -160,9 +211,13 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
       case 'open':
         if (root) await this.#open(root, message.change, message.staged);
         break;
-      case 'setPull':
-        await vscode.workspace.getConfiguration('gitForge').update('commit.pullBeforeCommit', message.value, vscode.ConfigurationTarget.Global);
+      case 'setPull': {
+        // Réglage de l'espace de travail s'il y en a un (sinon il masquerait le réglage utilisateur).
+        const config = vscode.workspace.getConfiguration('gitForge');
+        const workspace = config.inspect<boolean>('commit.pullBeforeCommit')?.workspaceValue !== undefined;
+        await config.update('commit.pullBeforeCommit', message.value, workspace ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global);
         break;
+      }
       case 'commit':
         await this.commit(message.message, message.push);
         break;
@@ -188,7 +243,9 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
     }
     const index = vscode.l10n.t('Index');
     if (staged) {
-      const left = revisionUri({ root, path: change.oldPath ?? change.path, sha: change.status === 'A' ? '' : 'HEAD' });
+      // SHA réel de HEAD : un onglet de diff resté ouvert ne montre jamais un ancien HEAD sous le même nom.
+      const head = (await this.#git.revParse(root, 'HEAD')) ?? '';
+      const left = revisionUri({ root, path: change.oldPath ?? change.path, sha: change.status === 'A' ? '' : head });
       const right = revisionUri({ root, path: change.path, sha: change.status === 'D' ? '' : ':0' });
       await vscode.commands.executeCommand('vscode.diff', left, right, `${name} (HEAD ↔ ${index})`);
     } else {

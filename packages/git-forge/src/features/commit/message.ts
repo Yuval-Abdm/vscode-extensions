@@ -41,7 +41,8 @@ export function readPrefix(message: string): Prefix & { rest: string } {
 export function writePrefix(message: string, prefix: Prefix): string {
   const { rest } = readPrefix(message);
   if (!prefix.type) return rest;
-  const scope = prefix.scope.trim();
+  // Parenthèses et sauts de ligne casseraient le préfixe.
+  const scope = prefix.scope.replace(/[()\n]/g, '').trim();
   return `${prefix.type}${scope ? `(${scope})` : ''}${prefix.breaking ? '!' : ''}: ${rest}`;
 }
 
@@ -50,7 +51,7 @@ export function summaryLength(message: string): number {
   return message.split('\n')[0].length;
 }
 
-/** Au moins un fichier indexé et du texte après le préfixe. */
+/** Au moins un fichier indexé et un résumé (première ligne) après le préfixe. */
 export function canCommit(message: string, stagedCount: number): boolean {
-  return stagedCount > 0 && readPrefix(message).rest.trim() !== '';
+  return stagedCount > 0 && readPrefix(message).rest.split('\n')[0].trim() !== '';
 }

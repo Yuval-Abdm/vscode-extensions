@@ -221,7 +221,6 @@
   "tag": "tag",
   "Commit": "Commit",
   "Pulling (rebase)…": "Pull (rebase)…",
-  "The pull stopped on conflicts: resolve them {0}. Nothing was committed; your message is kept.": "Le pull s'est arrêté sur des conflits : résolvez-les {0}. Rien n'a été commité ; votre message est gardé.",
   "No remote branch yet: pull skipped.": "Pas encore de branche distante : pull ignoré.",
   "Nothing to commit: stage files and write a message.": "Rien à commiter : indexez des fichiers et écrivez un message.",
   "Committing…": "Commit…",
@@ -265,5 +264,10 @@
   "Pull before commit (rebase)": "Pull avant commit (rebase)",
   "Commit & Push": "Commit & Push",
   "type…": "type…",
-  "Conventional commit type": "Type de commit conventionnel"
+  "Conventional commit type": "Type de commit conventionnel",
+  "A {0} is in progress: finish it {1} before committing here.": "Un {0} est en cours : terminez-le {1} avant de commiter ici.",
+  "The pull stopped on conflicts: resolve them {0}. Your changes are kept in the stash list. Nothing was committed; your message is kept.": "Le pull s'est arrêté sur des conflits : résolvez-les {0}. Vos modifications sont gardées dans la liste des stashs. Rien n'a été commité ; votre message est gardé.",
+  "The pull is done, but your changes could not be put back exactly as they were: resolve the conflicts {0} (they are also kept in the stash list). Nothing was committed; your message is kept.": "Le pull est fait, mais vos modifications n'ont pas pu être remises exactement comme avant : résolvez les conflits {0} (elles sont aussi gardées dans la liste des stashs). Rien n'a été commité ; votre message est gardé.",
+  "HEAD is detached: check out a branch to push.": "HEAD est détaché : faites un checkout d'une branche pour pousser.",
+  "This repository has no remote to push to.": "Ce dépôt n'a pas de remote vers lequel pousser."
 }

@@ -12,6 +12,7 @@ interface Change {
 
 interface ViewState {
   type: 'state';
+  root: string;
   repo: string;
   branch: string;
   upstream?: string;
@@ -112,9 +113,14 @@ message.addEventListener('keydown', (event) => {
     send(false);
   }
 });
-pull.addEventListener('change', () => vscode.postMessage({ type: 'setPull', value: pull.checked }));
+pull.addEventListener('change', () => post({ type: 'setPull', value: pull.checked }));
 commit.addEventListener('click', () => send(false));
 commitPush.addEventListener('click', () => send(true));
+
+/** Message vers l'extension, avec le dépôt affiché (refusé par l'extension s'il a changé entre-temps). */
+function post(data: Record<string, unknown>): void {
+  vscode.postMessage({ ...data, root: state?.root });
+}
 
 function edited(): void {
   vscode.setState({ message: message.value });
@@ -134,7 +140,12 @@ function send(push: boolean): void {
   if (commit.disabled) return;
   busy = true;
   update();
-  vscode.postMessage({ type: 'commit', message: message.value, push });
+  post({ type: 'commit', message: message.value, push });
+}
+
+/** Chemins d'un changement : un renommage désindexé l'est des deux côtés (ancien et nouveau chemin). */
+function pathsOf(change: Change): string[] {
+  return change.oldPath ? [change.path, change.oldPath] : [change.path];
 }
 
 function group(title: string, changes: Change[], staged: boolean): HTMLElement {
@@ -143,9 +154,11 @@ function group(title: string, changes: Change[], staged: boolean): HTMLElement {
   const all = el('input');
   all.type = 'checkbox';
   all.checked = staged;
-  all.disabled = !changes.length;
   all.title = staged ? strings.unstageAll : strings.stageAll;
-  all.addEventListener('change', () => vscode.postMessage({ type: staged ? 'unstage' : 'stage', paths: changes.map((change) => change.path) }));
+  // Les fichiers en conflit ne sont jamais indexés en masse : ce serait les marquer résolus.
+  const selectable = changes.filter((change) => change.status !== 'U');
+  all.disabled = !selectable.length;
+  all.addEventListener('change', () => post({ type: staged ? 'unstage' : 'stage', paths: selectable.flatMap(pathsOf) }));
   header.appendChild(all);
   header.appendChild(el('span', 'group-title', `${title} (${changes.length})`));
   section.appendChild(header);
@@ -155,7 +168,12 @@ function group(title: string, changes: Change[], staged: boolean): HTMLElement {
     box.type = 'checkbox';
     box.checked = staged;
     box.title = staged ? strings.unstageAll : strings.stageAll;
-    box.addEventListener('change', () => vscode.postMessage({ type: staged ? 'unstage' : 'stage', paths: [change.path] }));
+    if (change.status === 'U') {
+      // Conflit : à résoudre (vue Conflits), pas à cocher.
+      box.disabled = true;
+      box.title = strings.status.U ?? '';
+    }
+    box.addEventListener('change', () => post({ type: staged ? 'unstage' : 'stage', paths: pathsOf(change) }));
     row.appendChild(box);
     // Comme VS Code : U = non suivi ; un conflit s'affiche « ! ».
     const letter = change.status === '?' ? 'U' : change.status === 'U' ? '!' : change.status;
@@ -165,7 +183,7 @@ function group(title: string, changes: Change[], staged: boolean): HTMLElement {
     const slash = change.path.lastIndexOf('/');
     const name = el('span', 'name', change.path.slice(slash + 1));
     name.title = change.oldPath ? `${change.oldPath} → ${change.path}` : change.path;
-    name.addEventListener('click', () => vscode.postMessage({ type: 'open', change, staged }));
+    name.addEventListener('click', () => post({ type: 'open', change, staged }));
     row.appendChild(name);
     if (slash > 0) row.appendChild(el('span', 'dir', change.path.slice(0, slash)));
     section.appendChild(row);

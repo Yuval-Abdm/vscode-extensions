@@ -89,6 +89,17 @@ export interface RebaseCommit {
 
 export type CompareMode = 'merge-base' | 'direct';
 
+/** Push impossible avant même de lancer git (message traduit par l'appelant). */
+export class PushError extends Error {
+  readonly reason: 'detached' | 'no-remote';
+
+  constructor(reason: 'detached' | 'no-remote') {
+    super(reason === 'detached' ? 'HEAD is detached' : 'no remote');
+    this.name = 'PushError';
+    this.reason = reason;
+  }
+}
+
 export type { Worktree };
 
 export class GitCommands {
@@ -584,13 +595,45 @@ export class GitCommands {
   /** Retire de l'index ; avant le premier commit (pas de HEAD), `rm --cached`. */
   async unstage(root: string, paths: readonly string[]): Promise<void> {
     if (!paths.length) return;
-    const args = (await this.revParse(root, 'HEAD')) ? ['restore', '--staged', '--', ...paths] : ['rm', '--cached', '-r', '--quiet', '--', ...paths];
+    // -f avec --cached ne touche que l'index (nécessaire si le fichier a changé depuis son ajout).
+    const args = (await this.revParse(root, 'HEAD')) ? ['restore', '--staged', '--', ...paths] : ['rm', '--cached', '-r', '-f', '--quiet', '--', ...paths];
     await this.runner.write(root, args);
   }
 
   /** Commit des fichiers indexés avec `message` (lignes « # » gardées). */
   async commitWithMessage(root: string, message: string): Promise<void> {
     await this.runner.write(root, ['commit', '--quiet', '--cleanup=whitespace', '-F', '-'], { input: message, env: NO_EDITOR });
+  }
+
+  /**
+   * Pull (rebase) avant un commit, en gardant l'index exact : les modifications suivies sont mises de côté
+   * (`stash push`), puis `pull --rebase`, puis `stash pop --index` (--autostash, lui, perdrait l'indexation).
+   * 'no-upstream' : rien n'est fait ; 'conflicts' : le rebase s'est arrêté (modifications gardées dans le stash) ;
+   * 'stash-conflicts' : les modifications n'ont pas pu être réappliquées telles quelles (gardées dans le stash).
+   */
+  async pullBeforeCommit(root: string): Promise<'done' | 'no-upstream' | 'conflicts' | 'stash-conflicts'> {
+    if (!(await this.status(root)).branch.upstream) return 'no-upstream';
+    const changes = await this.workingChanges(root);
+    const dirty = changes.staged.length > 0 || changes.unstaged.some((change) => change.status !== '?');
+    const before = await this.revParse(root, 'refs/stash');
+    if (dirty) await this.runner.write(root, ['stash', 'push', '--quiet', '-m', 'git-forge: before pull'], { env: STASH_ENV });
+    const stashed = dirty && (await this.revParse(root, 'refs/stash')) !== before;
+    try {
+      await this.runner.write(root, ['pull', '--rebase', '--no-autostash', '--quiet'], { env: NO_EDITOR, timeoutMs: NETWORK_TIMEOUT });
+    } catch (err) {
+      if (err instanceof GitError && ((await this.operation(root))?.kind === 'rebase' || (await this.status(root)).conflicts.length)) return 'conflicts';
+      // Pull impossible (réseau, fichier non suivi qui serait écrasé…) : on remet les modifications comme avant.
+      if (stashed) await this.runner.write(root, ['stash', 'pop', '--index', '--quiet'], { env: STASH_ENV });
+      throw err;
+    }
+    if (!stashed) return 'done';
+    try {
+      await this.runner.write(root, ['stash', 'pop', '--index', '--quiet'], { env: STASH_ENV });
+      return 'done';
+    } catch (err) {
+      if (err instanceof GitError) return 'stash-conflicts';
+      throw err;
+    }
   }
 
   /**
@@ -614,7 +657,7 @@ export class GitCommands {
    */
   async pushCurrent(root: string): Promise<string> {
     const head = (await this.status(root)).branch.head;
-    if (!head) throw new Error('HEAD is detached: check out a branch to push.');
+    if (!head) throw new PushError('detached');
     const upstream = (await this.branches(root)).find((b) => b.name === head)?.upstream;
     if (upstream) {
       await this.pushBranch(root, upstream.remote, head, upstream.ref);
@@ -622,7 +665,7 @@ export class GitCommands {
     }
     const remotes = await this.remotes(root);
     const remote = remotes.includes('origin') ? 'origin' : remotes[0];
-    if (!remote) throw new Error('This repository has no remote to push to.');
+    if (!remote) throw new PushError('no-remote');
     await this.runner.write(root, ['push', '--quiet', '-u', remote, `refs/heads/${head}:refs/heads/${head}`], { timeoutMs: NETWORK_TIMEOUT });
     return `${remote}/${head}`;
   }
