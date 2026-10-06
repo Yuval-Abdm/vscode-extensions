@@ -94,6 +94,17 @@ test('recherche de fichiers sur le serveur : liste complète hors exclusions, fi
   const again = api.remoteSearch.listing(profile);
   await waitFor(() => again.done, 'nouvelle liste');
   assert.ok(again.files.includes('found.php'), again.files.join(', '));
+
+  // Dans la vue « Serveur distant » : ligne de recherche en tête du serveur, puis résultats à la place des dossiers.
+  const [ftpRoot] = await api.remoteTree.getChildren();
+  assert.strictEqual((await api.remoteTree.getChildren(ftpRoot))[0].kind, 'search');
+  api.remoteTree.setFilter(profile, 'incapp');
+  await waitFor(async () => (await api.remoteTree.getChildren(ftpRoot)).some((n) => n.match), 'résultats dans l’arbre');
+  const rows = await api.remoteTree.getChildren(ftpRoot);
+  assert.deepStrictEqual(rows.map((n) => n.kind), ['search', 'clearSearch', 'entry']);
+  assert.strictEqual(rows[2].path, '/www/includes/js/app.js');
+  await vscode.commands.executeCommand('ftpSftpDeploy.remote.clearSearch', rows[1]);
+  assert.ok((await api.remoteTree.getChildren(ftpRoot)).some((n) => n.kind === 'entry' && n.type === 'dir'), 'retour aux dossiers');
   await vscode.workspace.fs.delete(uri);
   fs.rmSync(onFtp('node_modules'), { recursive: true });
 });
@@ -177,7 +188,7 @@ test('vue « Serveur distant » : arborescence, nouveau dossier, suppression ave
   const roots = await api.remoteTree.getChildren();
   assert.deepStrictEqual(roots.map((r) => r.profile.name), ['ftp', 'sftp']);
   const sftpRoot = roots[1];
-  const children = await api.remoteTree.getChildren(sftpRoot);
+  const children = (await api.remoteTree.getChildren(sftpRoot)).filter((c) => c.kind === 'entry');
   const names = children.map((c) => `${c.type}:${c.path}`);
   assert.ok(names[0].startsWith('dir:'), 'dossiers en premier');
   assert.ok(names.includes('dir:/srv/site/includes') && names.includes('file:/srv/site/index.php'), names.join(', '));

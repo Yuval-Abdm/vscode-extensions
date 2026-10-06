@@ -9,7 +9,8 @@
   "ftpSftpDeploy.importSftp.title": "Import configuration from sftp.json",
   "ftpSftpDeploy.forgetPassword.title": "Forget a saved password",
   "ftpSftpDeploy.showLog.title": "Show deployment logs",
-  "ftpSftpDeploy.searchFiles.title": "Search files on the server",
+  "ftpSftpDeploy.remote.search.title": "Search a file on the server…",
+  "ftpSftpDeploy.remote.clearSearch.title": "Clear the search",
   "ftpSftpDeploy.remote.refresh.title": "Refresh",
   "ftpSftpDeploy.remote.newFile.title": "New File…",
   "ftpSftpDeploy.remote.newFolder.title": "New Folder…",
@@ -24,7 +25,6 @@
   "displayName": "FTP SFTP Deploy",
   "description": "Deploy over FTP, FTPS and SFTP: upload files and folders, browse and edit the server, compare with server, upload on save, migrate from sftp.json. Passwords stay in VS Code secret storage.",
   "container.title": "Deploy",
-  "view.search": "Search",
   "view.remote": "Remote Server",
   "view.welcome": "No server configured for this folder.\n[Create configuration](command:ftpSftpDeploy.createConfig)\n[Import from sftp.json](command:ftpSftpDeploy.importSftp)\n[Migrate all my SFTP projects…](command:ftpSftpDeploy.migrateAll)\nThe configuration is saved in .vscode/deploy.json; passwords stay in VS Code secret storage."
 }

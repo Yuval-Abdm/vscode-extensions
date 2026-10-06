@@ -66,12 +66,6 @@
     "views": {
       "ftpSftpDeploy": [
         {
-          "type": "webview",
-          "id": "ftpSftpDeploy.search",
-          "name": "%view.search%",
-          "when": "ftpSftpDeploy.hasConfig"
-        },
-        {
           "id": "ftpSftpDeploy.remote",
           "name": "%view.remote%",
           "icon": "media/deploy.svg"
@@ -149,10 +143,15 @@
         "category": "FTP SFTP Deploy"
       },
       {
-        "command": "ftpSftpDeploy.searchFiles",
-        "title": "%ftpSftpDeploy.searchFiles.title%",
+        "command": "ftpSftpDeploy.remote.search",
+        "title": "%ftpSftpDeploy.remote.search.title%",
         "icon": "$(search)",
         "category": "FTP SFTP Deploy"
+      },
+      {
+        "command": "ftpSftpDeploy.remote.clearSearch",
+        "title": "%ftpSftpDeploy.remote.clearSearch.title%",
+        "icon": "$(close)"
       },
       {
         "command": "ftpSftpDeploy.remote.refresh",
@@ -244,6 +243,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "ftpSftpDeploy.remote.search",
+          "when": "view == ftpSftpDeploy.remote && viewItem == remoteRoot",
+          "group": "0_search@1"
+        },
         {
           "command": "ftpSftpDeploy.remote.newFile",
           "when": "view == ftpSftpDeploy.remote && viewItem =~ /^(remoteRoot|remoteDir)$/",
@@ -357,6 +361,14 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "ftpSftpDeploy.remote.clearSearch",
+          "when": "false"
+        },
+        {
+          "command": "ftpSftpDeploy.remote.search",
+          "when": "ftpSftpDeploy.hasConfig"
+        },
         {
           "command": "ftpSftpDeploy.remote.refresh",
           "when": "false"
