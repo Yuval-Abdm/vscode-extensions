@@ -44,6 +44,7 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
   readonly #disposables: vscode.Disposable[];
   #spec: CompareSpec | undefined;
   #result: CompareResult | undefined;
+  #timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(git: GitCommands, repos: Repos) {
     this.#git = git;
@@ -56,6 +57,13 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
       this.#view,
       this.#changed,
       vscode.extensions.onDidChange(() => vscode.commands.executeCommand('setContext', 'gitForge.deployAvailable', deployInstalled())),
+      // Nouveau commit, checkout, fichier modifié : la comparaison affichée est recalculée.
+      repos.onDidChange(() => {
+        clearTimeout(this.#timer);
+        this.#timer = setTimeout(() => {
+          if (this.#spec) void this.compare(this.#spec);
+        }, 500);
+      }),
       command('gitForge.compareReferences', () => this.pick()),
       command('gitForge.compare.show', (spec: CompareSpec) => this.compare(spec)),
       command('gitForge.compare.swap', () => {
@@ -81,6 +89,7 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
   }
 
   dispose(): void {
+    clearTimeout(this.#timer);
     void vscode.commands.executeCommand('setContext', 'gitForge.compare.active', false);
     for (const disposable of this.#disposables) disposable.dispose();
   }
@@ -98,9 +107,9 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
 
   async compare(spec: CompareSpec): Promise<void> {
     this.#spec = spec;
-    this.#result = undefined;
     const separator = spec.mode === 'merge-base' ? '...' : '..';
-    this.#view.description = `${spec.left} ${separator} ${spec.right ?? vscode.l10n.t('working tree')}`;
+    this.#view.description = `${shortRef(spec.left)} ${separator} ${spec.right === undefined ? vscode.l10n.t('working tree') : shortRef(spec.right)}`;
+    void vscode.commands.executeCommand('setContext', 'gitForge.compare.hasRight', spec.right !== undefined);
     try {
       const [files, commits, rightSha] = await Promise.all([
         this.#git.compareFiles(spec.root, spec.left, spec.right, spec.mode),
@@ -112,6 +121,7 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
       this.#view.message = files.changes.length ? undefined : vscode.l10n.t('No differences.');
     } catch (err) {
       if (this.#spec !== spec) return;
+      this.#result = undefined;
       this.#view.message = vscode.l10n.t('Comparison failed: {0}', errorText(err));
     }
     void vscode.commands.executeCommand('setContext', 'gitForge.compare.active', true);
@@ -163,7 +173,7 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
     const sides = diffSides(spec.root, result.base, result.rightSha, change);
     const left = revisionUri(sides.left);
     const right = sides.right === 'worktree' ? vscode.Uri.file(path.join(spec.root, change.path)) : revisionUri(sides.right);
-    const title = `${path.posix.basename(change.path)} (${spec.left} ↔ ${spec.right ?? vscode.l10n.t('working tree')})`;
+    const title = `${path.posix.basename(change.path)} (${shortRef(spec.left)} ↔ ${spec.right === undefined ? vscode.l10n.t('working tree') : shortRef(spec.right)})`;
     item.command = { command: 'vscode.diff', title: '', arguments: [left, right, title] };
     return item;
   }
@@ -179,8 +189,11 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
 
   async #deploy(): Promise<void> {
     const spec = this.#spec;
+    if (!spec) return;
+    // Liste recalculée : le dépôt a pu changer depuis l'affichage.
+    await this.compare(spec);
     const result = this.#result;
-    if (!spec || !result) return;
+    if (!result || this.#spec !== spec) return;
     const api = await deployApi();
     if (!api) return;
     if (!api.hasConfig()) {
@@ -190,7 +203,9 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
     const files = result.changes.filter((change) => change.status !== 'D').map((change) => vscode.Uri.file(path.join(spec.root, change.path)));
     const present = files.filter((uri) => existsSync(uri.fsPath));
     const deleted = result.changes.length - present.length;
+    const renamed = result.changes.filter((change) => change.oldPath && change.status === 'R').map((change) => change.oldPath as string);
     const targets = api.resolve(present);
+    const skipped = present.length - targets.length;
     if (!targets.length) {
       void vscode.window.showInformationMessage(vscode.l10n.t('No file to deploy (deleted files are never sent).'));
       return;
@@ -200,6 +215,8 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
     const detail = [
       vscode.l10n.t('The current version of each file (working tree) is sent.'),
       deleted ? vscode.l10n.t('{0} deleted or missing file(s) are not sent.', deleted) : '',
+      skipped ? vscode.l10n.t('{0} file(s) are excluded by the deploy configuration.', skipped) : '',
+      renamed.length ? vscode.l10n.t('Renamed files: the old copy stays on the server ({0}).', renamed.join(', ')) : '',
     ]
       .filter(Boolean)
       .join('\n');
@@ -214,4 +231,9 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
 
 function toNodes(entries: readonly TreeEntry[]): Node[] {
   return entries.map((entry) => (entry.kind === 'folder' ? { type: 'folder', folder: entry } : { type: 'file', change: entry.change }));
+}
+
+/** Nom affiché d'une référence : refs/heads/main → main, refs/tags/v1 → v1, refs/remotes/origin/x → origin/x. */
+function shortRef(ref: string): string {
+  return ref.replace(/^refs\/(heads|tags|remotes)\//, '');
 }

@@ -535,7 +535,7 @@
         },
         {
           "command": "gitForge.compare.swap",
-          "when": "view == gitForge.compare && gitForge.compare.active",
+          "when": "view == gitForge.compare && gitForge.compare.active && gitForge.compare.hasRight",
           "group": "navigation@2"
         },
         {

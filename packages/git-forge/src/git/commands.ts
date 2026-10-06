@@ -53,6 +53,8 @@ export interface Operation {
 export interface RefInfo {
   /** Nom court : `main`, `origin/main`, `v1`. */
   name: string;
+  /** Nom complet (`refs/heads/main`) : sans ambiguïté si une branche et un tag ont le même nom. */
+  ref: string;
   kind: 'branch' | 'remote' | 'tag';
   sha: string;
 }
@@ -136,7 +138,7 @@ export class GitCommands {
   /** Fichiers modifiés par `sha` par rapport à `parent` (tous les fichiers ajoutés pour un commit racine). */
   async commitFiles(root: string, sha: string, parent?: string): Promise<FileChange[]> {
     const args = parent
-      ? [...RAW_PATHS, 'diff', '--no-color', '--name-status', '-M', parent, sha]
+      ? [...RAW_PATHS, 'diff', '--no-color', '--name-status', '-M', parent, sha, '--']
       : [...RAW_PATHS, 'diff-tree', '--no-color', '--root', '--no-commit-id', '-r', '--name-status', '-M', sha];
     return parseNameStatus((await this.runner.read(root, args)).stdout);
   }
@@ -304,9 +306,9 @@ export class GitCommands {
     for (const line of stdout.split('\n')) {
       const [ref, sha] = line.split('\0');
       if (!ref || /^refs\/remotes\/[^/]+\/HEAD$/.test(ref)) continue;
-      if (ref.startsWith('refs/heads/')) refs.push({ name: ref.slice(11), kind: 'branch', sha });
-      else if (ref.startsWith('refs/remotes/')) refs.push({ name: ref.slice(13), kind: 'remote', sha });
-      else if (ref.startsWith('refs/tags/')) refs.push({ name: ref.slice(10), kind: 'tag', sha });
+      if (ref.startsWith('refs/heads/')) refs.push({ name: ref.slice(11), ref, kind: 'branch', sha });
+      else if (ref.startsWith('refs/remotes/')) refs.push({ name: ref.slice(13), ref, kind: 'remote', sha });
+      else if (ref.startsWith('refs/tags/')) refs.push({ name: ref.slice(10), ref, kind: 'tag', sha });
     }
     return refs;
   }
@@ -326,9 +328,15 @@ export class GitCommands {
    */
   async compareFiles(root: string, left: string, right: string | undefined, mode: CompareMode): Promise<{ base: string; changes: FileChange[] }> {
     const from = (mode === 'merge-base' && (await this.mergeBase(root, left, right ?? 'HEAD'))) || left;
-    const args = [...RAW_PATHS, 'diff', '--no-color', '--no-ext-diff', '--name-status', '-M', from, ...(right ? [right] : [])];
-    const { stdout } = await this.runner.read(root, args);
-    return { base: (await this.revParse(root, from)) ?? from, changes: parseNameStatus(stdout) };
+    // « -- » : une référence du même nom qu'un fichier reste une référence.
+    const args = [...RAW_PATHS, 'diff', '--no-color', '--no-ext-diff', '--name-status', '-M', from, ...(right ? [right] : []), '--'];
+    const changes = parseNameStatus((await this.runner.read(root, args)).stdout);
+    if (right === undefined) {
+      // Arbre de travail : les nouveaux fichiers non suivis font partie des modifications.
+      const { stdout } = await this.runner.read(root, ['ls-files', '--others', '--exclude-standard', '-z']);
+      for (const file of stdout.split('\0').filter(Boolean)) changes.push({ status: 'A', path: file });
+    }
+    return { base: (await this.revParse(root, from)) ?? from, changes };
   }
 
   /** Commits de `right` (HEAD par défaut) absents de `left`, du plus récent au plus ancien. */
@@ -348,11 +356,18 @@ export class GitCommands {
       });
   }
 
-  /** Fichiers d'un stash : suivis (diff avec son premier parent) puis non suivis (troisième parent). */
+  /**
+   * Fichiers d'un stash : suivis (arbre de travail mis de côté, plus l'index s'il diffère), puis non suivis
+   * (troisième parent).
+   */
   async stashFiles(root: string, stash: StashEntry): Promise<StashFile[]> {
-    const tracked = parseNameStatus(
-      (await this.runner.read(root, [...RAW_PATHS, 'diff', '--no-color', '--no-ext-diff', '--name-status', '-M', `${stash.sha}^1`, stash.sha])).stdout,
-    );
+    const diff = async (from: string, to: string) =>
+      parseNameStatus((await this.runner.read(root, [...RAW_PATHS, 'diff', '--no-color', '--no-ext-diff', '--name-status', '-M', from, to, '--'])).stdout);
+    const tracked = await diff(`${stash.sha}^1`, stash.sha);
+    // Modifications seulement indexées (annulées dans l'arbre de travail) : visibles dans le commit d'index.
+    for (const change of await diff(`${stash.sha}^1`, `${stash.sha}^2`)) {
+      if (!tracked.some((c) => c.path === change.path)) tracked.push(change);
+    }
     const untrackedSha = await this.revParse(root, `${stash.sha}^3`);
     const untracked = untrackedSha
       ? parseNameStatus((await this.runner.read(root, [...RAW_PATHS, 'diff-tree', '--no-color', '--root', '--no-commit-id', '-r', '--name-status', untrackedSha])).stdout)
@@ -360,18 +375,38 @@ export class GitCommands {
     return [...tracked.map((change) => ({ change, untracked: false })), ...untracked.map((change) => ({ change, untracked: true }))];
   }
 
-  async stashApply(root: string, ref: string, pop: boolean): Promise<'applied' | 'conflicts'> {
+  /** Référence actuelle (`stash@{n}`) d'un stash : les index se décalent quand un stash est créé ou supprimé. */
+  async #stashRef(root: string, stash: StashEntry): Promise<string> {
+    const current = (await this.stashes(root)).find((entry) => entry.sha === stash.sha);
+    if (!current) throw new Error(`The stash "${stash.message}" no longer exists.`);
+    return current.ref;
+  }
+
+  /**
+   * Applique un stash (et le supprime si `pop`), index compris (--index) ; 'applied-without-index' si l'index n'a pu
+   * être restauré (les modifications indexées reviennent non indexées).
+   */
+  async stashApply(root: string, stash: StashEntry, pop: boolean): Promise<'applied' | 'applied-without-index' | 'conflicts'> {
+    const ref = await this.#stashRef(root, stash);
+    try {
+      await this.runner.write(root, ['stash', pop ? 'pop' : 'apply', '--index', '--quiet', ref], { env: STASH_ENV });
+      return 'applied';
+    } catch (err) {
+      if (!(err instanceof GitError)) throw err;
+      if ((await this.status(root)).conflicts.length) return 'conflicts';
+      if (!/index/i.test(err.stderr)) throw err;
+    }
     try {
       await this.runner.write(root, ['stash', pop ? 'pop' : 'apply', '--quiet', ref], { env: STASH_ENV });
-      return 'applied';
+      return 'applied-without-index';
     } catch (err) {
       if (err instanceof GitError && (await this.status(root)).conflicts.length) return 'conflicts';
       throw err;
     }
   }
 
-  async stashDrop(root: string, ref: string): Promise<void> {
-    await this.runner.write(root, ['stash', 'drop', '--quiet', ref]);
+  async stashDrop(root: string, stash: StashEntry): Promise<void> {
+    await this.runner.write(root, ['stash', 'drop', '--quiet', await this.#stashRef(root, stash)]);
   }
 
   async worktrees(root: string): Promise<Worktree[]> {
@@ -383,7 +418,9 @@ export class GitCommands {
     await this.runner.write(root, create ? ['worktree', 'add', '--quiet', '-b', branch, dir] : ['worktree', 'add', '--quiet', dir, branch]);
   }
 
-  async worktreeRemove(root: string, dir: string, force: boolean): Promise<void> {
-    await this.runner.write(root, ['worktree', 'remove', ...(force ? ['--force'] : []), dir]);
+  /** `force` : modifications et fichiers ignorés perdus ; `locked` : aussi un worktree verrouillé (-f -f). */
+  async worktreeRemove(root: string, dir: string, force: boolean, locked = false): Promise<void> {
+    const flags = locked ? ['--force', '--force'] : force ? ['--force'] : [];
+    await this.runner.write(root, ['worktree', 'remove', ...flags, dir]);
   }
 }

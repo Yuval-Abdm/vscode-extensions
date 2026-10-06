@@ -1,5 +1,7 @@
 // Vue « Worktrees » : worktrees du dépôt courant ; créer depuis une branche (existante ou nouvelle), ouvrir dans une
 // nouvelle fenêtre, supprimer.
+import { realpathSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import * as vscode from 'vscode';
 import type { GitCommands, Worktree } from '../../git/commands.ts';
@@ -10,7 +12,8 @@ import { errorText } from '../merge/command.ts';
 
 const REFRESH_DELAY = 300;
 
-type Node = { root: string; worktree: Worktree; current: boolean };
+/** current : ouvert dans cette fenêtre ; main : worktree principal (jamais supprimable). */
+type Node = { root: string; worktree: Worktree; current: boolean; main: boolean };
 
 export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Disposable {
   readonly #git: GitCommands;
@@ -22,6 +25,7 @@ export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Dispo
   #root: string | undefined;
   #worktrees: Worktree[] = [];
   #timer: ReturnType<typeof setTimeout> | undefined;
+  #generation = 0;
 
   constructor(git: GitCommands, repos: Repos) {
     this.#git = git;
@@ -53,14 +57,17 @@ export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Dispo
   }
 
   async refresh(): Promise<void> {
+    const generation = ++this.#generation;
     const root = currentRoot(this.#repos);
-    this.#root = root;
+    let worktrees: Worktree[];
     try {
-      this.#worktrees = root ? await this.#git.worktrees(root) : [];
+      worktrees = root ? await this.#git.worktrees(root) : [];
     } catch {
-      this.#worktrees = [];
+      worktrees = [];
     }
-    if (this.#root !== root) return;
+    if (generation !== this.#generation) return;
+    this.#root = root;
+    this.#worktrees = worktrees;
     this.#view.description = root && this.#repos.roots().length > 1 ? path.basename(root) : undefined;
     this.#changed.fire(undefined);
   }
@@ -68,7 +75,8 @@ export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Dispo
   getChildren(node?: Node): Node[] {
     const root = this.#root;
     if (node || !root) return [];
-    return this.#worktrees.map((worktree) => ({ root, worktree, current: samePath(worktree.path, root) }));
+    const open = this.#repos.roots().map(realPath);
+    return this.#worktrees.map((worktree, index) => ({ root, worktree, current: open.includes(realPath(worktree.path)), main: index === 0 }));
   }
 
   getTreeItem(node: Node): vscode.TreeItem {
@@ -80,7 +88,8 @@ export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Dispo
       .filter(Boolean)
       .join(' · ');
     item.iconPath = new vscode.ThemeIcon(node.current ? 'folder-active' : worktree.prunable ? 'warning' : 'folder');
-    item.contextValue = node.current || worktree.bare ? 'gitForge.worktree.current' : 'gitForge.worktree';
+    // Ouvert dans VS Code, principal ou nu : pas de suppression proposée.
+    item.contextValue = node.current || node.main || worktree.bare ? 'gitForge.worktree.current' : 'gitForge.worktree';
     return item;
   }
 
@@ -109,11 +118,14 @@ export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Dispo
       if (!branch) return;
     }
     const name = branch as string;
-    const dir = await vscode.window.showInputBox({
+    const input = await vscode.window.showInputBox({
       title: vscode.l10n.t('New worktree: folder'),
+      prompt: isNew ? vscode.l10n.t('The new branch starts from the current HEAD.') : undefined,
       value: path.join(path.dirname(root), `${path.basename(root)}-${name.replace(/[\\/]/g, '-')}`),
     });
-    if (!dir) return;
+    if (!input) return;
+    // « ~ » et chemins relatifs : par rapport au dossier personnel et au dossier parent du dépôt.
+    const dir = path.resolve(path.dirname(root), input.replace(/^~(?=$|[\\/])/, os.homedir()));
     try {
       await this.#git.worktreeAdd(root, dir, name, isNew);
     } catch (err) {
@@ -129,19 +141,22 @@ export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Dispo
 
   async #remove(node: Node): Promise<void> {
     const remove = vscode.l10n.t('Remove');
+    const locked = node.worktree.locked;
     const choice = await vscode.window.showWarningMessage(
-      vscode.l10n.t('Remove the worktree {0}? Its folder is deleted; the branch is kept.', node.worktree.path),
+      locked
+        ? vscode.l10n.t('The worktree {0} is locked. Remove it anyway? Its folder is deleted; the branch is kept.', node.worktree.path)
+        : vscode.l10n.t('Remove the worktree {0}? Its folder is deleted; the branch is kept.', node.worktree.path),
       { modal: true },
       remove,
     );
     if (choice !== remove) return;
     try {
-      await this.#git.worktreeRemove(node.root, node.worktree.path, false);
+      await this.#git.worktreeRemove(node.root, node.worktree.path, locked, locked);
     } catch (err) {
       if (!(err instanceof GitError)) throw err;
       const force = vscode.l10n.t('Remove Anyway');
       const again = await vscode.window.showWarningMessage(
-        vscode.l10n.t('The worktree has changes or untracked files: {0}. Remove it anyway? Those changes are lost.', errorText(err)),
+        vscode.l10n.t('{0}. Remove the worktree anyway? Its changes, untracked and ignored files (.env…) are lost.', errorText(err)),
         { modal: true },
         force,
       );
@@ -156,6 +171,11 @@ export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Dispo
   }
 }
 
-function samePath(a: string, b: string): boolean {
-  return path.resolve(a) === path.resolve(b);
+/** Chemin réel (liens symboliques résolus), comme celui que donne git. */
+function realPath(dir: string): string {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return path.resolve(dir);
+  }
 }

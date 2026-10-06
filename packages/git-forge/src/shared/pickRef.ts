@@ -12,24 +12,27 @@ export async function pickRef(git: GitCommands, root: string, title: string, all
   const items: RefItem[] = [];
   if (allowWorktree) items.push({ label: `$(edit) ${vscode.l10n.t('Working tree')}`, ref: '' });
   items.push({ label: '$(git-commit) HEAD', ref: 'HEAD' });
-  for (const ref of await git.refs(root)) items.push({ label: `${icons[ref.kind]} ${ref.name}`, description: ref.sha.slice(0, 8), ref: ref.name });
+  // Nom complet : sans ambiguïté si une branche et un tag ont le même nom.
+  for (const ref of await git.refs(root)) items.push({ label: `${icons[ref.kind]} ${ref.name}`, description: ref.sha.slice(0, 8), ref: ref.ref });
   const quickPick = vscode.window.createQuickPick<RefItem>();
   quickPick.title = title;
   quickPick.placeholder = vscode.l10n.t('Branch, tag or commit SHA');
   quickPick.items = items;
-  const picked = await new Promise<string | undefined>((resolve) => {
+  const accepted = await new Promise<{ item?: RefItem; typed: string } | undefined>((resolve) => {
     quickPick.onDidAccept(() => {
-      const item = quickPick.selectedItems[0] ?? quickPick.activeItems[0];
-      resolve(item ? item.ref : quickPick.value.trim() || undefined);
+      resolve({ item: quickPick.selectedItems[0] ?? quickPick.activeItems[0], typed: quickPick.value.trim() });
       quickPick.hide();
     });
     quickPick.onDidHide(() => resolve(undefined));
     quickPick.show();
   });
   quickPick.dispose();
-  if (picked === undefined || picked === '' || items.some((item) => item.ref === picked)) return picked;
-  // SHA ou référence saisie : vérifiée avant usage.
-  if (await git.revParse(root, picked)) return picked;
-  void vscode.window.showErrorMessage(vscode.l10n.t('Unknown reference: {0}', picked));
+  if (!accepted) return undefined;
+  const { item, typed } = accepted;
+  // Texte saisi qui désigne une révision (« v1 », un SHA…) : il l'emporte sur l'élément proposé par la recherche floue.
+  const itemName = item?.label.replace(/^\$\([^)]+\) /, '');
+  if (typed && typed !== itemName && (await git.revParse(root, typed))) return typed;
+  if (item) return item.ref;
+  if (typed) void vscode.window.showErrorMessage(vscode.l10n.t('Unknown reference: {0}', typed));
   return undefined;
 }

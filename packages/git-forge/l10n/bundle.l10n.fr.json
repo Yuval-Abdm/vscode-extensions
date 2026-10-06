@@ -130,5 +130,10 @@
   "Remove": "Supprimer",
   "Remove the worktree {0}? Its folder is deleted; the branch is kept.": "Supprimer le worktree {0} ? Son dossier est supprimé ; la branche est gardée.",
   "Remove Anyway": "Supprimer quand même",
-  "The worktree has changes or untracked files: {0}. Remove it anyway? Those changes are lost.": "Le worktree a des modifications ou des fichiers non suivis : {0}. Le supprimer quand même ? Ces modifications seront perdues."
+  "The stash was applied, but its staged changes could not be restored as staged: they are now unstaged.": "Le stash a été appliqué, mais ses modifications indexées n'ont pas pu être restaurées dans l'index : elles sont maintenant non indexées.",
+  "The new branch starts from the current HEAD.": "La nouvelle branche part du HEAD actuel.",
+  "The worktree {0} is locked. Remove it anyway? Its folder is deleted; the branch is kept.": "Le worktree {0} est verrouillé. Le supprimer quand même ? Son dossier est supprimé ; la branche est gardée.",
+  "{0}. Remove the worktree anyway? Its changes, untracked and ignored files (.env…) are lost.": "{0}. Supprimer le worktree quand même ? Ses modifications, ses fichiers non suivis et ignorés (.env…) seront perdus.",
+  "{0} file(s) are excluded by the deploy configuration.": "{0} fichier(s) sont exclus par la configuration de déploiement.",
+  "Renamed files: the old copy stays on the server ({0}).": "Fichiers renommés : l'ancienne copie reste sur le serveur ({0})."
 }

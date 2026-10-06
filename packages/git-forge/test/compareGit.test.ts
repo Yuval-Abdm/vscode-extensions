@@ -31,7 +31,7 @@ describe('comparaison', () => {
     const repo = branched();
     try {
       const refs = await git.refs(repo.root);
-      assert.deepEqual(refs.map((r) => `${r.kind}:${r.name}`), ['branch:feature', 'branch:main', 'tag:v1']);
+      assert.deepEqual(refs.map((r) => `${r.kind}:${r.name}:${r.ref}`), ['branch:feature:refs/heads/feature', 'branch:main:refs/heads/main', 'tag:v1:refs/tags/v1']);
       assert.equal(refs[1].sha, repo.git('rev-parse', 'main').trim());
     } finally {
       repo.dispose();
@@ -96,10 +96,10 @@ describe('stash', () => {
         { change: { status: 'M', path: 'a.txt' }, untracked: false },
         { change: { status: 'A', path: 'new.txt' }, untracked: true },
       ]);
-      assert.equal(await git.stashApply(repo.root, stash.ref, false), 'applied');
+      assert.equal(await git.stashApply(repo.root, stash, false), 'applied');
       assert.equal(readFileSync(path.join(repo.root, 'new.txt'), 'utf8'), 'untracked\n');
       assert.equal((await git.stashes(repo.root)).length, 1);
-      await git.stashDrop(repo.root, stash.ref);
+      await git.stashDrop(repo.root, stash);
       assert.deepEqual(await git.stashes(repo.root), []);
     } finally {
       repo.dispose();
@@ -113,7 +113,7 @@ describe('stash', () => {
       await git.stashPush(repo.root, 'conflicting');
       repo.write('a.txt', 'committed meanwhile\n');
       repo.commit('meanwhile');
-      assert.equal(await git.stashApply(repo.root, 'stash@{0}', true), 'conflicts');
+      assert.equal(await git.stashApply(repo.root, (await git.stashes(repo.root))[0], true), 'conflicts');
       assert.equal((await git.status(repo.root)).conflicts.length, 1);
       assert.equal((await git.stashes(repo.root)).length, 1);
     } finally {
@@ -142,6 +142,10 @@ describe('worktrees', () => {
       await assert.rejects(git.worktreeRemove(repo.root, existing, false), GitError);
       await git.worktreeRemove(repo.root, existing, true);
       await git.worktreeRemove(repo.root, created, false);
+      await git.worktreeAdd(repo.root, existing, 'feature', false);
+      repo.git('worktree', 'lock', existing);
+      await assert.rejects(git.worktreeRemove(repo.root, existing, true), GitError);
+      await git.worktreeRemove(repo.root, existing, true, true);
       assert.equal((await git.worktrees(repo.root)).length, 1);
     } finally {
       repo.dispose();
@@ -154,5 +158,56 @@ describe('worktrees', () => {
       { path: '/r', detached: false, bare: true, locked: false, prunable: false },
       { path: '/w', head: 'abc', detached: true, bare: false, locked: true, prunable: true },
     ]);
+  });
+});
+
+describe('cas limites (revue 0.4)', () => {
+  it('stash de modifications seulement indexées : listées, restaurées par pop (--index)', async () => {
+    const repo = branched();
+    try {
+      repo.write('a.txt', 'staged\n');
+      repo.git('add', 'a.txt');
+      repo.write('a.txt', 'a\n');
+      await git.stashPush(repo.root, 'index only');
+      const [stash] = await git.stashes(repo.root);
+      assert.deepEqual((await git.stashFiles(repo.root, stash)).map((f) => f.change.path), ['a.txt']);
+      assert.equal(await git.stashApply(repo.root, stash, true), 'applied');
+      assert.equal(repo.git('show', ':a.txt'), 'staged\n');
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('stash désigné par son SHA : un nouveau stash ne décale pas la cible', async () => {
+    const repo = branched();
+    try {
+      repo.write('a.txt', 'one\n');
+      await git.stashPush(repo.root, 'first');
+      const [first] = await git.stashes(repo.root);
+      repo.write('a.txt', 'two\n');
+      await git.stashPush(repo.root, 'second'); // first devient stash@{1}
+      await git.stashDrop(repo.root, first);
+      const left = await git.stashes(repo.root);
+      assert.equal(left.length, 1);
+      assert.match(left[0].message, /second/);
+      await assert.rejects(git.stashDrop(repo.root, first), /no longer exists/);
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('référence du même nom qu’un fichier ; fichiers non suivis avec l’arbre de travail', async () => {
+    const repo = branched();
+    try {
+      repo.write('main', 'a file named like the branch\n');
+      repo.commit('file main');
+      repo.write('brandnew.php', '<?php\n');
+      const direct = await git.compareFiles(repo.root, 'v1', 'feature', 'direct');
+      assert.ok(direct.changes.some((c) => c.path === 'dir/sub/b.txt'));
+      const worktree = await git.compareFiles(repo.root, 'main', undefined, 'direct');
+      assert.deepEqual(worktree.changes, [{ status: 'A', path: 'brandnew.php' }]);
+    } finally {
+      repo.dispose();
+    }
   });
 });

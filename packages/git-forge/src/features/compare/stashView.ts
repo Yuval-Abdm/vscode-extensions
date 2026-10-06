@@ -22,6 +22,8 @@ export class StashView implements vscode.TreeDataProvider<Node>, vscode.Disposab
   #root: string | undefined;
   #stashes: StashEntry[] = [];
   #timer: ReturnType<typeof setTimeout> | undefined;
+  /** Seul le dernier rafraîchissement lancé écrit son résultat. */
+  #generation = 0;
 
   constructor(git: GitCommands, repos: Repos) {
     this.#git = git;
@@ -56,14 +58,17 @@ export class StashView implements vscode.TreeDataProvider<Node>, vscode.Disposab
   }
 
   async refresh(): Promise<void> {
+    const generation = ++this.#generation;
     const root = currentRoot(this.#repos);
-    this.#root = root;
+    let stashes: StashEntry[];
     try {
-      this.#stashes = root ? await this.#git.stashes(root) : [];
+      stashes = root ? await this.#git.stashes(root) : [];
     } catch {
-      this.#stashes = [];
+      stashes = [];
     }
-    if (this.#root !== root) return;
+    if (generation !== this.#generation) return;
+    this.#root = root;
+    this.#stashes = stashes;
     this.#view.description = root && this.#repos.roots().length > 1 ? path.basename(root) : undefined;
     this.#view.message = this.#stashes.length ? undefined : vscode.l10n.t('No stash.');
     this.#changed.fire(undefined);
@@ -81,8 +86,10 @@ export class StashView implements vscode.TreeDataProvider<Node>, vscode.Disposab
 
   async apply(node: Node, pop: boolean): Promise<void> {
     try {
-      const result = await this.#git.stashApply(node.root, node.stash.ref, pop);
-      if (result === 'conflicts') {
+      const result = await this.#git.stashApply(node.root, node.stash, pop);
+      if (result === 'applied-without-index') {
+        void vscode.window.showWarningMessage(vscode.l10n.t('The stash was applied, but its staged changes could not be restored as staged: they are now unstaged.'));
+      } else if (result === 'conflicts') {
         void vscode.window.showWarningMessage(vscode.l10n.t('The stash was applied with conflicts: resolve them in the Conflicts view. The stash was kept.'));
       }
     } catch (err) {
@@ -152,7 +159,7 @@ export class StashView implements vscode.TreeDataProvider<Node>, vscode.Disposab
     );
     if (choice !== drop) return;
     try {
-      await this.#git.stashDrop(node.root, node.stash.ref);
+      await this.#git.stashDrop(node.root, node.stash);
     } catch (err) {
       void vscode.window.showErrorMessage(errorText(err));
     }
