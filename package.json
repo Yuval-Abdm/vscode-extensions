@@ -6,8 +6,10 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "test": "npm test --workspace ftp-sftp-deploy && node test/l10n.test.js",
+    "test": "npm test --workspace ftp-sftp-deploy && npm test --workspace php-forge && node test/l10n.test.js",
     "test:e2e": "npm run build && node test/e2e/run.js",
+    "test:e2e:php-forge": "npm run build --workspace php-forge && node packages/php-forge/test/e2e/run.cjs",
+    "typecheck": "npm run typecheck --workspace php-forge",
     "package": "npm run package --workspaces",
     "icons": "node scripts/icons.js",
     "ovsx:namespace": "ovsx create-namespace yuval-abdm",

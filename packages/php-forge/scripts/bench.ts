@@ -1,0 +1,246 @@
+// Banc d'essai sur des projets réels, en local uniquement : PHP_FORGE_CORPUS=/projet1:/projet2 npm run bench
+// Mesure l'indexation (temps, mémoire, symboles, erreurs de syntaxe) et compare avec la mesure précédente.
+// Les résultats vont dans bench-results/ (ignoré par git) : aucun fichier des projets n'est copié.
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { URI } from 'vscode-uri';
+import { complete } from '../src/server/completion/complete.ts';
+import { DocumentStore } from '../src/server/documents.ts';
+import { collectDiagnostics, semanticPart, type CollectEnv } from '../src/server/diagnostics/collect.ts';
+import { isLibrary } from '../src/server/diagnostics/policy.ts';
+import { IncludeAnalysis } from '../src/server/includes/analysis.ts';
+import { IncludeGraph } from '../src/server/includes/graph.ts';
+import { indexFolder } from '../src/server/index/indexer.ts';
+import { Lookup } from '../src/server/index/lookup.ts';
+import { decode } from '../src/server/parser/encoding.ts';
+import { DEFAULT_FORMAT, formatText } from '../src/server/format/format.ts';
+import { tokensOf } from '../src/server/format/tokens.ts';
+import { findReferences, type RefEnv } from '../src/server/refactor/references.ts';
+import { REQUEST_NAMES, returnsData, type Summary } from '../src/server/security/taint.ts';
+import { loadSchema } from '../src/server/sql/sources.ts';
+import { loadStubs } from '../src/server/stubs/stubs.ts';
+import { TypeResolver } from '../src/server/types/expand.ts';
+import { SymbolIndex } from '../src/server/index/symbolIndex.ts';
+import { createParser, initParser, parsePhp, type Node, type Tree } from '../src/server/parser/parser.ts';
+import { DEFAULT_SETTINGS, DEFAULT_STUBS } from '../src/shared/protocol.ts';
+
+interface Result {
+  project: string;
+  files: number;
+  parsed: number;
+  skipped: number;
+  syntaxErrors: number;
+  symbols: number;
+  ms: number;
+  heapMB: number;
+  completionP50: number;
+  completionP95: number;
+  /** Analyse des inclusions (graphe + exécution), en ms */
+  analysisMs: number;
+  workspaceDiagnosticsMs: number;
+  /** Références des 20 fonctions les plus utilisées : moyenne et maximum (ms), total trouvé */
+  referencesMs: number;
+  referencesMaxMs: number;
+  referencesCount: number;
+  /** Formateur : temps total, fichier le plus lent, fichiers qui manquent une garantie (jetons, PHP valide, idempotence) */
+  formatMs: number;
+  formatMaxMs: number;
+  formatFailures: number;
+  /** Schéma SQL : fichiers lus, tables, temps de chargement */
+  sqlFiles: number;
+  sqlTables: number;
+  sqlSchemaMs: number;
+  entries: number;
+  byCode: Record<string, number>;
+}
+
+const corpus = (process.env.PHP_FORGE_CORPUS ?? '').split(':').filter(Boolean);
+if (!corpus.length) {
+  console.error('Usage : PHP_FORGE_CORPUS=/chemin/projet1:/chemin/projet2 npm run bench');
+  process.exit(1);
+}
+
+const require = createRequire(import.meta.url);
+const wasm = { treeSitter: require.resolve('web-tree-sitter/web-tree-sitter.wasm'), php: require.resolve('tree-sitter-php/tree-sitter-php.wasm') };
+await initParser(wasm);
+const parser = createParser();
+
+const stubs = loadStubs(path.join(import.meta.dirname, '..', 'dist', 'stubs.json.gz'), DEFAULT_STUBS);
+const percentile = (values: number[], p: number) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return Math.round(sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] ?? 0);
+};
+
+/** Complétions (variables, noms, membres) à la fin des 20 plus gros fichiers du projet. */
+function completionTimings(index: SymbolIndex, root: string): number[] {
+  const resolver = new TypeResolver(new Lookup(index, stubs), '8.3');
+  const store = new DocumentStore(parser);
+  const files = [...index.files()]
+    .map((f) => URI.parse(f.uri).fsPath)
+    .map((file) => ({ file, size: statSync(file).size }))
+    .sort((a, b) => b.size - a.size)
+    .slice(0, 20);
+  const timings: number[] = [];
+  for (const { file } of files) {
+    const text = decode(readFileSync(file));
+    const reopen = /\?>\s*$/.test(text) || !text.includes('<?php') ? '\n<?php' : '';
+    for (const suffix of ['\n$', '\nstr', "\n$pdo = new PDO('x');\n$pdo->"]) {
+      const source = text + reopen + suffix;
+      const doc = store.open('file:///bench.php', 'php', 1, source);
+      const started = performance.now();
+      complete({ resolver, parser, folders: [root] }, doc, doc.doc.positionAt(source.length));
+      timings.push(performance.now() - started);
+    }
+  }
+  store.close('file:///bench.php');
+  return timings;
+}
+
+const results: Result[] = [];
+for (const root of corpus) {
+  const index = new SymbolIndex();
+  const stats = await indexFolder(index, {
+    root,
+    exclude: DEFAULT_SETTINGS.exclude,
+    maxFileSize: DEFAULT_SETTINGS.maxFileSize,
+    parser,
+    wasm,
+    workerScript: path.join(import.meta.dirname, '../src/server/index/worker.ts'),
+  });
+  const symbols = [...index.files()].reduce((n, f) => n + f.symbols.length, 0);
+  const timings = completionTimings(index, root);
+  const analysisStart = performance.now();
+  const graph = new IncludeGraph(index, { roots: [root] });
+  const analysis = new IncludeAnalysis(index, new Lookup(index, stubs), graph, { maxContexts: 64, externalGlobals: [] });
+  analysis.run();
+  const analysisMs = Math.round(performance.now() - analysisStart);
+  // Passe des diagnostics du workspace (fichiers hors librairie), comme le serveur en arrière-plan
+  const byCode: Record<string, number> = {};
+  const libraryPaths = ['**/vendor/**', '**/PHPExcel/**', '**/Google/Api/**'];
+  // Schéma SQL du corpus (globs par défaut, cache de la base s'il existe)
+  const schemaStart = performance.now();
+  const { schema, files: sqlFiles } = loadSchema({ folders: [root], globs: DEFAULT_SETTINGS.sql.schema, exclude: DEFAULT_SETTINGS.exclude });
+  const sqlSchemaMs = Math.round(performance.now() - schemaStart);
+  const env: CollectEnv = {
+    schema: () => schema,
+    parser,
+    resolver: new TypeResolver(new Lookup(index, stubs), process.env.PHP_FORGE_VERSION ?? '7.3'),
+    analysis,
+    rules: {},
+    library: (fsPath) => isLibrary(fsPath, [root], libraryPaths, []),
+    baseline: () => undefined,
+    // Propagation comme dans le serveur : fonctions des autres fichiers relues, variables venues des inclusions
+    security: (input) => ({
+      uri: input.uri,
+      summaries: { get: (name, depth) => benchSummaries.get(`${name}@${depth}`), set: (name, depth, summary) => benchSummaries.set(`${name}@${depth}`, summary) },
+      request: (name, at) => analysis.variable(input.uri, name.slice(1), at)?.request,
+      requestAtEntry: () => !!analysis.variable(input.uri, '', { line: 0, character: 0 })?.request,
+      readsRequest: (name) => {
+        const hit = index.findFunction(name)[0];
+        return !!hit && hit.uri !== input.uri && !!index.get(hit.uri)?.names?.some((n) => REQUEST_NAMES.has(n));
+      },
+      native: (name) => {
+        const hit = stubs.findFunction(name)[0];
+        return hit ? returnsData(hit.symbol.type) : undefined;
+      },
+      loadFunction: (name) => {
+        const hit = index.findFunction(name)[0];
+        if (!hit || hit.uri === input.uri) return undefined;
+        let tree = functionTrees.get(hit.uri);
+        if (!tree) functionTrees.set(hit.uri, (tree = parsePhp(parser, decode(readFileSync(URI.parse(hit.uri).fsPath)))));
+        let node: Node | null = tree.rootNode.descendantForPosition({ row: hit.symbol.selectionRange.start.line, column: hit.symbol.selectionRange.start.character });
+        while (node && node.type !== 'function_definition') node = node.parent;
+        return node ? { uri: hit.uri, node, release: () => undefined } : undefined;
+      },
+    }),
+    ...(process.env.PHP_FORGE_TARGET ? { target: new TypeResolver(new Lookup(index, stubs), process.env.PHP_FORGE_TARGET) } : {}),
+  };
+  const functionTrees = new Map<string, Tree>();
+  const benchSummaries = new Map<string, Summary>();
+  const workspaceStart = performance.now();
+  for (const file of index.files()) {
+    const fsPath = URI.parse(file.uri).fsPath;
+    if (!file.flow || env.library(fsPath)) continue;
+    const text = decode(readFileSync(fsPath));
+    const tree = parsePhp(parser, text);
+    const input = { uri: file.uri, fsPath, symbols: file, tree, text };
+    for (const d of collectDiagnostics(input, env, semanticPart(input, env)).diagnostics) byCode[String(d.code)] = (byCode[String(d.code)] ?? 0) + 1;
+    tree.delete();
+  }
+  const workspaceDiagnosticsMs = Math.round(performance.now() - workspaceStart);
+  for (const tree of functionTrees.values()) tree.delete();
+  // Références : les 20 fonctions du projet présentes dans le plus de fichiers, fichiers relus comme par le serveur
+  const refEnv: RefEnv = {
+    lookup: env.resolver.lookup,
+    resolver: env.resolver,
+    files: () => [...index.files()],
+    text: (uri) => decode(readFileSync(URI.parse(uri).fsPath)),
+    source: (uri) => {
+      const symbols = index.get(uri);
+      if (!symbols) return undefined;
+      const text = decode(readFileSync(URI.parse(uri).fsPath));
+      const tree = parsePhp(parser, text);
+      return { file: { uri, text, tree, symbols }, release: () => tree.delete() };
+    },
+  };
+  const usage = new Map<string, number>();
+  for (const file of index.files()) for (const name of file.names ?? []) usage.set(name, (usage.get(name) ?? 0) + 1);
+  const functions = [...index.files()].flatMap((file) => file.symbols.filter((s) => s.kind === 'function').map((symbol) => ({ uri: file.uri, symbol })));
+  const popular = functions.sort((a, b) => (usage.get(b.symbol.name.toLowerCase()) ?? 0) - (usage.get(a.symbol.name.toLowerCase()) ?? 0)).slice(0, 20);
+  const referenceTimes: number[] = [];
+  let referencesCount = 0;
+  for (const declaration of popular) {
+    const start = performance.now();
+    referencesCount += findReferences(refEnv, { kind: 'function', name: declaration.symbol.name, declarations: [declaration] }, false).length;
+    referenceTimes.push(performance.now() - start);
+  }
+  const referencesMs = Math.round(referenceTimes.reduce((a, b) => a + b, 0) / Math.max(1, referenceTimes.length));
+  const referencesMaxMs = Math.round(Math.max(0, ...referenceTimes));
+  // Formateur sur tous les fichiers hors librairie sans erreur de syntaxe : garanties du §5.5
+  let formatMs = 0;
+  let formatMaxMs = 0;
+  let formatFailures = 0;
+  for (const file of index.files()) {
+    const fsPath = URI.parse(file.uri).fsPath;
+    if (!file.flow || env.library(fsPath)) continue;
+    const text = decode(readFileSync(fsPath));
+    const tree = parsePhp(parser, text);
+    if (!tree.rootNode.hasError) {
+      const start = performance.now();
+      const out = formatText(tree, text, DEFAULT_FORMAT);
+      const ms = performance.now() - start;
+      formatMs += ms;
+      formatMaxMs = Math.max(formatMaxMs, ms);
+      const again = parsePhp(parser, out);
+      // Suite des jetons (type et texte) : `- -$b` collé en `--$b` garde le texte non blanc mais pas les jetons
+      const stream = (t: typeof tree, s: string) => tokensOf(t).map((k) => `${k.type}:${s.slice(k.start, k.end).replace(/\s+/g, ' ')}`).join('\n');
+      if (stream(again, out) !== stream(tree, text) || again.rootNode.hasError || formatText(again, out, DEFAULT_FORMAT) !== out) formatFailures++;
+      again.delete();
+    }
+    tree.delete();
+  }
+  formatMs = Math.round(formatMs);
+  formatMaxMs = Math.round(formatMaxMs);
+  results.push({
+    project: path.basename(root), files: stats.files, parsed: stats.parsed, skipped: stats.skipped, syntaxErrors: stats.syntaxErrors,
+    symbols, ms: stats.ms, heapMB: Math.round(process.memoryUsage().heapUsed / 1e6),
+    completionP50: percentile(timings, 50), completionP95: percentile(timings, 95),
+    analysisMs, entries: graph.entries().length, workspaceDiagnosticsMs, referencesMs, referencesMaxMs, referencesCount, formatMs, formatMaxMs, formatFailures, sqlFiles, sqlTables: schema.tables.length, sqlSchemaMs, byCode,
+  });
+}
+console.table(results.map(({ byCode, ...r }) => r));
+for (const r of results) console.log(r.project, JSON.stringify(r.byCode));
+
+const dir = path.join(import.meta.dirname, '..', 'bench-results');
+mkdirSync(dir, { recursive: true });
+const previous = readdirSync(dir).filter((f) => f.endsWith('.json')).sort().pop();
+if (previous) {
+  const old = JSON.parse(readFileSync(path.join(dir, previous), 'utf8')) as Result[];
+  console.log(`Comparaison avec ${previous} :`);
+  for (const r of results) {
+    const o = old.find((x) => x.project === r.project);
+    if (o) console.log(`  ${r.project} : ${r.ms - o.ms >= 0 ? '+' : ''}${r.ms - o.ms} ms, symboles ${r.symbols - o.symbols >= 0 ? '+' : ''}${r.symbols - o.symbols}, erreurs de syntaxe ${o.syntaxErrors} → ${r.syntaxErrors}`);
+  }
+}
+writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}.json`), JSON.stringify(results, null, 2));

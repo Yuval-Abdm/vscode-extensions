@@ -1,0 +1,497 @@
+{
+  "name": "php-forge",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "1.0.0",
+  "publisher": "yuval-abdm",
+  "license": "MIT",
+  "type": "module",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#2b2140",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions.git",
+    "directory": "packages/php-forge"
+  },
+  "bugs": {
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions/issues"
+  },
+  "homepage": "https://github.com/Yuval-Abdm/vscode-extensions/tree/main/packages/php-forge#readme",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "l10n": "./l10n",
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "php",
+    "intellisense",
+    "language server",
+    "intelephense",
+    "go to definition",
+    "include",
+    "legacy",
+    "diagnostics",
+    "completion",
+    "autocomplete",
+    "type inference"
+  ],
+  "main": "./dist/client.cjs",
+  "activationEvents": [
+    "onLanguage:php",
+    "workspaceContains:**/*.php"
+  ],
+  "scripts": {
+    "build": "node scripts/build-stubs.ts && node scripts/build.ts",
+    "typecheck": "tsc -p .",
+    "test": "node scripts/build.ts --dev && node --test \"test/**/*.test.ts\"",
+    "bench": "node scripts/bench.ts",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@vscode/l10n": "^0.0.18",
+    "minimatch": "^10.2.6",
+    "mysql2": "^3.24.5",
+    "tree-sitter-php": "0.24.2",
+    "vscode-languageclient": "^10.1.2",
+    "vscode-languageserver": "^10.1.2",
+    "vscode-languageserver-textdocument": "^1.0.15",
+    "vscode-uri": "^3.2.0",
+    "web-tree-sitter": "0.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/vscode": "~1.91.0",
+    "typescript": "^5.9.3",
+    "vscode-jsonrpc": "9.0.3"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "phpForge.restartServer",
+        "title": "%phpForge.restartServer.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.reindex",
+        "title": "%phpForge.reindex.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showOutput",
+        "title": "%phpForge.showOutput.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showIncludeTree",
+        "title": "%phpForge.showIncludeTree.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showIncluders",
+        "title": "%phpForge.showIncluders.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showReferences",
+        "title": "%phpForge.showReferences.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.createBaseline",
+        "title": "%phpForge.createBaseline.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.updateBaseline",
+        "title": "%phpForge.updateBaseline.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.clearBaseline",
+        "title": "%phpForge.clearBaseline.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.refreshSqlSchema",
+        "title": "%phpForge.refreshSqlSchema.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.migrationReport",
+        "title": "%phpForge.migrationReport.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.showImpact",
+        "title": "%phpForge.showImpact.title%",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.refreshImpact",
+        "title": "%phpForge.refreshImpact.title%",
+        "category": "PHP Forge",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "phpForge.deployChanged",
+        "title": "%phpForge.deployChanged.title%",
+        "category": "PHP Forge",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "phpForge.impactEntries",
+        "title": "Impact entries (tests)",
+        "category": "PHP Forge"
+      },
+      {
+        "command": "phpForge.selectPhpVersion",
+        "title": "%phpForge.selectPhpVersion.title%",
+        "category": "PHP Forge"
+      }
+    ],
+    "configuration": {
+      "title": "PHP Forge",
+      "properties": {
+        "phpForge.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/.git/**"
+          ],
+          "markdownDescription": "%phpForge.exclude.description%"
+        },
+        "phpForge.maxFileSize": {
+          "type": "number",
+          "default": 2000000,
+          "minimum": 10000,
+          "markdownDescription": "%phpForge.maxFileSize.description%"
+        },
+        "phpForge.phpVersion": {
+          "type": "string",
+          "default": "",
+          "pattern": "^(\\d+(\\.\\d+)?)?$",
+          "markdownDescription": "%phpForge.phpVersion.description%"
+        },
+        "phpForge.stubs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "apache",
+            "bcmath",
+            "bz2",
+            "calendar",
+            "Core",
+            "ctype",
+            "curl",
+            "date",
+            "dom",
+            "exif",
+            "fileinfo",
+            "filter",
+            "ftp",
+            "gd",
+            "gettext",
+            "gmp",
+            "hash",
+            "iconv",
+            "imap",
+            "intl",
+            "json",
+            "libxml",
+            "mbstring",
+            "mysql",
+            "mysqli",
+            "openssl",
+            "pcntl",
+            "pcre",
+            "PDO",
+            "Phar",
+            "posix",
+            "random",
+            "readline",
+            "Reflection",
+            "regex",
+            "session",
+            "SimpleXML",
+            "soap",
+            "sockets",
+            "sodium",
+            "SPL",
+            "sqlite3",
+            "standard",
+            "superglobals",
+            "tokenizer",
+            "xml",
+            "xmlreader",
+            "xmlwriter",
+            "xsl",
+            "zip",
+            "zlib"
+          ],
+          "markdownDescription": "%phpForge.stubs.description%"
+        },
+        "phpForge.inlayHints.parameterNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "%phpForge.inlayHints.parameterNames.description%"
+        },
+        "phpForge.inlayHints.variableTypes": {
+          "type": "boolean",
+          "default": false,
+          "description": "%phpForge.inlayHints.variableTypes.description%"
+        },
+        "phpForge.inlayHints.returnTypes": {
+          "type": "boolean",
+          "default": false,
+          "description": "%phpForge.inlayHints.returnTypes.description%"
+        },
+        "phpForge.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "%phpForge.trace.server.description%"
+        },
+        "phpForge.documentRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%phpForge.documentRoot.description%"
+        },
+        "phpForge.serverRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%phpForge.serverRoot.description%"
+        },
+        "phpForge.includes.maxContexts": {
+          "type": "number",
+          "default": 64,
+          "minimum": 1,
+          "markdownDescription": "%phpForge.includes.maxContexts.description%"
+        },
+        "phpForge.externalGlobals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%phpForge.externalGlobals.description%"
+        },
+        "phpForge.diagnostics.scope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "openFiles"
+          ],
+          "default": "workspace",
+          "markdownDescription": "%phpForge.diagnostics.scope.description%"
+        },
+        "phpForge.diagnostics.rules": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "information",
+              "hint",
+              "off"
+            ]
+          },
+          "markdownDescription": "%phpForge.diagnostics.rules.description%"
+        },
+        "phpForge.libraryPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/vendor/**",
+            "**/PHPExcel/**",
+            "**/Google/Api/**"
+          ],
+          "markdownDescription": "%phpForge.libraryPaths.description%"
+        },
+        "phpForge.codeLens.references": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.codeLens.references.description%"
+        },
+        "phpForge.codeLens.implementations": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.codeLens.implementations.description%"
+        },
+        "phpForge.completion.autoImport": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.completion.autoImport.description%"
+        },
+        "phpForge.organizeUsesOnSave": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%phpForge.organizeUsesOnSave.description%"
+        },
+        "phpForge.format.enable": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.format.enable.description%"
+        },
+        "phpForge.format.braces": {
+          "type": "string",
+          "enum": [
+            "psr12",
+            "keep"
+          ],
+          "default": "psr12",
+          "markdownDescription": "%phpForge.format.braces.description%"
+        },
+        "phpForge.format.alignArrows": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%phpForge.format.alignArrows.description%"
+        },
+        "phpForge.format.alignAssignments": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%phpForge.format.alignAssignments.description%"
+        },
+        "phpForge.format.trailingCommas": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%phpForge.format.trailingCommas.description%"
+        },
+        "phpForge.format.lineLength": {
+          "type": "number",
+          "default": 120,
+          "markdownDescription": "%phpForge.format.lineLength.description%"
+        },
+        "phpForge.sql.schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "sql/**/*.sql",
+            "migrations/**/*.sql",
+            "database/**/*.sql"
+          ],
+          "markdownDescription": "%phpForge.sql.schema.description%"
+        },
+        "phpForge.sql.connection": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "number",
+              "default": 3306
+            },
+            "user": {
+              "type": "string"
+            },
+            "database": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "default": {},
+          "markdownDescription": "%phpForge.sql.connection.description%"
+        },
+        "phpForge.security.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.security.enabled.description%"
+        },
+        "phpForge.security.sanitizers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%phpForge.security.sanitizers.description%"
+        },
+        "phpForge.migration.targetVersion": {
+          "type": "string",
+          "default": "",
+          "pattern": "^(\\d+\\.\\d+)?$",
+          "markdownDescription": "%phpForge.migration.targetVersion.description%"
+        },
+        "phpForge.deploy.checkErrors": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%phpForge.deploy.checkErrors.description%"
+        }
+      }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "phpForge.showIncluders",
+          "when": "false"
+        },
+        {
+          "command": "phpForge.showReferences",
+          "when": "false"
+        },
+        {
+          "command": "phpForge.impactEntries",
+          "when": "false"
+        },
+        {
+          "command": "phpForge.deployChanged",
+          "when": "phpForge.deployAvailable"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "phpForge.refreshImpact",
+          "when": "view == phpForge.impact",
+          "group": "navigation@1"
+        },
+        {
+          "command": "phpForge.deployChanged",
+          "when": "view == phpForge.impact && phpForge.deployAvailable",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "phpForge.includeTree",
+          "name": "%phpForge.includeTree.name%"
+        },
+        {
+          "id": "phpForge.impact",
+          "name": "%phpForge.impact.name%"
+        }
+      ]
+    },
+    "grammars": [
+      {
+        "scopeName": "php-forge.sql-injection",
+        "path": "./syntaxes/php-sql.injection.json",
+        "injectTo": [
+          "source.php"
+        ]
+      }
+    ]
+  }
+}

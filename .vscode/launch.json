@@ -11,6 +11,14 @@
       ],
       "outFiles": ["${workspaceFolder}/packages/*/dist/**/*.js"],
       "preLaunchTask": "npm: build"
+    },
+    {
+      "name": "Run PHP Forge",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/php-forge"],
+      "outFiles": ["${workspaceFolder}/packages/php-forge/dist/**/*.cjs"],
+      "preLaunchTask": "npm: build"
     }
   ]
 }
