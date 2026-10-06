@@ -90,9 +90,13 @@
   "\"{0}\": the key passphrase will be asked when connecting": "« {0} » : la phrase secrète de la clé sera demandée à la connexion",
   "Read the server again": "Relire le serveur",
   "Compare with local file": "Comparer avec le fichier local",
-  "Search files on {0}": "Rechercher des fichiers sur {0}",
   "Only the first {0} files are searched.": "Seuls les {0} premiers fichiers sont cherchés.",
   "Reading the server… {0} files": "Lecture du serveur… {0} fichiers",
-  "{0} files: name or part of the path (letters in order, e.g. \"usrctl\")": "{0} fichiers : nom ou partie du chemin (lettres dans l'ordre, ex. « usrctl »)",
-  "Search on which server?": "Rechercher sur quel serveur ?"
+  "{0} files on the server": "{0} fichiers sur le serveur",
+  "No file matches.": "Aucun fichier ne correspond.",
+  "No server configured.": "Aucun serveur configuré.",
+  "Type part of the name or path: letters in order, e.g. \"usrctl\" for UserController.php.": "Tapez une partie du nom ou du chemin : les lettres dans l'ordre, ex. « usrctl » pour UserController.php.",
+  "Type to filter.": "Tapez pour filtrer.",
+  "Server": "Serveur",
+  "Search files on the server": "Rechercher des fichiers sur le serveur"
 }

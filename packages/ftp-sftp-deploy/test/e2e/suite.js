@@ -83,7 +83,7 @@ test('recherche de fichiers sur le serveur : liste complète hors exclusions, fi
   const profile = api.config.profiles()[0];
   fs.mkdirSync(onFtp('node_modules/lib'), { recursive: true });
   fs.writeFileSync(onFtp('node_modules/lib/x.js'), 'ignored');
-  const listing = api.remoteSearch.listing(profile, profile.remotePath);
+  const listing = api.remoteSearch.listing(profile);
   await waitFor(() => listing.done, 'liste des fichiers du serveur');
   assert.ok(!listing.error, listing.error);
   assert.deepStrictEqual([...listing.files].sort(), ['includes/js/app.js', 'index.php']);
@@ -91,7 +91,7 @@ test('recherche de fichiers sur le serveur : liste complète hors exclusions, fi
   // Une écriture sur le serveur par l'extension vide la liste en mémoire : la recherche suivante relit le serveur.
   const uri = vscode.Uri.from({ scheme: 'ftp-sftp-deploy', authority: Buffer.from(profile.id).toString('hex'), path: '/www/found.php' });
   await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode('x'));
-  const again = api.remoteSearch.listing(profile, profile.remotePath);
+  const again = api.remoteSearch.listing(profile);
   await waitFor(() => again.done, 'nouvelle liste');
   assert.ok(again.files.includes('found.php'), again.files.join(', '));
   await vscode.workspace.fs.delete(uri);

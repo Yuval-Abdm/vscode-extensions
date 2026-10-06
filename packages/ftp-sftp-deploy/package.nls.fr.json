@@ -9,7 +9,7 @@
   "ftpSftpDeploy.importSftp.title": "Importer la configuration depuis sftp.json",
   "ftpSftpDeploy.forgetPassword.title": "Oublier un mot de passe mémorisé",
   "ftpSftpDeploy.showLog.title": "Afficher les logs de déploiement",
-  "ftpSftpDeploy.remote.search.title": "Rechercher des fichiers sur le serveur…",
+  "ftpSftpDeploy.searchFiles.title": "Rechercher des fichiers sur le serveur",
   "ftpSftpDeploy.remote.refresh.title": "Rafraîchir",
   "ftpSftpDeploy.remote.newFile.title": "Nouveau fichier…",
   "ftpSftpDeploy.remote.newFolder.title": "Nouveau dossier…",
@@ -24,6 +24,7 @@
   "displayName": "FTP SFTP Deploy",
   "description": "Déploiement FTP, FTPS et SFTP : upload de fichiers et dossiers, parcours et édition du serveur, comparaison avec le serveur, upload à l'enregistrement, migration depuis sftp.json. Les mots de passe restent dans le coffre sécurisé de VS Code.",
   "container.title": "Déploiement",
+  "view.search": "Rechercher",
   "view.remote": "Serveur distant",
   "view.welcome": "Aucun serveur configuré pour ce dossier.\n[Créer la configuration](command:ftpSftpDeploy.createConfig)\n[Importer depuis sftp.json](command:ftpSftpDeploy.importSftp)\n[Migrer tous mes projets SFTP…](command:ftpSftpDeploy.migrateAll)\nLa configuration est enregistrée dans .vscode/deploy.json ; les mots de passe restent dans le coffre sécurisé de VS Code."
 }

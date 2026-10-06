@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { fuzzyFilter } = require('../src/fuzzy');
+const { fuzzyFilter, fuzzyMatch } = require('../src/fuzzy');
 
 const PATHS = [
   'src/user/UserController.php',
@@ -36,5 +36,12 @@ describe('fuzzyFilter', () => {
     assert.strictEqual(fuzzyFilter('', PATHS).length, PATHS.length);
     assert.deepStrictEqual(fuzzyFilter('zzz', PATHS), []);
     assert.strictEqual(fuzzyFilter('', PATHS, 2).length, 2);
+  });
+});
+
+describe('fuzzyMatch', () => {
+  it('positions des lettres trouvées, pour les surligner', () => {
+    assert.deepStrictEqual(fuzzyMatch('ux', ['src/user/x.php']), [{ path: 'src/user/x.php', positions: [4, 9] }]);
+    assert.deepStrictEqual(fuzzyMatch('idx', ['public/index.php'])[0].positions, [7, 9, 11]);
   });
 });
