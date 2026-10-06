@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1
+
+- First public release (1.0.0 was withdrawn before release and cannot be reused). Contents below.
+
 ## 1.0.0
 
 - First stable release, now named **Git Spark**, with a new icon and logo: inline blame, file and line history, conflicts view and local merge, compare / stashes / worktrees with deploy, commit graph, guided cherry-pick / revert / reset / interactive rebase.
