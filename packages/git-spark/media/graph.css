@@ -1,0 +1,194 @@
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  overflow: hidden;
+}
+#toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+body.sidebar #toolbar label {
+  font-size: 0.9em;
+}
+#search {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 3px 6px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+}
+#toolbar button {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border: none;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+#count {
+  margin-left: auto;
+  color: var(--vscode-descriptionForeground);
+}
+.row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  cursor: default;
+}
+.row.header {
+  position: static;
+  font-weight: 600;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.row:not(.header):hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.row.match {
+  background: var(--vscode-editor-findMatchHighlightBackground);
+}
+.row.selected {
+  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--vscode-list-activeSelectionBackground);
+}
+.graph {
+  flex: 0 0 var(--graph-width, 24px);
+  height: 22px;
+}
+.message {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 8px;
+}
+.author {
+  flex: 0 0 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.date {
+  flex: 0 0 130px;
+  color: var(--vscode-descriptionForeground);
+}
+.sha {
+  flex: 0 0 80px;
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-descriptionForeground);
+}
+.ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 5px;
+  padding: 0 7px 0 5px;
+  border: 1px solid;
+  border-radius: 9px;
+  font-size: 0.88em;
+  line-height: 15px;
+  color: var(--vscode-foreground);
+  vertical-align: middle;
+}
+.ref.remote {
+  border-style: dashed;
+}
+.ref.current,
+.ref.head {
+  font-weight: 700;
+}
+.ref-icon {
+  flex: 0 0 auto;
+}
+/* Vue étroite (barre latérale) : graphe, étiquettes et message seulement ; le reste dans l'infobulle. */
+@media (max-width: 560px) {
+  .row.header,
+  .author,
+  .date,
+  .sha {
+    display: none;
+  }
+}
+#list {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+#rows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+#details {
+  flex: 0 0 35%;
+  max-height: 45%;
+  overflow: auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+#details[hidden] {
+  display: none;
+}
+#details .meta {
+  overflow-wrap: anywhere;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 6px;
+}
+#details pre {
+  white-space: pre-wrap;
+  font-family: var(--vscode-editor-font-family);
+  margin: 0 0 8px;
+}
+#details .file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 0;
+  cursor: pointer;
+}
+#details .file:hover {
+  text-decoration: underline;
+}
+#details .status {
+  display: inline-block;
+  width: 18px;
+  font-weight: 700;
+}
+/* Vue large et basse (panneau du bas) : détails du commit à droite de la liste plutôt qu'en dessous. */
+@media (min-width: 900px) and (max-height: 520px) {
+  body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 32%);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  body:has(#details[hidden]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #toolbar {
+    grid-column: 1 / -1;
+  }
+  .row.header,
+  #list {
+    grid-column: 1;
+  }
+  #details {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    max-height: none;
+    border-top: none;
+    border-left: 1px solid var(--vscode-panel-border);
+  }
+}

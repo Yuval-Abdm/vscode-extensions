@@ -7,7 +7,7 @@ const path = require('path');
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 
-const PACKAGES = ['changed-files-explorer', 'ftp-sftp-deploy', 'php-forge'];
+const PACKAGES = ['changed-files-explorer', 'ftp-sftp-deploy', 'php-forge', 'git-spark'];
 const root = path.join(__dirname, '..', 'packages');
 
 /** Clés l10n du code (.js et .ts, sous-dossiers compris) : vscode.l10n.t('…'), l10n.t('…') et t('…'). */

@@ -1,0 +1,84 @@
+body {
+  margin: 0;
+  padding: 12px 16px;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+h1 {
+  font-size: 1.2em;
+  margin: 0 0 4px;
+}
+.note {
+  color: var(--vscode-descriptionForeground);
+  margin: 0 0 12px;
+}
+.error {
+  color: var(--vscode-errorForeground);
+  min-height: 1.4em;
+}
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+.item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.item.dragging {
+  opacity: 0.4;
+}
+.item.over {
+  border-color: var(--vscode-focusBorder);
+}
+.item.drop .summary,
+.item.drop .sha {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.handle {
+  cursor: grab;
+  color: var(--vscode-descriptionForeground);
+  user-select: none;
+}
+select {
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+}
+.sha {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-descriptionForeground);
+}
+.summary {
+  flex: 1 1 auto;
+}
+textarea {
+  flex: 1 0 100%;
+  min-height: 3.5em;
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+}
+.buttons {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+}
+button {
+  padding: 4px 14px;
+  border: none;
+  cursor: pointer;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+button.secondary {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
