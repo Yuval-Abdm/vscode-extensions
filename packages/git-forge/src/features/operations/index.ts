@@ -196,7 +196,7 @@ export class OperationsFeature implements vscode.Disposable {
     return true;
   }
 
-  /** Associe (ou dissocie) les fichiers git-rebase-todo à l'éditeur de Git Forge selon gitForge.rebaseEditor. */
+  /** Associe (ou dissocie) les fichiers git-rebase-todo à l'éditeur de Git Spark selon gitForge.rebaseEditor. */
   async #syncAssociation(): Promise<void> {
     const wanted = vscode.workspace.getConfiguration('gitForge').get<boolean>('rebaseEditor', false);
     const workbench = vscode.workspace.getConfiguration('workbench');
@@ -206,7 +206,7 @@ export class OperationsFeature implements vscode.Disposable {
     if (wanted === ours) return;
     if (wanted && current !== undefined) {
       // Association déjà choisie par l'utilisateur (autre extension) : jamais écrasée.
-      void vscode.window.showWarningMessage(vscode.l10n.t('git-rebase-todo files are already associated with the editor "{0}" (workbench.editorAssociations): remove that entry to use Git Forge\'s rebase editor.', current));
+      void vscode.window.showWarningMessage(vscode.l10n.t('git-rebase-todo files are already associated with the editor "{0}" (workbench.editorAssociations): remove that entry to use Git Spark\'s rebase editor.', current));
       return;
     }
     if (wanted) associations[TODO_ASSOCIATION] = TODO_EDITOR;

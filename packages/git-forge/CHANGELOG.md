@@ -2,10 +2,9 @@
 
 ## 1.0.0
 
-- Commit view at the top of the sidebar: stage and unstage files, conventional commit types with icons and descriptions, optional scope and breaking change, pull (`--rebase`) before committing that keeps staged files exactly, Commit or Commit & Push.
-- New activity bar icon and logo.
-- Everything in its own activity bar container (Git Forge icon): commit graph styled with colored lanes and branch labels (also in an editor tab), Conflicts, File History, Compare, Stashes and Worktrees; VS Code's Source Control panel is left untouched.
-- First stable release: inline blame, file and line history, conflicts view and local merge, compare / stashes / worktrees with deploy, commit graph, guided cherry-pick / revert / reset / interactive rebase.
+- First stable release, now named **Git Spark**, with a new icon and logo: inline blame, file and line history, conflicts view and local merge, compare / stashes / worktrees with deploy, commit graph, guided cherry-pick / revert / reset / interactive rebase.
+- Its own activity bar container: the Commit view (expanded) — stage and unstage files, conventional commit types with icons and descriptions, optional scope and breaking change, pull (`--rebase`) before committing that keeps staged files exactly, Commit or Commit & Push — then Conflicts, File History, Compare, Stashes and Worktrees (collapsed). VS Code's Source Control panel is left untouched.
+- Commit graph in its own tab of the bottom panel, next to the Terminal: colored lanes, branch labels, message / author / date / SHA columns, details on the right (also in an editor tab).
 - Performance measured on 10,000 commits (`npm run bench`).
 
 ## 0.6.0

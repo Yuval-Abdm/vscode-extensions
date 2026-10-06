@@ -295,7 +295,7 @@ describe('merge local', () => {
       assert.equal(await settlePendingDelete(git, pending), 'wait');
       local.write('base.txt', 'resolved\n');
       local.git('add', 'base.txt');
-      local.git('commit', '-q', '--no-edit'); // commité hors de Git Forge
+      local.git('commit', '-q', '--no-edit'); // commité hors de Git Spark
       assert.deepEqual(await settlePendingDelete(git, pending), { deleted: 'local' });
       assert.equal(local.git('branch', '--list', 'feature').trim(), '');
       assert.equal(await settlePendingDelete(git, { ...pending, sourceSha: 'deadbeef' }), 'drop');

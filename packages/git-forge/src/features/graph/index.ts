@@ -1,4 +1,4 @@
-// Fonction « graph » : vue Graph de la barre latérale (conteneur Git Forge), un onglet de graphe par dépôt, et les
+// Fonction « graph » : vue Graph de la barre latérale (conteneur Git Spark), un onglet de graphe par dépôt, et les
 // commandes de leurs menus contextuels (webview/context).
 import * as vscode from 'vscode';
 import type { GitCommands } from '../../git/commands.ts';

@@ -30,7 +30,7 @@ export class LineBlame implements vscode.Disposable {
 
   constructor(service: BlameService, repos: Repos) {
     this.#service = service;
-    this.#status.name = vscode.l10n.t('Git Forge blame');
+    this.#status.name = vscode.l10n.t('Git Spark blame');
     this.#status.command = 'gitForge.blame.statusClick';
     this.#disposables = [
       this.#decoration,

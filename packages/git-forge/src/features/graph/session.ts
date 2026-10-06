@@ -70,7 +70,7 @@ export class GraphSession implements vscode.Disposable {
       webview.onDidReceiveMessage((message: Incoming) => this.#receive(message)),
       repos.onDidChange(() => {
         clearTimeout(this.#timer);
-        this.#timer = setTimeout(() => void this.#reloadIfChanged(), REFRESH_DELAY);
+        this.#timer = setTimeout(() => void this.reloadIfChanged(), REFRESH_DELAY);
       }),
     ];
   }
@@ -215,7 +215,8 @@ export class GraphSession implements vscode.Disposable {
     return `${head}|${refs.map((ref) => `${ref.kind}:${ref.name}=${ref.sha}`).join(',')}`;
   }
 
-  async #reloadIfChanged(): Promise<void> {
+  /** Recharge si les références ou HEAD ont changé (vue de nouveau visible, dépôt modifié). */
+  async reloadIfChanged(): Promise<void> {
     if (this.#disposed) return;
     try {
       if ((await this.#currentSignature()) !== this.#signature) await this.#load(true);

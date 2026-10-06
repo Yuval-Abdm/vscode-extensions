@@ -1,4 +1,4 @@
-// Vue « Commit » de la barre latérale Git Forge (au-dessus du Graphe) : fichiers à indexer / désindexer, message
+// Vue « Commit » de la barre latérale Git Spark (au-dessus du Graphe) : fichiers à indexer / désindexer, message
 // conventionnel, pull (rebase) facultatif avant le commit, Commit ou Commit & Push. Suit le dépôt de l'éditeur actif.
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';

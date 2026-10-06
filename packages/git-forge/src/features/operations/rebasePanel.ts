@@ -1,5 +1,5 @@
 // Webview de l'éditeur de rebase : liste modifiable, rendue à l'appelant quand l'utilisateur valide (« start ») ou
-// abandonne (onglet fermé, « cancel »). Deux usages : rebase lancé par Git Forge (messages modifiables) et fichier
+// abandonne (onglet fermé, « cancel »). Deux usages : rebase lancé par Git Spark (messages modifiables) et fichier
 // git-rebase-todo d'un `git rebase -i` lancé ailleurs (éditeur personnalisé, actions seulement).
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';

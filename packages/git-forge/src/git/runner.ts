@@ -124,7 +124,7 @@ export class GitRunner {
     this.gitPath = gitPath;
   }
 
-  /** Appelé pour chaque commande en échec (canal de sortie « Git Forge »). */
+  /** Appelé pour chaque commande en échec (canal de sortie « Git Spark »). */
   onFailure: ((args: string[], stderr: string) => void) | undefined;
 
   #report<T>(args: string[], pending: Promise<T>): Promise<T> {

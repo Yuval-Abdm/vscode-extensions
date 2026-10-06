@@ -1,4 +1,4 @@
-// Types de l'API publique de l'extension Git intégrée (vscode.git, getAPI(1)), réduits à ce qu'utilise Git Forge.
+// Types de l'API publique de l'extension Git intégrée (vscode.git, getAPI(1)), réduits à ce qu'utilise Git Spark.
 import type { Event, Uri } from 'vscode';
 
 export interface Branch {

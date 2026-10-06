@@ -7,7 +7,7 @@ import { makeRemote, makeRepo } from './helpers/repo.ts';
 
 const git = new GitCommands(new GitRunner('git'));
 
-describe('commit depuis Git Forge', () => {
+describe('commit depuis Git Spark', () => {
   it('fichiers indexés et non indexés (modifié, ajouté, supprimé, renommé, non suivi)', async () => {
     const repo = makeRepo();
     try {

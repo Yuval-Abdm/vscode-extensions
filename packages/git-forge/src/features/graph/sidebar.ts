@@ -1,5 +1,6 @@
-// Vue « Graph » de la barre latérale (conteneur Git Forge) : une GraphSession sur le dépôt de l'éditeur actif,
-// remplacée quand l'éditeur actif passe dans un autre dépôt.
+// Vue « Graph » du panneau du bas (conteneur Git Spark, à côté du Terminal) : une GraphSession sur le dépôt de l'éditeur
+// actif, remplacée quand l'éditeur actif passe dans un autre dépôt. Compacte quand elle est étroite (déplacée dans la
+// barre latérale), colonnes complètes sinon.
 import * as vscode from 'vscode';
 import type { GitCommands } from '../../git/commands.ts';
 import type { Repos } from '../../git/repos.ts';
@@ -35,6 +36,10 @@ export class GraphSidebar implements vscode.WebviewViewProvider, vscode.Disposab
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.#view = view;
+    // Masquée, la vue peut manquer des changements : relue à chaque affichage.
+    view.onDidChangeVisibility(() => {
+      if (view.visible) void this.#session?.reloadIfChanged();
+    });
     view.onDidDispose(() => {
       this.#session?.dispose();
       this.#session = undefined;

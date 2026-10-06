@@ -21,7 +21,7 @@
       "preLaunchTask": "npm: build"
     },
     {
-      "name": "Run Git Forge",
+      "name": "Run Git Spark",
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/git-forge"],

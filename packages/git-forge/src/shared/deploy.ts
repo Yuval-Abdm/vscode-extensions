@@ -1,4 +1,4 @@
-// API publique (v1) de FTP SFTP Deploy, extension facultative : ce qu'utilise Git Forge.
+// API publique (v1) de FTP SFTP Deploy, extension facultative : ce qu'utilise Git Spark.
 import * as vscode from 'vscode';
 
 export const DEPLOY_EXTENSION_ID = 'yuval-abdm.ftp-sftp-deploy';

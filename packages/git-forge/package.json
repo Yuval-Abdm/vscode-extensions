@@ -62,7 +62,7 @@
   },
   "contributes": {
     "configuration": {
-      "title": "Git Forge",
+      "title": "Git Spark",
       "properties": {
         "gitForge.blame.enabled": {
           "type": "boolean",
@@ -136,303 +136,303 @@
       {
         "command": "gitForge.toggleFileBlame",
         "title": "%command.toggleFileBlame%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.showLineCommit",
         "title": "%command.showLineCommit%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.diffWithPrevious",
         "title": "%command.diffWithPrevious%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.openRevision",
         "title": "%command.openRevision%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.copySha",
         "title": "%command.copySha%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.showFileHistory",
         "title": "%command.showFileHistory%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(history)"
       },
       {
         "command": "gitForge.showLineHistory",
         "title": "%command.showLineHistory%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.history.pin",
         "title": "%command.history.pin%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(pin)"
       },
       {
         "command": "gitForge.history.unpin",
         "title": "%command.history.unpin%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(pinned)"
       },
       {
         "command": "gitForge.history.refresh",
         "title": "%command.history.refresh%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(refresh)"
       },
       {
         "command": "gitForge.history.openRevision",
         "title": "%command.openRevision%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.history.compareWithWorking",
         "title": "%command.history.compareWithWorking%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.history.copySha",
         "title": "%command.copySha%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.history.copyMessage",
         "title": "%command.history.copyMessage%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.mergeLocal",
         "title": "%command.mergeLocal%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(git-merge)"
       },
       {
         "command": "gitForge.conflicts.refresh",
         "title": "%command.history.refresh%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(refresh)"
       },
       {
         "command": "gitForge.conflicts.finish",
         "title": "%command.conflicts.finish%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(check-all)"
       },
       {
         "command": "gitForge.conflicts.abort",
         "title": "%command.conflicts.abort%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(discard)"
       },
       {
         "command": "gitForge.conflicts.keepOurs",
         "title": "%command.conflicts.keepOurs%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(arrow-left)"
       },
       {
         "command": "gitForge.conflicts.keepTheirs",
         "title": "%command.conflicts.keepTheirs%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(arrow-right)"
       },
       {
         "command": "gitForge.conflicts.keepBoth",
         "title": "%command.conflicts.keepBoth%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(arrow-both)"
       },
       {
         "command": "gitForge.conflicts.keepAllOurs",
         "title": "%command.conflicts.keepAllOurs%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.conflicts.keepAllTheirs",
         "title": "%command.conflicts.keepAllTheirs%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.conflicts.openMergeEditor",
         "title": "%command.conflicts.openMergeEditor%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(git-merge)"
       },
       {
         "command": "gitForge.conflicts.markResolved",
         "title": "%command.conflicts.markResolved%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(check)"
       },
       {
         "command": "gitForge.conflicts.keepFile",
         "title": "%command.conflicts.keepFile%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.conflicts.deleteFile",
         "title": "%command.conflicts.deleteFile%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.compareReferences",
         "title": "%command.compareReferences%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(git-compare)"
       },
       {
         "command": "gitForge.compare.swap",
         "title": "%command.compare.swap%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(arrow-swap)"
       },
       {
         "command": "gitForge.compare.toggleMode",
         "title": "%command.compare.toggleMode%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(git-pull-request-go-to-changes)"
       },
       {
         "command": "gitForge.compare.clear",
         "title": "%command.compare.clear%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(clear-all)"
       },
       {
         "command": "gitForge.compare.deploy",
         "title": "%command.compare.deploy%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "gitForge.compare.show",
         "title": "%command.compareReferences%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.stash.push",
         "title": "%command.stash.push%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(add)"
       },
       {
         "command": "gitForge.stash.apply",
         "title": "%command.stash.apply%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(check)"
       },
       {
         "command": "gitForge.stash.pop",
         "title": "%command.stash.pop%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(arrow-up)"
       },
       {
         "command": "gitForge.stash.drop",
         "title": "%command.stash.drop%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(trash)"
       },
       {
         "command": "gitForge.worktree.add",
         "title": "%command.worktree.add%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(add)"
       },
       {
         "command": "gitForge.worktree.open",
         "title": "%command.worktree.open%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(empty-window)"
       },
       {
         "command": "gitForge.worktree.remove",
         "title": "%command.worktree.remove%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(trash)"
       },
       {
         "command": "gitForge.showGraph",
         "title": "%command.showGraph%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(git-branch)"
       },
       {
         "command": "gitForge.graph.checkoutCommit",
         "title": "%command.graph.checkoutCommit%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graph.createBranch",
         "title": "%command.graph.createBranch%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graph.createTag",
         "title": "%command.graph.createTag%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graph.compareWithHead",
         "title": "%command.graph.compareWithHead%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graph.copySha",
         "title": "%command.copySha%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graph.checkoutBranch",
         "title": "%command.graph.checkoutBranch%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graph.mergeBranch",
         "title": "%command.graph.mergeBranch%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graph.deleteBranch",
         "title": "%command.graph.deleteBranch%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graph.compareWithSelected",
         "title": "%command.graph.compareWithSelected%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.cherryPick",
         "title": "%command.cherryPick%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.revert",
         "title": "%command.revert%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.reset",
         "title": "%command.reset%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.interactiveRebase",
         "title": "%command.interactiveRebase%",
-        "category": "Git Forge"
+        "category": "Git Spark"
       },
       {
         "command": "gitForge.graphView.refresh",
         "title": "%command.history.refresh%",
-        "category": "Git Forge",
+        "category": "Git Spark",
         "icon": "$(refresh)"
       }
     ],
@@ -460,7 +460,8 @@
         },
         {
           "command": "gitForge.showFileHistory",
-          "when": "gitForge.active && config.gitForge.history.enabled"
+          "when": "gitForge.active && config.gitForge.history.enabled",
+          "visibility": "collapsed"
         },
         {
           "command": "gitForge.showLineHistory",
@@ -1003,20 +1004,16 @@
           "when": "gitForge.active && config.gitForge.commit.enabled"
         },
         {
-          "type": "webview",
-          "id": "gitForge.graphView",
-          "name": "%view.graph%",
-          "when": "gitForge.active && config.gitForge.graph.enabled"
-        },
-        {
           "id": "gitForge.conflicts",
           "name": "%view.conflicts%",
-          "when": "gitForge.active && config.gitForge.conflicts.enabled && gitForge.conflicts.active"
+          "when": "gitForge.active && config.gitForge.conflicts.enabled && gitForge.conflicts.active",
+          "visibility": "collapsed"
         },
         {
           "id": "gitForge.history",
           "name": "%view.history%",
-          "when": "gitForge.active && config.gitForge.history.enabled"
+          "when": "gitForge.active && config.gitForge.history.enabled",
+          "visibility": "collapsed"
         },
         {
           "id": "gitForge.compare",
@@ -1036,6 +1033,14 @@
           "when": "gitForge.active && config.gitForge.compare.enabled",
           "visibility": "collapsed"
         }
+      ],
+      "gitForgePanel": [
+        {
+          "type": "webview",
+          "id": "gitForge.graphView",
+          "name": "%view.graph%",
+          "when": "gitForge.active && config.gitForge.graph.enabled"
+        }
       ]
     },
     "customEditors": [
@@ -1054,6 +1059,13 @@
       "activitybar": [
         {
           "id": "gitForge",
+          "title": "%viewsContainer.gitForge%",
+          "icon": "media/activity.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "gitForgePanel",
           "title": "%viewsContainer.gitForge%",
           "icon": "media/activity.svg"
         }

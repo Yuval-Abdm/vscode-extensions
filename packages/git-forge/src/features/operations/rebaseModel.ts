@@ -120,12 +120,12 @@ export function shellQuote(value: string): string {
 /** Contenu du script d'une réécriture ; les fichiers du message et du message attendu sont à côté. */
 export function amendScript(amend: Amend, messageFile: string, expectedFile: string): string {
   return [
-    `# Git Forge : message du commit ${amend.sha}, appliqué seulement si HEAD est bien ce commit.`,
+    `# Git Spark : message du commit ${amend.sha}, appliqué seulement si HEAD est bien ce commit.`,
     `if [ "$(git show -s --no-show-signature --format='%an <%ae> %at' HEAD)" = ${shellQuote(amend.ident)} ] &&`,
     `   [ "$(git show -s --no-show-signature --format=%B HEAD)" = "$(cat ${shellQuote(expectedFile)})" ]; then`,
     `  git commit --amend --allow-empty --quiet --cleanup=whitespace -F ${shellQuote(messageFile)}`,
     'else',
-    `  echo "Git Forge: ${amend.sha.slice(0, 8)} was skipped, its new message is not applied." >&2`,
+    `  echo "Git Spark: ${amend.sha.slice(0, 8)} was skipped, its new message is not applied." >&2`,
     'fi',
     '',
   ].join('\n');

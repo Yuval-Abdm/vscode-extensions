@@ -1,4 +1,4 @@
-// Lance un vrai VS Code avec Git Forge sur un dépôt Git créé pour l'occasion.
+// Lance un vrai VS Code avec Git Spark sur un dépôt Git créé pour l'occasion.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');

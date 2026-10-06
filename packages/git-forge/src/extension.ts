@@ -60,7 +60,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<GitFor
   const extension = vscode.extensions.getExtension<GitExtension>('vscode.git');
   const gitExtension = extension && (extension.isActive ? extension.exports : await extension.activate());
   if (!gitExtension) {
-    void vscode.window.showWarningMessage(vscode.l10n.t('Git Forge needs the built-in Git extension.'));
+    void vscode.window.showWarningMessage(vscode.l10n.t('Git Spark needs the built-in Git extension.'));
     return api;
   }
   const start = () => {
@@ -68,16 +68,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<GitFor
     try {
       gitApi = gitExtension.getAPI(1);
     } catch {
-      void vscode.window.showWarningMessage(vscode.l10n.t('Git Forge is inactive: Git was not found.'));
+      void vscode.window.showWarningMessage(vscode.l10n.t('Git Spark is inactive: Git was not found.'));
       return;
     }
     setup(context, gitApi, live).catch((err: unknown) => {
-      void vscode.window.showErrorMessage(vscode.l10n.t('Git Forge could not start: {0}', err instanceof Error ? err.message : String(err)));
+      void vscode.window.showErrorMessage(vscode.l10n.t('Git Spark could not start: {0}', err instanceof Error ? err.message : String(err)));
     });
   };
   if (gitExtension.enabled) start();
   else {
-    void vscode.window.showWarningMessage(vscode.l10n.t('Git Forge is inactive: the built-in Git extension is disabled (git.enabled).'));
+    void vscode.window.showWarningMessage(vscode.l10n.t('Git Spark is inactive: the built-in Git extension is disabled (git.enabled).'));
     const listener = gitExtension.onDidChangeEnablement((enabled) => {
       if (!enabled) return;
       listener.dispose();
@@ -99,8 +99,8 @@ async function setup(context: vscode.ExtensionContext, gitApi: API, live: Map<st
       context.subscriptions.push(listener);
     });
   }
-  // Commandes git en échec : commande et sortie d'erreur brute dans le canal « Git Forge ».
-  const log = vscode.window.createOutputChannel('Git Forge', { log: true });
+  // Commandes git en échec : commande et sortie d'erreur brute dans le canal « Git Spark ».
+  const log = vscode.window.createOutputChannel('Git Spark', { log: true });
   const runner = new GitRunner(gitApi.git.path);
   runner.onFailure = (args, stderr) => log.warn(`git ${args.join(' ')}\n${stderr.trim()}`);
   context.subscriptions.push(log);
