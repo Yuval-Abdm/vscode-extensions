@@ -58,6 +58,16 @@ button {
   color: var(--vscode-foreground);
   white-space: nowrap;
   overflow: hidden;
+  border: 1px solid transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.branch-chip:hover {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+.branch-chip:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
 }
 .branch-name {
   font-weight: 600;

@@ -8,6 +8,7 @@ import type { WorkingChange } from '../../git/parsers/status.ts';
 import type { Repos } from '../../git/repos.ts';
 import { errorText, showConflictsView, whereToFinish } from '../../shared/errors.ts';
 import { revisionUri } from '../../shared/revisions.ts';
+import { branchChoices, type BranchChoice } from './branches.ts';
 import { canCommit } from './message.ts';
 
 const REFRESH_DELAY = 300;
@@ -20,7 +21,13 @@ type Incoming = { root?: string } & (
   | { type: 'open'; change: WorkingChange; staged: boolean }
   | { type: 'setPull'; value: boolean }
   | { type: 'commit'; message: string; push: boolean }
+  | { type: 'switchBranch' }
+  | { type: 'discard'; changes: WorkingChange[] }
 );
+
+interface BranchItem extends vscode.QuickPickItem {
+  choice?: BranchChoice;
+}
 
 export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable {
   readonly #git: GitCommands;
@@ -221,7 +228,68 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
       case 'commit':
         await this.commit(message.message, message.push);
         break;
+      case 'discard':
+        if (root) await this.#discard(root, message.changes);
+        break;
+      case 'switchBranch':
+        if (root) await this.#switchBranch(root);
+        break;
     }
+  }
+
+  /** Annule les modifications non indexées, après confirmation (irréversible). Les conflits ne sont jamais annulés ici. */
+  async #discard(root: string, changes: WorkingChange[]): Promise<void> {
+    const targets = changes.filter((change) => change.status !== 'U');
+    if (!targets.length) return;
+    const untracked = targets.filter((change) => change.status === '?').map((change) => change.path);
+    const tracked = targets.filter((change) => change.status !== '?').map((change) => change.path);
+    const discard = vscode.l10n.t('Discard Changes');
+    const question =
+      targets.length === 1
+        ? untracked.length
+          ? vscode.l10n.t('Delete the new file {0}? It is not tracked by Git: this cannot be undone.', targets[0].path)
+          : vscode.l10n.t('Discard the changes to {0}? This cannot be undone.', targets[0].path)
+        : untracked.length
+          ? vscode.l10n.t('Discard the changes to {0} files? {1} new files will be deleted. This cannot be undone.', targets.length, untracked.length)
+          : vscode.l10n.t('Discard the changes to {0} files? This cannot be undone.', targets.length);
+    const choice = await vscode.window.showWarningMessage(question, { modal: true }, discard);
+    if (choice === discard) await this.#run(() => this.#git.discard(root, tracked, untracked));
+  }
+
+  /** Clic sur la branche : choix d'une branche locale ou distante à extraire, ou création d'une nouvelle branche. */
+  async #switchBranch(root: string): Promise<void> {
+    const [refs, status] = await Promise.all([this.#git.refs(root), this.#git.status(root)]);
+    const items: BranchItem[] = [{ label: `$(plus) ${vscode.l10n.t('Create new branch…')}`, alwaysShow: true }];
+    const choices = branchChoices(refs, status.branch.head);
+    const locals = choices.filter((choice) => choice.kind === 'local');
+    const remotes = choices.filter((choice) => choice.kind === 'remote');
+    if (locals.length) items.push({ label: vscode.l10n.t('Branches'), kind: vscode.QuickPickItemKind.Separator });
+    for (const choice of locals) {
+      items.push({ label: `${choice.current ? '$(check)' : '$(git-branch)'} ${choice.name}`, description: choice.current ? vscode.l10n.t('current') : undefined, choice });
+    }
+    if (remotes.length) items.push({ label: vscode.l10n.t('Remote branches'), kind: vscode.QuickPickItemKind.Separator });
+    for (const choice of remotes) items.push({ label: `$(cloud) ${choice.name}`, description: choice.remoteBranch, choice });
+    const picked = await vscode.window.showQuickPick(items, { title: vscode.l10n.t('Switch branch'), placeHolder: vscode.l10n.t('Branch to check out') });
+    if (!picked) return;
+    const choice = picked.choice;
+    if (!choice) {
+      const name = await vscode.window.showInputBox({
+        title: vscode.l10n.t('New branch'),
+        prompt: vscode.l10n.t('Created from the current commit; your changes in progress follow it.'),
+        validateInput: async (value) => (value && (await this.#git.validRefName(root, value, 'branch')) ? undefined : vscode.l10n.t('Invalid name.')),
+      });
+      if (name) await this.#runSwitch(() => this.#git.checkoutNew(root, name));
+      return;
+    }
+    if (choice.kind === 'local') {
+      if (!choice.current) await this.#runSwitch(() => this.#git.checkout(root, choice.name));
+      return;
+    }
+    await this.#runSwitch(() => this.#git.checkoutTracking(root, choice.name, choice.remoteBranch));
+  }
+
+  async #runSwitch(action: () => Promise<void>): Promise<void> {
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: vscode.l10n.t('Switching branch…') }, () => this.#run(action));
   }
 
   async #run(action: () => Promise<void>): Promise<void> {
@@ -295,6 +363,8 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
       noRepo: vscode.l10n.t('Open a file of a Git repository.'),
       noChanges: vscode.l10n.t('No changes.'),
       noUpstream: vscode.l10n.t('(no remote branch yet)'),
+      switchBranch: vscode.l10n.t('Switch branch'),
+      discard: vscode.l10n.t('Discard Changes'),
       status: {
         M: vscode.l10n.t('Modified'),
         A: vscode.l10n.t('Added'),

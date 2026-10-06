@@ -271,5 +271,18 @@
   "HEAD is detached: check out a branch to push.": "HEAD est détaché : faites un checkout d'une branche pour pousser.",
   "This repository has no remote to push to.": "Ce dépôt n'a pas de remote vers lequel pousser.",
   "Branch line: {0} (each color follows one branch)": "Ligne de la branche : {0} (chaque couleur suit une branche)",
-  "Branch line without a known name (each color follows one branch; this one was deleted or merged)": "Ligne de branche sans nom connu (chaque couleur suit une branche ; celle-ci a été supprimée ou mergée)"
+  "Branch line without a known name (each color follows one branch; this one was deleted or merged)": "Ligne de branche sans nom connu (chaque couleur suit une branche ; celle-ci a été supprimée ou mergée)",
+  "Create new branch…": "Créer une branche…",
+  "Branches": "Branches",
+  "current": "actuelle",
+  "Remote branches": "Branches distantes",
+  "Switch branch": "Changer de branche",
+  "Branch to check out": "Branche à extraire",
+  "New branch": "Nouvelle branche",
+  "Created from the current commit; your changes in progress follow it.": "Créée sur le commit actuel ; vos modifications en cours la suivent.",
+  "Discard Changes": "Annuler les modifications",
+  "Delete the new file {0}? It is not tracked by Git: this cannot be undone.": "Supprimer le nouveau fichier {0} ? Il n'est pas suivi par Git : impossible de revenir en arrière.",
+  "Discard the changes to {0}? This cannot be undone.": "Annuler les modifications de {0} ? Impossible de revenir en arrière.",
+  "Discard the changes to {0} files? {1} new files will be deleted. This cannot be undone.": "Annuler les modifications de {0} fichiers ? {1} nouveaux fichiers seront supprimés. Impossible de revenir en arrière.",
+  "Discard the changes to {0} files? This cannot be undone.": "Annuler les modifications de {0} fichiers ? Impossible de revenir en arrière."
 }

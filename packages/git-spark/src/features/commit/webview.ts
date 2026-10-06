@@ -33,6 +33,8 @@ interface Strings {
   noRepo: string;
   noChanges: string;
   noUpstream: string;
+  switchBranch: string;
+  discard: string;
   status: Record<string, string>;
 }
 
@@ -84,6 +86,7 @@ const ICONS = {
   chevron: 'M6 4l4 4-4 4',
   plus: 'M8 3v10M3 8h10',
   minus: 'M3 8h10',
+  discard: 'M5.5 3.5L2.5 6.5l3 3M2.5 6.5H10a3.5 3.5 0 0 1 0 7H7',
   branch: 'M5 2.5v8M11 5.5c0 3-6 2-6 5M5 14a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM11 5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
   caret: 'M4 6l4 4 4-4',
 } as const;
@@ -261,7 +264,7 @@ function pathsOf(change: Change): string[] {
 }
 
 /** Petit bouton rond d'action (indexer / désindexer), visible au survol. */
-function action(name: 'plus' | 'minus', title: string, run: () => void): HTMLButtonElement {
+function action(name: 'plus' | 'minus' | 'discard', title: string, run: () => void): HTMLButtonElement {
   const button = el('button', 'action');
   button.type = 'button';
   button.title = title;
@@ -286,6 +289,8 @@ function group(key: 'staged' | 'unstaged', changes: Change[]): HTMLElement {
   header.appendChild(el('span', 'group-title', staged ? strings.staged : strings.unstaged));
   // Les fichiers en conflit ne sont jamais indexés en masse : ce serait les marquer résolus.
   const selectable = changes.filter((change) => change.status !== 'U');
+  // Annuler tout (non indexé uniquement), comme dans la vue Contrôle de code source.
+  if (!staged && selectable.length) header.appendChild(action('discard', strings.discard, () => post({ type: 'discard', changes: selectable })));
   if (selectable.length) header.appendChild(action(staged ? 'minus' : 'plus', verb, () => post({ type: staged ? 'unstage' : 'stage', paths: selectable.flatMap(pathsOf) })));
   header.appendChild(el('span', 'badge', String(changes.length)));
   const toggle = () => {
@@ -312,6 +317,7 @@ function group(key: 'staged' | 'unstaged', changes: Change[]): HTMLElement {
     if (slash > 0) row.appendChild(el('span', 'dir', change.path.slice(0, slash)));
     row.appendChild(el('span', 'spacer'));
     // Conflit : à résoudre (vue Conflits), pas à indexer.
+    if (change.status !== 'U' && !staged) row.appendChild(action('discard', strings.discard, () => post({ type: 'discard', changes: [change] })));
     if (change.status !== 'U') row.appendChild(action(staged ? 'minus' : 'plus', verb, () => post({ type: staged ? 'unstage' : 'stage', paths: pathsOf(change) })));
     // Comme VS Code : U = non suivi ; un conflit s'affiche « ! ».
     const letter = change.status === '?' ? 'U' : change.status === 'U' ? '!' : change.status;
@@ -335,13 +341,14 @@ function render(): void {
     update();
     return;
   }
-  branch.replaceChildren(
-    el('span', 'branch-chip'),
-    el('span', 'repo', state.repo),
-  );
-  const chip = branch.firstElementChild as HTMLElement;
+  // Pastille cliquable : choix de la branche à extraire.
+  const chip = el('button', 'branch-chip');
+  chip.type = 'button';
+  chip.title = strings.switchBranch;
   chip.append(icon('branch'), el('span', 'branch-name', state.branch));
   if (state.upstream) chip.append(el('span', 'upstream', `→ ${state.upstream}`));
+  chip.addEventListener('click', () => post({ type: 'switchBranch' }));
+  branch.replaceChildren(chip, el('span', 'repo', state.repo));
   pull.checked = state.pull;
   pullHint.textContent = state.upstream ? '' : strings.noUpstream;
   const groups = [group('staged', state.staged), group('unstaged', state.unstaged)];

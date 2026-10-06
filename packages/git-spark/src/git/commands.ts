@@ -236,6 +236,16 @@ export class GitCommands {
     await this.runner.write(root, ['checkout', '--quiet', branch, '--']);
   }
 
+  /** Crée la branche locale `name` qui suit la branche distante `remoteBranch` (« origin/x ») et l'extrait. */
+  async checkoutTracking(root: string, name: string, remoteBranch: string): Promise<void> {
+    await this.runner.write(root, ['checkout', '--quiet', '-b', name, '--track', remoteBranch, '--']);
+  }
+
+  /** Crée la branche `name` sur HEAD et l'extrait (les modifications en cours la suivent). */
+  async checkoutNew(root: string, name: string): Promise<void> {
+    await this.runner.write(root, ['checkout', '--quiet', '-b', name, '--']);
+  }
+
   /** Branches extraites dans un autre worktree que `root`. */
   async branchesCheckedOutElsewhere(root: string): Promise<Map<string, string>> {
     const { stdout } = await this.runner.read(root, ['worktree', 'list', '--porcelain']);
@@ -590,6 +600,15 @@ export class GitCommands {
 
   async stage(root: string, paths: readonly string[]): Promise<void> {
     if (paths.length) await this.runner.write(root, ['add', '--', ...paths]);
+  }
+
+  /**
+   * Annule les modifications non indexées : les fichiers suivis reprennent leur version de l'index, les fichiers non
+   * suivis sont supprimés. L'index (ce qui est prêt à être commité) n'est pas touché.
+   */
+  async discard(root: string, tracked: readonly string[], untracked: readonly string[]): Promise<void> {
+    if (tracked.length) await this.runner.write(root, ['checkout', '--quiet', '--', ...tracked]);
+    if (untracked.length) await this.runner.write(root, ['clean', '-f', '-d', '-q', '--', ...untracked]);
   }
 
   /** Retire de l'index ; avant le premier commit (pas de HEAD), `rm --cached`. */
