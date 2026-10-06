@@ -1,0 +1,14 @@
+{
+  "{0} ({1}^ ↔ {1})": "{0} ({1}^ ↔ {1})",
+  "SHA copied: {0}": "SHA copié : {0}",
+  "Git Forge blame": "Blame Git Forge",
+  "You • Uncommitted changes": "Vous • Modification non commitée",
+  "Compare with previous revision": "Comparer avec la révision précédente",
+  "Copy SHA": "Copier le SHA",
+  "Open file at this commit": "Ouvrir le fichier à ce commit",
+  "No blame for this file: it is not tracked by Git, or it is too long (gitForge.blame.maxLines).": "Pas de blame pour ce fichier : il n'est pas suivi par Git, ou il est trop long (gitForge.blame.maxLines).",
+  "Uncommitted": "Non commité",
+  "Git Forge needs the built-in Git extension.": "Git Forge a besoin de l'extension Git intégrée.",
+  "Git Forge is inactive: Git was not found.": "Git Forge est inactif : Git est introuvable.",
+  "Git Forge is inactive: the built-in Git extension is disabled (git.enabled).": "Git Forge est inactif : l'extension Git intégrée est désactivée (git.enabled)."
+}

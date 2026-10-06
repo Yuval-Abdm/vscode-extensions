@@ -60,5 +60,95 @@
     "@types/vscode": "~1.91.0",
     "typescript": "^5.9.3"
   },
-  "contributes": {}
+  "contributes": {
+    "configuration": {
+      "title": "Git Forge",
+      "properties": {
+        "gitForge.blame.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.blame.enabled%"
+        },
+        "gitForge.blame.format": {
+          "type": "string",
+          "default": "${author}, ${date} • ${message}",
+          "markdownDescription": "%config.blame.format%"
+        },
+        "gitForge.blame.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.blame.statusBar%"
+        },
+        "gitForge.blame.maxLines": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 1,
+          "description": "%config.blame.maxLines%"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "gitForge.toggleFileBlame",
+        "title": "%command.toggleFileBlame%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.showLineCommit",
+        "title": "%command.showLineCommit%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.diffWithPrevious",
+        "title": "%command.diffWithPrevious%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.openRevision",
+        "title": "%command.openRevision%",
+        "category": "Git Forge"
+      },
+      {
+        "command": "gitForge.copySha",
+        "title": "%command.copySha%",
+        "category": "Git Forge"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "gitForge.toggleFileBlame",
+          "when": "gitForge.active && config.gitForge.blame.enabled"
+        },
+        {
+          "command": "gitForge.showLineCommit",
+          "when": "gitForge.active && config.gitForge.blame.enabled"
+        },
+        {
+          "command": "gitForge.diffWithPrevious",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.openRevision",
+          "when": "false"
+        },
+        {
+          "command": "gitForge.copySha",
+          "when": "false"
+        }
+      ]
+    },
+    "colors": [
+      {
+        "id": "gitForge.blameForeground",
+        "description": "%color.blameForeground%",
+        "defaults": {
+          "dark": "#ffffff59",
+          "light": "#00000059",
+          "highContrast": "#ffffff99",
+          "highContrastLight": "#00000099"
+        }
+      }
+    ]
+  }
 }

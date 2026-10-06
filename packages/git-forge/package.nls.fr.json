@@ -1,0 +1,14 @@
+{
+  "displayName": "Git Forge",
+  "description": "Outils Git gratuits et légers : blame en ligne, historique des fichiers, résolution des conflits, merge local et graphe des commits.",
+  "config.blame.enabled": "Affiche le blame de la ligne courante et active le blame du fichier.",
+  "config.blame.format": "Texte affiché en fin de ligne courante. Variables : `${author}`, `${date}` (relative), `${message}` (première ligne), `${sha}` (7 caractères).",
+  "config.blame.statusBar": "Affiche l'auteur et la date de la ligne courante dans la barre d'état.",
+  "config.blame.maxLines": "Les fichiers qui dépassent ce nombre de lignes n'ont pas de blame.",
+  "command.toggleFileBlame": "Afficher/masquer le blame du fichier",
+  "command.showLineCommit": "Afficher le commit de la ligne courante",
+  "command.diffWithPrevious": "Comparer avec la révision précédente",
+  "command.openRevision": "Ouvrir le fichier à cette révision",
+  "command.copySha": "Copier le SHA du commit",
+  "color.blameForeground": "Couleur du texte du blame en fin de ligne courante et dans le blame du fichier."
+}

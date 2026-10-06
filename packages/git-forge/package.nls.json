@@ -1,0 +1,14 @@
+{
+  "displayName": "Git Forge",
+  "description": "Free and lightweight Git tools: inline blame, file history, conflict resolution, local merge and commit graph.",
+  "config.blame.enabled": "Show the blame of the current line and enable the file blame.",
+  "config.blame.format": "Text shown at the end of the current line. Variables: `${author}`, `${date}` (relative), `${message}` (first line), `${sha}` (7 characters).",
+  "config.blame.statusBar": "Show the author and date of the current line in the status bar.",
+  "config.blame.maxLines": "Files with more lines than this have no blame.",
+  "command.toggleFileBlame": "Toggle File Blame",
+  "command.showLineCommit": "Show Commit of Current Line",
+  "command.diffWithPrevious": "Compare with Previous Revision",
+  "command.openRevision": "Open File at Revision",
+  "command.copySha": "Copy Commit SHA",
+  "color.blameForeground": "Color of the blame text at the end of the current line and in the file blame."
+}
