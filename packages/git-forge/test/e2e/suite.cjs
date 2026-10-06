@@ -2,10 +2,12 @@
 const vscode = require('vscode');
 const assert = require('assert');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const WS = process.env.GIT_FORGE_WORKSPACE;
 const SHAS = JSON.parse(process.env.GIT_FORGE_SHAS);
 const file = vscode.Uri.file(path.join(WS, 'a.txt'));
+const gitIn = (...args) => execFileSync('git', args, { cwd: WS, encoding: 'utf8' });
 
 async function waitFor(check, label, timeout = 30000) {
   const start = Date.now();
@@ -114,6 +116,42 @@ test("ouvrir un diff depuis l'historique ne change pas le fichier suivi", async 
   await new Promise((r) => setTimeout(r, 600));
   assert.strictEqual(view.target, target);
   await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+});
+
+test('merge local en conflit, résolu dans la vue Conflicts, branche supprimée à la fin', async () => {
+  gitIn('switch', '-q', '-c', 'feature');
+  require('fs').writeFileSync(path.join(WS, 'a.txt'), 'one\nTWO\nfeature\n');
+  gitIn('commit', '-q', '-am', 'feature change');
+  gitIn('switch', '-q', 'main');
+  require('fs').writeFileSync(path.join(WS, 'a.txt'), 'one\nTWO\nmain\n');
+  gitIn('commit', '-q', '-am', 'main change');
+
+  const merge = await waitFor(() => api.feature('merge'), 'commande merge');
+  const outcome = await merge.execute(WS, { source: 'feature', noFf: false, deleteSource: 'local' });
+  assert.deepEqual(outcome, { kind: 'conflicts' });
+
+  const view = api.feature('conflicts');
+  await view.refresh();
+  await waitFor(() => view.files.length === 1 || undefined, 'un fichier en conflit');
+  const fileNode = view.files[0];
+  assert.equal(fileNode.conflict.path, 'a.txt');
+  assert.equal(fileNode.blocks.length, 1);
+
+  // Marquer résolu avec les marqueurs encore présents : refusé.
+  await vscode.commands.executeCommand('gitForge.conflicts.markResolved', fileNode);
+  assert.equal(view.files.length, 1);
+
+  const [block] = view.getChildren(fileNode);
+  await vscode.commands.executeCommand('gitForge.conflicts.keepTheirs', block);
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(WS, 'a.txt')));
+  assert.equal(doc.getText(), 'one\nTWO\nfeature\n');
+
+  await vscode.commands.executeCommand('gitForge.conflicts.markResolved', view.files[0]);
+  await waitFor(() => view.files.length === 0 || undefined, 'plus de conflit');
+  await vscode.commands.executeCommand('gitForge.conflicts.finish');
+  assert.equal(gitIn('rev-list', '--parents', '-n', '1', 'HEAD').trim().split(' ').length, 3);
+  assert.equal(gitIn('branch', '--list', 'feature').trim(), '');
+  assert.equal(gitIn('status', '--porcelain').trim(), '');
 });
 
 test('désactivée par réglage, puis réactivée', async () => {
