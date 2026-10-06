@@ -1060,14 +1060,14 @@
         {
           "id": "gitForge",
           "title": "%viewsContainer.gitForge%",
-          "icon": "media/activity.svg"
+          "icon": "media/spark.svg"
         }
       ],
       "panel": [
         {
           "id": "gitForgePanel",
           "title": "%viewsContainer.gitForge%",
-          "icon": "media/activity.svg"
+          "icon": "media/spark.svg"
         }
       ]
     }
