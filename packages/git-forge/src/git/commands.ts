@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseBlameIncremental, type BlameResult } from './parsers/blame.ts';
 import { LOG_FORMAT, parseHunks, parseLog, parseNameStatus, type FileChange, type Hunk, type LogEntry } from './parsers/log.ts';
-import { parseStatusV2, type Status } from './parsers/status.ts';
+import { parseStatusV2, parseWorkingChanges, type Status, type WorkingChanges } from './parsers/status.ts';
 import { parseWorktrees, type Worktree } from './parsers/worktree.ts';
 import { GRAPH_FORMAT, parseGraphLog, type GraphCommit } from './parsers/graph.ts';
 import { GitError, type GitRunner } from './runner.ts';
@@ -569,5 +569,61 @@ export class GitCommands {
       if (err instanceof GitError && (await this.operation(root))?.kind === 'rebase') return 'stopped';
       throw err;
     }
+  }
+
+  /** Fichiers indexés et non indexés (vue Commit). */
+  async workingChanges(root: string): Promise<WorkingChanges> {
+    const args = [...RAW_PATHS, 'status', '--porcelain=v2', '-z', '--untracked-files=all'];
+    return parseWorkingChanges((await this.runner.read(root, args)).stdout);
+  }
+
+  async stage(root: string, paths: readonly string[]): Promise<void> {
+    if (paths.length) await this.runner.write(root, ['add', '--', ...paths]);
+  }
+
+  /** Retire de l'index ; avant le premier commit (pas de HEAD), `rm --cached`. */
+  async unstage(root: string, paths: readonly string[]): Promise<void> {
+    if (!paths.length) return;
+    const args = (await this.revParse(root, 'HEAD')) ? ['restore', '--staged', '--', ...paths] : ['rm', '--cached', '-r', '--quiet', '--', ...paths];
+    await this.runner.write(root, args);
+  }
+
+  /** Commit des fichiers indexés avec `message` (lignes « # » gardées). */
+  async commitWithMessage(root: string, message: string): Promise<void> {
+    await this.runner.write(root, ['commit', '--quiet', '--cleanup=whitespace', '-F', '-'], { input: message, env: NO_EDITOR });
+  }
+
+  /**
+   * `git pull --rebase --autostash` de la branche courante : 'no-upstream' si elle n'a pas de branche distante (rien
+   * n'est fait), 'conflicts' si le rebase s'arrête.
+   */
+  async pullRebase(root: string): Promise<'done' | 'conflicts' | 'no-upstream'> {
+    if (!(await this.status(root)).branch.upstream) return 'no-upstream';
+    try {
+      await this.runner.write(root, ['pull', '--rebase', '--autostash', '--quiet'], { env: NO_EDITOR, timeoutMs: NETWORK_TIMEOUT });
+      return 'done';
+    } catch (err) {
+      if (err instanceof GitError && ((await this.operation(root))?.kind === 'rebase' || (await this.status(root)).conflicts.length)) return 'conflicts';
+      throw err;
+    }
+  }
+
+  /**
+   * Pousse la branche courante vers sa branche distante, ou la crée sur « origin » (sinon le premier remote) avec
+   * suivi (-u). Renvoie le nom de la branche distante.
+   */
+  async pushCurrent(root: string): Promise<string> {
+    const head = (await this.status(root)).branch.head;
+    if (!head) throw new Error('HEAD is detached: check out a branch to push.');
+    const upstream = (await this.branches(root)).find((b) => b.name === head)?.upstream;
+    if (upstream) {
+      await this.pushBranch(root, upstream.remote, head, upstream.ref);
+      return upstream.name;
+    }
+    const remotes = await this.remotes(root);
+    const remote = remotes.includes('origin') ? 'origin' : remotes[0];
+    if (!remote) throw new Error('This repository has no remote to push to.');
+    await this.runner.write(root, ['push', '--quiet', '-u', remote, `refs/heads/${head}:refs/heads/${head}`], { timeoutMs: NETWORK_TIMEOUT });
+    return `${remote}/${head}`;
   }
 }

@@ -69,5 +69,8 @@
   "command.reset": "Reset the Current Branch to This Commit…",
   "command.interactiveRebase": "Interactive Rebase from Here…",
   "viewsContainer.gitForge": "Git Forge",
-  "view.graph": "Graph"
+  "view.graph": "Graph",
+  "config.commit.enabled": "Show the Commit view (stage files, conventional message, pull, commit and push) at the top of the Git Forge sidebar.",
+  "config.commit.pullBeforeCommit": "In the Commit view, run `git pull --rebase --autostash` before committing.",
+  "view.commit": "Commit"
 }

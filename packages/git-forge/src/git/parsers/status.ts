@@ -67,3 +67,40 @@ export function parseStatusV2(text: string): Status {
   }
   return status;
 }
+
+/** Fichier modifié pour la vue Commit : statut M, A, D, R, C, T, U (conflit) ou ? (non suivi). */
+export interface WorkingChange {
+  path: string;
+  oldPath?: string;
+  status: string;
+}
+
+export interface WorkingChanges {
+  /** Dans l'index (prêts à commiter). */
+  staged: WorkingChange[];
+  /** Dans l'arbre de travail seulement, fichiers non suivis et conflits compris. */
+  unstaged: WorkingChange[];
+}
+
+/** `git status --porcelain=v2 -z --untracked-files=all` : un fichier peut être dans les deux listes. */
+export function parseWorkingChanges(text: string): WorkingChanges {
+  const changes: WorkingChanges = { staged: [], unstaged: [] };
+  const records = text.split('\0');
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+    if (record.startsWith('1 ') || record.startsWith('2 ')) {
+      const fields = record.split(' ');
+      const [x, y] = fields[1];
+      const renamed = record.startsWith('2 ');
+      const path = fields.slice(renamed ? 9 : 8).join(' ');
+      const oldPath = renamed ? records[++i] : undefined;
+      if (x !== '.') changes.staged.push(oldPath ? { path, oldPath, status: x } : { path, status: x });
+      if (y !== '.') changes.unstaged.push({ path, status: y });
+    } else if (record.startsWith('u ')) {
+      changes.unstaged.push({ path: record.split(' ').slice(10).join(' '), status: 'U' });
+    } else if (record.startsWith('? ')) {
+      changes.unstaged.push({ path: record.slice(2), status: '?' });
+    }
+  }
+  return changes;
+}

@@ -119,6 +119,16 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "%config.rebaseEditor%"
+        },
+        "gitForge.commit.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.commit.enabled%"
+        },
+        "gitForge.commit.pullBeforeCommit": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.commit.pullBeforeCommit%"
         }
       }
     },
@@ -986,6 +996,12 @@
     ],
     "views": {
       "gitForge": [
+        {
+          "type": "webview",
+          "id": "gitForge.commitView",
+          "name": "%view.commit%",
+          "when": "gitForge.active && config.gitForge.commit.enabled"
+        },
         {
           "type": "webview",
           "id": "gitForge.graphView",

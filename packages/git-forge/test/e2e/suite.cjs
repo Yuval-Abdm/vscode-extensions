@@ -254,6 +254,20 @@ test('chaque fonction : désactivée puis réactivée, ses commandes fonctionnen
   api.feature('graph').panel.dispose();
 });
 
+test('vue Commit : indexer un fichier, commiter avec un message conventionnel', async () => {
+  const view = await waitFor(() => api.feature('commit'), 'fonction commit');
+  await vscode.commands.executeCommand('gitForge.commitView.focus');
+  await vscode.window.showTextDocument(file);
+  await view.refresh();
+  assert.equal(view.root, WS);
+  require('fs').writeFileSync(path.join(WS, 'from-commit-view.txt'), 'x\n');
+  await view.stage(['from-commit-view.txt']);
+  assert.ok(gitIn('diff', '--cached', '--name-only').includes('from-commit-view.txt'));
+  assert.equal(await view.commit('fix(e2e): commit depuis la vue', false), true);
+  assert.equal(gitIn('log', '-1', '--format=%s').trim(), 'fix(e2e): commit depuis la vue');
+  assert.equal(gitIn('status', '--porcelain').trim(), '');
+});
+
 test('désactivée par réglage, puis réactivée', async () => {
   const config = vscode.workspace.getConfiguration('gitForge');
   await config.update('blame.enabled', false, vscode.ConfigurationTarget.Global);
