@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- Commit graph: all branches or the current one, badges for branches, remote branches, tags and HEAD, search, commit details and files with diff, context menus (checkout, create branch or tag, compare with HEAD, copy SHA, checkout / merge / delete a branch).
+
 ## 0.4.0
 
 - Compare view: two references or a reference and the working tree, from the common ancestor or direct; commits and file tree; diff on click; deploy the changed files with FTP SFTP Deploy.

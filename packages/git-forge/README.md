@@ -2,7 +2,7 @@
 
 **Free and lightweight Git tools for VS Code: inline blame, file history, conflict resolution, local merge and commit graph — no account, no paid tier, nothing you did not ask for.**
 
-> Preview (0.4). Interface in English and French (follows the VS Code display language).
+> Preview (0.5). Interface in English and French (follows the VS Code display language).
 
 ## Features
 
@@ -17,6 +17,7 @@
 - **Compare** view: pick two references — branch, remote branch, tag, commit SHA or the working tree — and see the commits and a tree of the changed files; click a file for its diff. From the common ancestor (`A...B`, what the right side changed) or direct (`A..B`), swap sides in one click. With [FTP SFTP Deploy](https://marketplace.visualstudio.com/items?itemName=yuval-abdm.ftp-sftp-deploy) installed, **Deploy These Files** uploads the current version of every changed file (deleted files are never sent), after a confirmation that names the server.
 - **Stashes** view: every stash and its files (untracked ones included), diff on click, apply, pop, delete; **Stash All Changes** includes untracked files.
 - **Worktrees** view: every worktree of the repository; create one from an existing or a new branch, open it in a new window, remove it (with an explicit confirmation if it has changes).
+- **Commit graph** (*Show Graph*, or the branch button in the Source Control title bar): every branch, remote branch and tag, or the current branch only; search by message, author, SHA or branch (Enter jumps to the next match); select a commit to see its full message and files, double-click a file for its diff. Right-click a commit: checkout (detached), create a branch or a tag here, compare with HEAD, copy the SHA. Right-click a branch: checkout, Merge Locally into the current branch, delete (with a clear warning when it is not merged). Loads 500 commits at a time and only draws what is visible, so large repositories stay smooth.
 
 ## Settings
 
@@ -30,6 +31,7 @@
 | `gitForge.conflicts.enabled` | `true` | Conflicts view |
 | `gitForge.merge.enabled` | `true` | Merge Locally command |
 | `gitForge.compare.enabled` | `true` | Compare, Stashes and Worktrees views |
+| `gitForge.graph.enabled` | `true` | Commit graph |
 
 Every feature can be turned off: nothing is registered for a disabled feature.
 
@@ -39,4 +41,4 @@ Git, and VS Code's built-in Git extension (enabled by default). Git Forge uses t
 
 ## Roadmap
 
-Commit graph, guided cherry-pick / revert / reset / interactive rebase.
+Guided cherry-pick / revert / reset / interactive rebase.

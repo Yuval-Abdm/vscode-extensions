@@ -186,6 +186,19 @@ test('worktrees : le dépôt principal est listé', async () => {
   assert.equal(worktrees.worktrees[0].branch, 'main');
 });
 
+test('graphe : tous les commits chargés, copier un SHA depuis le menu', async () => {
+  await vscode.commands.executeCommand('gitForge.showGraph');
+  const graph = await waitFor(() => api.feature('graph'), 'fonction graph');
+  const total = Number(gitIn('rev-list', '--all', '--exclude=refs/stash', '--count').trim());
+  await waitFor(() => (graph.panel && graph.panel.rows.length === total) || undefined, 'lignes du graphe');
+  const head = gitIn('rev-parse', 'HEAD').trim();
+  assert.equal(graph.panel.rows[0].sha, head);
+  assert.ok(graph.panel.rows[0].refs.some((ref) => ref.kind === 'branch' && ref.current));
+  await vscode.commands.executeCommand('gitForge.graph.copySha', { sha: head });
+  assert.equal(await vscode.env.clipboard.readText(), head);
+  graph.panel.dispose();
+});
+
 test('désactivée par réglage, puis réactivée', async () => {
   const config = vscode.workspace.getConfiguration('gitForge');
   await config.update('blame.enabled', false, vscode.ConfigurationTarget.Global);
