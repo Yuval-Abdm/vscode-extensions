@@ -286,6 +286,8 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
         revert: vscode.l10n.t('Reverts a previous commit'),
       },
       noType: vscode.l10n.t('type…'),
+      commit: vscode.l10n.t('Commit'),
+      commitPush: vscode.l10n.t('Commit & Push'),
       staged: vscode.l10n.t('Staged Changes'),
       unstaged: vscode.l10n.t('Changes'),
       stageAll: vscode.l10n.t('Stage (add to the commit)'),
@@ -314,21 +316,25 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
 <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(media, 'commit.css'))}">
 </head>
 <body>
-<div id="branch"></div>
-<div class="options">
-  <select id="type" title="${text(vscode.l10n.t('Conventional commit type'))}"></select>
-  <input id="scope" type="text" placeholder="${text(vscode.l10n.t('scope (optional)'))}">
-  <label title="${text(vscode.l10n.t('Breaking change: adds ! after the type'))}"><input id="breaking" type="checkbox"> ${text(vscode.l10n.t('breaking'))}</label>
-</div>
-<textarea id="message" placeholder="${text(vscode.l10n.t('Message (Ctrl+Enter to commit)'))}"></textarea>
-<div class="under">
-  <label><input id="pull" type="checkbox"> ${text(vscode.l10n.t('Pull before commit (rebase)'))}</label>
-  <span id="counter"></span>
-</div>
-<span id="pull-hint"></span>
-<div class="actions">
-  <button id="commit">${text(vscode.l10n.t('Commit'))}</button>
-  <button id="commit-push" class="secondary">${text(vscode.l10n.t('Commit & Push'))}</button>
+<div class="composer">
+  <div id="branch"></div>
+  <div class="options">
+    <div class="type-picker">
+      <button id="type" type="button" class="chip" aria-haspopup="listbox" aria-expanded="false" title="${text(vscode.l10n.t('Conventional commit type'))}"></button>
+      <ul id="type-list" role="listbox" hidden></ul>
+    </div>
+    <input id="scope" type="text" placeholder="${text(vscode.l10n.t('scope (optional)'))}">
+    <button id="breaking" type="button" class="toggle" aria-pressed="false" aria-label="${text(vscode.l10n.t('breaking'))}" title="${text(vscode.l10n.t('Breaking change: adds ! after the type'))}">!</button>
+  </div>
+  <div class="message-box">
+    <textarea id="message" placeholder="${text(vscode.l10n.t('Message (Ctrl+Enter to commit)'))}"></textarea>
+    <span id="counter"></span>
+  </div>
+  <div class="actions">
+    <button id="commit" type="button" class="primary"></button>
+    <button id="commit-push" type="button" class="secondary"></button>
+  </div>
+  <label class="switch"><input id="pull" type="checkbox"><span class="track"></span><span>${text(vscode.l10n.t('Pull before commit (rebase)'))}</span><span id="pull-hint"></span></label>
 </div>
 <div id="files"></div>
 <script id="strings" type="application/json">${json}</script>
