@@ -18,5 +18,9 @@
   "Open a file tracked by Git to see its history.": "Ouvrez un fichier suivi par Git pour voir son historique.",
   "No commits for this file.": "Aucun commit pour ce fichier.",
   "{0} ({1} ↔ working tree)": "{0} ({1} ↔ fichier actuel)",
-  "Commit message copied.": "Message du commit copié."
+  "Commit message copied.": "Message du commit copié.",
+  "This file has no commit yet.": "Ce fichier n'a encore aucun commit.",
+  "The selected lines are not committed yet: they have no history.": "Les lignes sélectionnées ne sont pas encore commitées : elles n'ont pas d'historique.",
+  "The selected lines are beyond the last committed version of the file.": "Les lignes sélectionnées dépassent la dernière version commitée du fichier.",
+  "Git error: {0}": "Erreur git : {0}"
 }

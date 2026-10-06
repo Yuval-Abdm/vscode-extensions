@@ -1,13 +1,13 @@
 // Commandes Git typées : seul passage des fonctions (features/*) vers git.
 import { parseBlameIncremental, type BlameResult } from './parsers/blame.ts';
-import { LOG_FORMAT, parseLog, parseNameStatus, type FileChange, type LogEntry } from './parsers/log.ts';
+import { LOG_FORMAT, parseHunks, parseLog, parseNameStatus, type FileChange, type Hunk, type LogEntry } from './parsers/log.ts';
 import { GitError, type GitRunner } from './runner.ts';
 
 /** Chemins affichés tels quels (accents, espaces), sans échappement. */
 const RAW_PATHS = ['-c', 'core.quotePath=false'];
 
-/** Format de log stable quelle que soit la configuration de l'utilisateur (couleurs, signatures). */
-const LOG = [...RAW_PATHS, 'log', '--no-color', '--no-show-signature', `--format=${LOG_FORMAT}`];
+/** Format de log stable quelle que soit la configuration de l'utilisateur (couleurs, signatures, log.showRoot). */
+const LOG = [...RAW_PATHS, 'log', '--no-color', '--no-show-signature', '--root', `--format=${LOG_FORMAT}`];
 
 /** Page d'un historique. */
 export interface Page {
@@ -58,14 +58,24 @@ export class GitCommands {
 
   /** Commits qui ont modifié `relPath`, du plus récent au plus ancien, en suivant les renommages. */
   async fileHistory(root: string, relPath: string, page: Page = {}): Promise<LogEntry[]> {
-    const args = [...LOG, '--follow', '-M', '--name-status', ...pageArgs(page), '--', relPath];
-    return parseLog((await this.runner.read(root, args, { signal: page.signal })).stdout);
+    // --follow filtre après le parcours : --skip compterait aussi les commits qui ne touchent pas le fichier.
+    // On demande donc skip + limit commits et on retire les premiers. --cc : merges qui modifient le fichier.
+    const skip = page.skip ?? 0;
+    const args = [...LOG, '--follow', '-M', '--cc', '--name-status', `--max-count=${skip + (page.limit ?? 50)}`, '--', relPath];
+    return parseLog((await this.runner.read(root, args, { signal: page.signal })).stdout).slice(skip);
   }
 
   /** Commits qui ont modifié les lignes `start` à `end` (1-based, incluses) de `relPath`. */
   async lineHistory(root: string, relPath: string, start: number, end: number, page: Page = {}): Promise<LogEntry[]> {
-    const args = [...LOG, '--src-prefix=a/', '--dst-prefix=b/', `-L${start},${end}:${relPath}`, ...pageArgs(page)];
+    const args = [...LOG, '-M', '--src-prefix=a/', '--dst-prefix=b/', `-L${start},${end}:${relPath}`, ...pageArgs(page)];
     return parseLog((await this.runner.read(root, args, { signal: page.signal })).stdout);
+  }
+
+  /** Blocs modifiés entre `relPath` à HEAD et `contents` (contenu de l'éditeur). */
+  async diffHead(root: string, relPath: string, contents: string): Promise<Hunk[]> {
+    const blob = (await this.runner.write(root, ['hash-object', '-w', '--stdin', `--path=${relPath}`], { input: contents })).stdout.trim();
+    const { stdout } = await this.runner.read(root, ['diff', '--no-color', '--no-ext-diff', '-U0', `HEAD:${relPath}`, blob]);
+    return parseHunks(stdout);
   }
 
   /** Fichiers modifiés par `sha` par rapport à `parent` (tous les fichiers ajoutés pour un commit racine). */

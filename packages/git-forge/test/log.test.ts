@@ -88,7 +88,7 @@ describe('parseLog', () => {
   });
 
   it('patch de -L : suppression (+++ /dev/null)', () => {
-    const text = '\x1eabc\x1fdef\x1fA\x1fa@x\x1f1\x1fdelete\x1f\n\ndiff --git a/x.txt b/x.txt\n--- a/x.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n';
+    const text = '\x00abc\x00def\x00A\x00a@x\x001\x00delete\x00\n\ndiff --git a/x.txt b/x.txt\n--- a/x.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n';
     assert.deepEqual(parseLog(text)[0].files, [{ status: 'D', path: 'x.txt' }]);
   });
 
@@ -97,5 +97,101 @@ describe('parseLog', () => {
       { status: 'M', path: 'a\tb.txt' },
       { status: 'R', path: 'n"ew.txt', oldPath: 'old.txt' },
     ]);
+  });
+});
+
+describe('historique : cas limites (revue 0.2)', () => {
+  const git = new GitCommands(new GitRunner('git'));
+  it('pagination avec --follow : pas de doublon quand d’autres commits sont intercalés', async () => {
+    const repo = makeRepo();
+    try {
+      for (let i = 0; i < 5; i++) {
+        repo.write('f.txt', `v${i}\n`);
+        repo.commit(`f${i}`);
+        repo.write('other.txt', `o${i}\n`);
+        repo.commit(`o${i}`);
+      }
+      const pages = [
+        await git.fileHistory(repo.root, 'f.txt', { skip: 0, limit: 2 }),
+        await git.fileHistory(repo.root, 'f.txt', { skip: 2, limit: 2 }),
+        await git.fileHistory(repo.root, 'f.txt', { skip: 4, limit: 2 }),
+      ];
+      assert.deepEqual(pages.map((p) => p.map((e) => e.summary)), [['f4', 'f3'], ['f2', 'f1'], ['f0']]);
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('chemins pris littéralement (crochets, deux-points en tête)', async () => {
+    const repo = makeRepo();
+    try {
+      repo.write('x1.txt', 'a\n');
+      repo.commit('x1');
+      repo.write('x[1].txt', 'b\n');
+      repo.commit('bracket');
+      repo.write(':memo.txt', 'c\n');
+      repo.commit('memo');
+      assert.deepEqual((await git.fileHistory(repo.root, 'x[1].txt')).map((e) => e.summary), ['bracket']);
+      assert.deepEqual((await git.fileHistory(repo.root, ':memo.txt')).map((e) => e.summary), ['memo']);
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('merge qui modifie le fichier listé ; log.showRoot=false et diff.renames=false sans effet', async () => {
+    const repo = makeRepo();
+    try {
+      repo.write('f.txt', 'a\nb\n');
+      repo.commit('root');
+      repo.git('config', 'log.showRoot', 'false');
+      repo.git('config', 'diff.renames', 'false');
+      repo.git('switch', '-q', '-c', 'side');
+      repo.write('f.txt', 'a\nside\n');
+      repo.commit('side');
+      repo.git('switch', '-q', 'main');
+      repo.write('f.txt', 'a\nmain\n');
+      repo.commit('main');
+      assert.throws(() => repo.git('merge', '-q', 'side'));
+      repo.write('f.txt', 'a\nresolved\n');
+      repo.git('add', 'f.txt');
+      repo.git('commit', '-q', '--no-edit');
+      const summaries = (await git.fileHistory(repo.root, 'f.txt')).map((e) => e.summary);
+      assert.equal(summaries.length, 4);
+      assert.ok(summaries.includes('root'));
+      assert.match(summaries[0], /^Merge/);
+      repo.git('mv', 'f.txt', 'g.txt');
+      repo.commit('rename');
+      const lines = await git.lineHistory(repo.root, 'g.txt', 1, 1);
+      assert.equal(lines.at(-1)?.summary, 'root');
+      assert.ok(lines.every((e) => e.files[0]?.status !== 'A' || e.summary === 'root'));
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it('caractères de contrôle dans le message', async () => {
+    const repo = makeRepo();
+    try {
+      repo.write('f.txt', 'a\n');
+      repo.commit('ctrl\x1fin\x1esummary');
+      assert.equal((await git.fileHistory(repo.root, 'f.txt'))[0].summary, 'ctrl\x1fin\x1esummary');
+    } finally {
+      repo.dispose();
+    }
+  });
+
+  it("lignes de l'éditeur ramenées aux lignes de HEAD (modifications non commitées)", async () => {
+    const repo = makeRepo();
+    try {
+      repo.write('f.txt', '1\n2\n3\n4\n5\n');
+      repo.commit('root');
+      const hunks = await git.diffHead(repo.root, 'f.txt', 'new a\nnew b\n1\n2\n3x\n4\n5\n');
+      assert.deepEqual(hunks, [
+        { oldStart: 0, oldCount: 0, newStart: 1, newCount: 2 },
+        { oldStart: 3, oldCount: 1, newStart: 5, newCount: 1 },
+      ]);
+    } finally {
+      repo.dispose();
+    }
   });
 });

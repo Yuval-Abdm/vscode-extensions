@@ -42,7 +42,8 @@ export function runGit(gitPath: string, cwd: string, args: string[], options: Ru
     if (signal?.aborted) return reject(new CancelledError());
     const child = spawn(gitPath, args, {
       cwd,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', ...options.env },
+      // Chemins toujours pris littéralement (pas de glob ni de « :magie » dans un nom de fichier).
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_LITERAL_PATHSPECS: '1', LC_ALL: 'C', ...options.env },
       signal,
       windowsHide: true,
     });

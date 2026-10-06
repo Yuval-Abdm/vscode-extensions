@@ -21,10 +21,14 @@ export interface LogEntry {
   files: FileChange[];
 }
 
-/** Un enregistrement par commit : commence par 0x1E, champs séparés par 0x1F. */
-export const LOG_FORMAT = '%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%s%x1f';
+/**
+ * Un enregistrement par commit : sept champs séparés par NUL (un message ne peut pas en contenir), le dernier étant
+ * la sortie --name-status ou le patch qui suit l'en-tête.
+ */
+export const LOG_FORMAT = '%x00%H%x00%P%x00%an%x00%ae%x00%at%x00%s%x00';
 
-const NAME_STATUS = /^([ACDMRTUX])\d*\t([^\t]+)(?:\t(.+))?$/;
+/** Statut simple (« M ») ou combiné d'un merge (« MM », --cc) : on garde le premier. */
+const NAME_STATUS = /^([ACDMRTUX])[ACDMRTUX]*\d*\t([^\t]+)(?:\t(.+))?$/;
 
 export function parseNameStatusLine(line: string): FileChange | undefined {
   const match = NAME_STATUS.exec(line);
@@ -39,10 +43,9 @@ export function parseNameStatus(text: string): FileChange[] {
 
 export function parseLog(text: string): LogEntry[] {
   const entries: LogEntry[] = [];
-  for (const record of text.split('\x1e').slice(1)) {
-    const fields = record.split('\x1f');
-    if (fields.length < 7) continue;
-    const [sha, parents, author, authorMail, authorTime, summary] = fields;
+  const fields = text.split('\0');
+  for (let i = 1; i + 5 < fields.length; i += 7) {
+    const [sha, parents, author, authorMail, authorTime, summary] = fields.slice(i, i + 6);
     entries.push({
       sha,
       parents: parents ? parents.split(' ') : [],
@@ -50,7 +53,7 @@ export function parseLog(text: string): LogEntry[] {
       authorMail,
       authorTime: Number(authorTime),
       summary,
-      files: parseChanges(fields.slice(6).join('\x1f')),
+      files: parseChanges(fields[i + 6] ?? ''),
     });
   }
   return entries;
@@ -93,4 +96,20 @@ function headerPath(raw: string, prefix: string): string | null {
   if (text === '/dev/null') return null;
   const path = unquotePath(text);
   return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
+
+/** Bloc modifié d'un diff -U0 : lignes `oldStart`… (oldCount) remplacées par `newStart`… (newCount). */
+export interface Hunk {
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+}
+
+export function parseHunks(text: string): Hunk[] {
+  const hunks: Hunk[] = [];
+  for (const match of text.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)) {
+    hunks.push({ oldStart: Number(match[1]), oldCount: Number(match[2] ?? 1), newStart: Number(match[3]), newCount: Number(match[4] ?? 1) });
+  }
+  return hunks;
 }

@@ -6,10 +6,10 @@ import type { GitCommands } from '../../git/commands.ts';
 import { relativePath } from '../../git/locator.ts';
 import type { FileChange, LogEntry } from '../../git/parsers/log.ts';
 import type { Repos } from '../../git/repos.ts';
-import { CancelledError } from '../../git/runner.ts';
+import { CancelledError, GitError } from '../../git/runner.ts';
 import { absoluteDate, relativeTime } from '../../shared/dates.ts';
 import { revisionUri } from '../../shared/revisions.ts';
-import { changeDiffArgs, entryDiffArgs } from './model.ts';
+import { changeDiffArgs, entryDiffArgs, mapToHead } from './model.ts';
 
 const PAGE = 50;
 const FOLLOW_DELAY = 250;
@@ -52,9 +52,14 @@ export class HistoryView implements vscode.TreeDataProvider<Node>, vscode.Dispos
         this.#followTimer = setTimeout(() => this.#follow(editor), FOLLOW_DELAY);
       }),
       repos.onDidChange(() => {
-        // Nouveau commit, checkout… : l'historique affiché est périmé.
+        // Dépôt ouvert après la vue : le fichier actif peut maintenant être suivi.
         const target = this.#target;
-        if (target && this.#repos.locate(target.fileName)?.head !== this.#head) void this.#load(true);
+        if (!target) return this.#follow(vscode.window.activeTextEditor);
+        // Nouveau commit, checkout… : l'historique affiché est périmé.
+        if (this.#repos.locate(target.fileName)?.head !== this.#head) {
+          this.#files.clear();
+          void this.#load(true);
+        }
       }),
       command('gitForge.showFileHistory', (uri?: vscode.Uri) => this.showFile(uri)),
       command('gitForge.showLineHistory', () => this.showLines()),
@@ -63,7 +68,10 @@ export class HistoryView implements vscode.TreeDataProvider<Node>, vscode.Dispos
         this.#setPinned(false);
         this.#follow(vscode.window.activeTextEditor);
       }),
-      command('gitForge.history.refresh', () => this.#load(true)),
+      command('gitForge.history.refresh', () => {
+        this.#files.clear();
+        return this.#load(true);
+      }),
       command('gitForge.history.loadMore', () => this.#load(false)),
       command('gitForge.history.openRevision', (node: Node) => this.#openRevision(node)),
       command('gitForge.history.compareWithWorking', (node: Node) => this.#compareWithWorking(node)),
@@ -94,20 +102,41 @@ export class HistoryView implements vscode.TreeDataProvider<Node>, vscode.Dispos
   }
 
   async showFile(uri?: vscode.Uri): Promise<void> {
+    clearTimeout(this.#followTimer);
     const editor = vscode.window.activeTextEditor;
-    const fileName = uri?.scheme === 'file' ? uri.fsPath : editor?.document.uri.scheme === 'file' ? editor.document.fileName : undefined;
-    if (fileName) this.#setTarget(this.#targetFor(fileName));
+    const active = editor?.document.uri.scheme === 'file' ? editor.document.fileName : undefined;
+    const fileName = uri?.scheme === 'file' ? uri.fsPath : active;
+    if (fileName) {
+      // Fichier choisi dans l'Explorateur, autre que l'éditeur actif : la vue est épinglée pour le garder.
+      if (fileName !== active) this.#setPinned(true);
+      this.#setTarget(this.#targetFor(fileName));
+    }
     await vscode.commands.executeCommand('gitForge.history.focus');
   }
 
   async showLines(): Promise<void> {
+    clearTimeout(this.#followTimer);
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.uri.scheme !== 'file') return;
     const { start, end } = editor.selection;
     // Sélection terminée en début de ligne : cette dernière ligne n'en fait pas partie.
     const last = end.line > start.line && end.character === 0 ? end.line - 1 : end.line;
     const base = this.#targetFor(editor.document.fileName);
-    if (base) this.#setTarget({ ...base, kind: 'lines', start: start.line + 1, end: last + 1 });
+    if (!base) return;
+    // git log -L compte les lignes de HEAD : la sélection de l'éditeur y est ramenée (lignes non commitées retirées).
+    let hunks;
+    try {
+      hunks = await this.#git.diffHead(base.root, base.relPath, editor.document.getText());
+    } catch {
+      void vscode.window.showInformationMessage(vscode.l10n.t('This file has no commit yet.'));
+      return;
+    }
+    const lines = mapToHead(hunks, start.line + 1, last + 1);
+    if (!lines) {
+      void vscode.window.showInformationMessage(vscode.l10n.t('The selected lines are not committed yet: they have no history.'));
+      return;
+    }
+    this.#setTarget({ ...base, kind: 'lines', start: lines.start, end: lines.end });
     await vscode.commands.executeCommand('gitForge.history.focus');
   }
 
@@ -115,7 +144,10 @@ export class HistoryView implements vscode.TreeDataProvider<Node>, vscode.Dispos
     if (!node) {
       const target = this.#target;
       if (!target) return [];
-      const nodes: Node[] = this.#entries.map((entry) => ({ type: 'commit', root: target.root, trackedPath: target.relPath, entry }));
+      // Chemin du fichier à chaque commit : un merge n'en liste pas, il garde celui du commit plus ancien suivant.
+      let trackedPath = target.relPath;
+      const paths = [...this.#entries].reverse().map((entry) => (trackedPath = entry.files[0]?.path ?? trackedPath)).reverse();
+      const nodes: Node[] = this.#entries.map((entry, i) => ({ type: 'commit', root: target.root, trackedPath: paths[i], entry }));
       if (this.#hasMore) nodes.push({ type: 'more' });
       return nodes;
     }
@@ -217,7 +249,13 @@ export class HistoryView implements vscode.TreeDataProvider<Node>, vscode.Dispos
           : await this.#git.lineHistory(target.root, target.relPath, target.start, target.end, page);
     } catch (err) {
       if (err instanceof CancelledError) return;
-      entries = []; // fichier non suivi, lignes hors du fichier commité…
+      if (this.#loading !== loading) return;
+      this.#view.message =
+        err instanceof GitError && /has only \d+ lines?/.test(err.stderr)
+          ? vscode.l10n.t('The selected lines are beyond the last committed version of the file.')
+          : vscode.l10n.t('Git error: {0}', err instanceof GitError ? err.stderr.trim().split('\n')[0] : String(err));
+      this.#changed.fire(undefined);
+      return;
     }
     if (this.#loading !== loading) return;
     this.#entries = [...this.#entries, ...entries];
@@ -230,7 +268,10 @@ export class HistoryView implements vscode.TreeDataProvider<Node>, vscode.Dispos
     const key = `${root}\0${entry.sha}`;
     let files = this.#files.get(key);
     if (!files) {
-      files = this.#git.commitFiles(root, entry.sha, entry.parents[0]).catch(() => []);
+      files = this.#git.commitFiles(root, entry.sha, entry.parents[0]).catch(() => {
+        this.#files.delete(key);
+        return [];
+      });
       this.#files.set(key, files);
     }
     return files;
@@ -247,7 +288,11 @@ export class HistoryView implements vscode.TreeDataProvider<Node>, vscode.Dispos
   #compareWithWorking(node: Node): unknown {
     if (node.type !== 'commit') return;
     const args = entryDiffArgs(node.root, node.entry, node.trackedPath);
-    const left = revisionUri({ root: node.root, path: args.path, sha: args.deleted ? '' : args.sha });
+    // Commit qui supprime le fichier : on compare sa dernière version, dans le parent.
+    const left =
+      args.deleted && args.previousSha
+        ? revisionUri({ root: node.root, path: args.previousPath ?? args.path, sha: args.previousSha })
+        : revisionUri({ root: node.root, path: args.path, sha: args.sha });
     const right = vscode.Uri.file(path.join(node.root, node.trackedPath));
     const title = vscode.l10n.t('{0} ({1} ↔ working tree)', path.posix.basename(node.trackedPath), node.entry.sha.slice(0, 7));
     return vscode.commands.executeCommand('vscode.diff', left, right, title);
