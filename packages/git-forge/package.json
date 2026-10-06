@@ -1,0 +1,64 @@
+{
+  "name": "git-forge",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.1.0",
+  "preview": true,
+  "publisher": "yuval-abdm",
+  "license": "MIT",
+  "type": "module",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1f2b24",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions.git",
+    "directory": "packages/git-forge"
+  },
+  "bugs": {
+    "url": "https://github.com/Yuval-Abdm/vscode-extensions/issues"
+  },
+  "homepage": "https://github.com/Yuval-Abdm/vscode-extensions/tree/main/packages/git-forge#readme",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "l10n": "./l10n",
+  "categories": [
+    "SCM Providers",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "blame",
+    "history",
+    "annotations",
+    "graph",
+    "merge",
+    "conflicts",
+    "rebase",
+    "gitlens alternative"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "typecheck": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/vscode": "~1.91.0",
+    "typescript": "^5.9.3"
+  },
+  "contributes": {}
+}

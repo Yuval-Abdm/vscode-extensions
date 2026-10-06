@@ -1,0 +1,112 @@
+// Exécution du binaire git : sortie complète, erreurs typées, annulation, et nombre de commandes simultanées limité par dépôt.
+import { spawn } from 'node:child_process';
+
+export interface RunOptions {
+  /** Texte envoyé sur l'entrée standard. */
+  input?: string;
+  signal?: AbortSignal;
+  env?: Record<string, string>;
+}
+
+export interface RunResult {
+  stdout: string;
+  stderr: string;
+}
+
+/** git s'est terminé avec un code de sortie non nul. */
+export class GitError extends Error {
+  readonly args: string[];
+  readonly exitCode: number | null;
+  readonly stderr: string;
+
+  constructor(args: string[], exitCode: number | null, stderr: string) {
+    super(`git ${args.join(' ')} (${exitCode}): ${stderr.trim()}`);
+    this.name = 'GitError';
+    this.args = args;
+    this.exitCode = exitCode;
+    this.stderr = stderr;
+  }
+}
+
+/** La commande a été annulée par son AbortSignal. */
+export class CancelledError extends Error {
+  constructor() {
+    super('cancelled');
+    this.name = 'CancelledError';
+  }
+}
+
+export function runGit(gitPath: string, cwd: string, args: string[], options: RunOptions = {}): Promise<RunResult> {
+  return new Promise((resolve, reject) => {
+    const { signal } = options;
+    if (signal?.aborted) return reject(new CancelledError());
+    const child = spawn(gitPath, args, {
+      cwd,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', ...options.env },
+      signal,
+      windowsHide: true,
+    });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
+    child.stdin.on('error', () => {}); // git peut fermer son entrée avant de tout lire (EPIPE)
+    child.on('error', (error) => reject(signal?.aborted ? new CancelledError() : error));
+    child.on('close', (code) => {
+      if (signal?.aborted) return reject(new CancelledError());
+      const stdout = Buffer.concat(out).toString('utf8');
+      const stderr = Buffer.concat(err).toString('utf8');
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new GitError(args, code, stderr));
+    });
+    child.stdin.end(options.input ?? '');
+  });
+}
+
+/** Limite le nombre de tâches simultanées ; les suivantes attendent leur tour (ordre d'arrivée). */
+export class Limiter {
+  readonly #max: number;
+  #running = 0;
+  readonly #waiting: (() => void)[] = [];
+
+  constructor(max: number) {
+    this.#max = max;
+  }
+
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.#running < this.#max) this.#running++;
+    else await new Promise<void>((resolve) => this.#waiting.push(resolve)); // place transmise par la tâche qui se termine
+    try {
+      return await task();
+    } finally {
+      const next = this.#waiting.shift();
+      if (next) next();
+      else this.#running--;
+    }
+  }
+}
+
+/** Exécute git dans un dépôt : 4 lectures simultanées au plus, une seule écriture à la fois. */
+export class GitRunner {
+  readonly gitPath: string;
+  readonly #reads = new Map<string, Limiter>();
+  readonly #writes = new Map<string, Limiter>();
+
+  constructor(gitPath: string) {
+    this.gitPath = gitPath;
+  }
+
+  read(cwd: string, args: string[], options?: RunOptions): Promise<RunResult> {
+    return limiter(this.#reads, cwd, 4).run(() => runGit(this.gitPath, cwd, args, options));
+  }
+
+  write(cwd: string, args: string[], options?: RunOptions): Promise<RunResult> {
+    return limiter(this.#writes, cwd, 1).run(() => runGit(this.gitPath, cwd, args, options));
+  }
+}
+
+function limiter(map: Map<string, Limiter>, key: string, max: number): Limiter {
+  let found = map.get(key);
+  if (!found) map.set(key, (found = new Limiter(max)));
+  return found;
+}
