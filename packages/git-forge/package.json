@@ -724,6 +724,11 @@
           "command": "gitForge.showGraph",
           "when": "view == gitForge.graphView",
           "group": "navigation@2"
+        },
+        {
+          "command": "gitForge.mergeLocal",
+          "when": "view == gitForge.graphView && config.gitForge.merge.enabled",
+          "group": "navigation@0"
         }
       ],
       "view/item/context": [
@@ -899,18 +904,6 @@
           "group": "gitForge@1"
         }
       ],
-      "scm/title": [
-        {
-          "command": "gitForge.mergeLocal",
-          "when": "gitForge.active && config.gitForge.merge.enabled && scmProvider == git",
-          "group": "navigation@10"
-        },
-        {
-          "command": "gitForge.showGraph",
-          "when": "gitForge.active && config.gitForge.graph.enabled && scmProvider == git",
-          "group": "navigation@11"
-        }
-      ],
       "webview/context": [
         {
           "command": "gitForge.graph.checkoutCommit",
@@ -992,7 +985,13 @@
       }
     ],
     "views": {
-      "scm": [
+      "gitForge": [
+        {
+          "type": "webview",
+          "id": "gitForge.graphView",
+          "name": "%view.graph%",
+          "when": "gitForge.active && config.gitForge.graph.enabled"
+        },
         {
           "id": "gitForge.conflicts",
           "name": "%view.conflicts%",
@@ -1020,14 +1019,6 @@
           "name": "%view.worktrees%",
           "when": "gitForge.active && config.gitForge.compare.enabled",
           "visibility": "collapsed"
-        }
-      ],
-      "gitForge": [
-        {
-          "type": "webview",
-          "id": "gitForge.graphView",
-          "name": "%view.graph%",
-          "when": "gitForge.active && config.gitForge.graph.enabled"
         }
       ]
     },
