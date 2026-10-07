@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
 - Git asks for your SSH key passphrase (or HTTPS credentials) in a VS Code input box instead of failing.
 - Commit & Push: the push is cancelled with an error notification if it has not finished after 30 seconds (time spent typing the passphrase is not counted).
