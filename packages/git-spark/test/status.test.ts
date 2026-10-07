@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { parseStatusV2 } from '../src/git/parsers/status.ts';
+import { changedFileCount, parseStatusV2 } from '../src/git/parsers/status.ts';
 
 describe('parseStatusV2', () => {
   it('branche, avance/retard, conflits, modifications, renommage', () => {
@@ -28,5 +28,18 @@ describe('parseStatusV2', () => {
 
   it('HEAD détaché', () => {
     assert.equal(parseStatusV2('# branch.oid 0123\0# branch.head (detached)\0').branch.head, undefined);
+  });
+});
+
+describe('changedFileCount', () => {
+  it('compte une fois un fichier présent dans les deux listes', () => {
+    assert.equal(changedFileCount({ staged: [], unstaged: [] }), 0);
+    assert.equal(
+      changedFileCount({
+        staged: [{ path: 'a', status: 'M' }, { path: 'new', oldPath: 'old', status: 'R' }],
+        unstaged: [{ path: 'a', status: 'M' }, { path: 'b', status: '?' }],
+      }),
+      3,
+    );
   });
 });

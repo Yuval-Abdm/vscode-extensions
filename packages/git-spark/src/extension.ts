@@ -9,6 +9,7 @@ import { CompareFeature } from './features/compare/index.ts';
 import { GraphFeature } from './features/graph/index.ts';
 import { OperationsFeature, RebaseTodoEditor, TODO_EDITOR } from './features/operations/index.ts';
 import { CommitView } from './features/commit/view.ts';
+import { Askpass } from './git/askpass.ts';
 import { GitCommands } from './git/commands.ts';
 import type { API, GitExtension } from './git/gitApi.ts';
 import { Repos } from './git/repos.ts';
@@ -104,6 +105,21 @@ async function setup(context: vscode.ExtensionContext, gitApi: API, live: Map<st
   const runner = new GitRunner(gitApi.git.path);
   runner.onFailure = (args, stderr) => log.warn(`git ${args.join(' ')}\n${stderr.trim()}`);
   context.subscriptions.push(log);
+  // Passphrase de clé SSH (ou identifiants HTTPS) demandée par git : boîte de saisie, masquée pour un secret.
+  try {
+    const askpass = await Askpass.start((prompt) =>
+      vscode.window.showInputBox({
+        title: vscode.l10n.t('Git Spark: Git authentication'),
+        prompt: prompt.trim(),
+        password: /pass(word|phrase)|PIN|token/i.test(prompt),
+        ignoreFocusOut: true,
+      }),
+    );
+    runner.askpass = askpass;
+    context.subscriptions.push({ dispose: () => void askpass.dispose() });
+  } catch (err) {
+    log.warn(`askpass: ${err instanceof Error ? err.message : String(err)}`);
+  }
   const git = new GitCommands(runner);
   const repos = new Repos(gitApi);
   context.subscriptions.push(

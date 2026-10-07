@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Git asks for your SSH key passphrase (or HTTPS credentials) in a VS Code input box instead of failing.
+- Commit & Push: the push is cancelled with an error notification if it has not finished after 30 seconds (time spent typing the passphrase is not counted).
+- The Git Spark icon in the activity bar shows the number of changed files (modified, added, deleted or untracked).
+
 ## 1.1.0
 
 - Commit view: click the branch to switch to another local branch, check out a remote branch (a local branch tracking it is created) or create a new branch.

@@ -299,8 +299,8 @@ export class GitCommands {
   }
 
   /** Pousse `branch` vers sa branche distante (nom distant éventuellement différent). */
-  async pushBranch(root: string, remote: string, branch: string, ref: string): Promise<void> {
-    await this.runner.write(root, ['push', '--quiet', remote, `refs/heads/${branch}:${ref}`], { timeoutMs: NETWORK_TIMEOUT });
+  async pushBranch(root: string, remote: string, branch: string, ref: string, timeoutMs = NETWORK_TIMEOUT): Promise<void> {
+    await this.runner.write(root, ['push', '--quiet', remote, `refs/heads/${branch}:${ref}`], { timeoutMs });
   }
 
   async stashPush(root: string, message: string, includeUntracked = false): Promise<void> {
@@ -672,20 +672,20 @@ export class GitCommands {
 
   /**
    * Pousse la branche courante vers sa branche distante, ou la crée sur « origin » (sinon le premier remote) avec
-   * suivi (-u). Renvoie le nom de la branche distante.
+   * suivi (-u). Renvoie le nom de la branche distante. Au-delà de `timeoutMs`, le push est arrêté (TimeoutError).
    */
-  async pushCurrent(root: string): Promise<string> {
+  async pushCurrent(root: string, timeoutMs = NETWORK_TIMEOUT): Promise<string> {
     const head = (await this.status(root)).branch.head;
     if (!head) throw new PushError('detached');
     const upstream = (await this.branches(root)).find((b) => b.name === head)?.upstream;
     if (upstream) {
-      await this.pushBranch(root, upstream.remote, head, upstream.ref);
+      await this.pushBranch(root, upstream.remote, head, upstream.ref, timeoutMs);
       return upstream.name;
     }
     const remotes = await this.remotes(root);
     const remote = remotes.includes('origin') ? 'origin' : remotes[0];
     if (!remote) throw new PushError('no-remote');
-    await this.runner.write(root, ['push', '--quiet', '-u', remote, `refs/heads/${head}:refs/heads/${head}`], { timeoutMs: NETWORK_TIMEOUT });
+    await this.runner.write(root, ['push', '--quiet', '-u', remote, `refs/heads/${head}:refs/heads/${head}`], { timeoutMs });
     return `${remote}/${head}`;
   }
 }

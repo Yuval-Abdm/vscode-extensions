@@ -4,14 +4,17 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import * as vscode from 'vscode';
 import { PushError, type GitCommands } from '../../git/commands.ts';
-import type { WorkingChange } from '../../git/parsers/status.ts';
+import { changedFileCount, type WorkingChange } from '../../git/parsers/status.ts';
 import type { Repos } from '../../git/repos.ts';
+import { TimeoutError } from '../../git/runner.ts';
 import { errorText, showConflictsView, whereToFinish } from '../../shared/errors.ts';
 import { revisionUri } from '../../shared/revisions.ts';
 import { branchChoices, type BranchChoice } from './branches.ts';
 import { canCommit } from './message.ts';
 
 const REFRESH_DELAY = 300;
+/** Push de « Commit & Push » arrêté s'il n'a pas abouti dans ce délai (hors temps de saisie de la passphrase). */
+const PUSH_TIMEOUT = 30_000;
 
 /** Messages de la webview ; `root` : dépôt affiché quand l'utilisateur a agi. */
 type Incoming = { root?: string } & (
@@ -37,6 +40,8 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
   #view: vscode.WebviewView | undefined;
   #root: string | undefined;
   #timer: ReturnType<typeof setTimeout> | undefined;
+  /** Fichiers modifiés du dépôt affiché : pastille sur la vue, reprise par l'icône Git Spark de la barre d'activité. */
+  #count = 0;
 
   constructor(git: GitCommands, repos: Repos, extensionUri: vscode.Uri) {
     this.#git = git;
@@ -72,6 +77,7 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
     view.webview.options = { enableScripts: true, localResourceRoots: [media, dist] };
     view.webview.html = this.#html(view.webview, media, dist);
     view.webview.onDidReceiveMessage((message: Incoming) => this.#receive(message));
+    this.#showCount(this.#count);
     view.onDidChangeVisibility(() => {
       if (view.visible) this.#schedule();
     });
@@ -96,6 +102,7 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
     const root = this.#resolveRoot();
     if (!root) {
       this.#root = undefined;
+      this.#showCount(0);
       this.#post({ type: 'state', root: '', repo: '', branch: '', staged: [], unstaged: [], pull: this.#pull() });
       return;
     }
@@ -104,6 +111,7 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
       if (this.#resolveRoot() !== root) return;
       // Le dépôt n'est retenu qu'une fois lu : l'écran et les actions visent toujours le même.
       this.#root = root;
+      this.#showCount(changedFileCount(changes));
       this.#post({
         type: 'state',
         root,
@@ -168,7 +176,7 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
         }
         progress.report({ message: vscode.l10n.t('Pushing…') });
         try {
-          const target = await this.#git.pushCurrent(root);
+          const target = await this.#git.pushCurrent(root, PUSH_TIMEOUT);
           void vscode.window.showInformationMessage(vscode.l10n.t('Committed and pushed to {0}.', target));
         } catch (err) {
           const reason =
@@ -176,7 +184,9 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
               ? err.reason === 'detached'
                 ? vscode.l10n.t('HEAD is detached: check out a branch to push.')
                 : vscode.l10n.t('This repository has no remote to push to.')
-              : errorText(err);
+              : err instanceof TimeoutError
+                ? vscode.l10n.t('no answer after {0} seconds, the push was cancelled.', PUSH_TIMEOUT / 1000)
+                : errorText(err);
           void vscode.window.showErrorMessage(vscode.l10n.t('Committed, but the push failed: {0}', reason));
         }
         return true;
@@ -330,6 +340,14 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
   #schedule(): void {
     clearTimeout(this.#timer);
     this.#timer = setTimeout(() => void this.refresh(), REFRESH_DELAY);
+  }
+
+  #showCount(count: number): void {
+    this.#count = count;
+    if (!this.#view) return;
+    this.#view.badge = count
+      ? { value: count, tooltip: count === 1 ? vscode.l10n.t('1 changed file') : vscode.l10n.t('{0} changed files', count) }
+      : undefined;
   }
 
   #post(message: unknown): void {

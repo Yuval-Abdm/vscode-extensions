@@ -284,5 +284,9 @@
   "Delete the new file {0}? It is not tracked by Git: this cannot be undone.": "Supprimer le nouveau fichier {0} ? Il n'est pas suivi par Git : impossible de revenir en arrière.",
   "Discard the changes to {0}? This cannot be undone.": "Annuler les modifications de {0} ? Impossible de revenir en arrière.",
   "Discard the changes to {0} files? {1} new files will be deleted. This cannot be undone.": "Annuler les modifications de {0} fichiers ? {1} nouveaux fichiers seront supprimés. Impossible de revenir en arrière.",
-  "Discard the changes to {0} files? This cannot be undone.": "Annuler les modifications de {0} fichiers ? Impossible de revenir en arrière."
+  "Discard the changes to {0} files? This cannot be undone.": "Annuler les modifications de {0} fichiers ? Impossible de revenir en arrière.",
+  "Git Spark: Git authentication": "Git Spark : authentification Git",
+  "no answer after {0} seconds, the push was cancelled.": "pas de réponse au bout de {0} secondes, le push a été annulé.",
+  "1 changed file": "1 fichier modifié",
+  "{0} changed files": "{0} fichiers modifiés"
 }

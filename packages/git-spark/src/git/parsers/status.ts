@@ -82,6 +82,11 @@ export interface WorkingChanges {
   unstaged: WorkingChange[];
 }
 
+/** Nombre de fichiers modifiés, ajoutés, supprimés ou non suivis (un fichier dans les deux listes compte une fois). */
+export function changedFileCount(changes: WorkingChanges): number {
+  return new Set([...changes.staged, ...changes.unstaged].map((change) => change.path)).size;
+}
+
 /** `git status --porcelain=v2 -z --untracked-files=all` : un fichier peut être dans les deux listes. */
 export function parseWorkingChanges(text: string): WorkingChanges {
   const changes: WorkingChanges = { staged: [], unstaged: [] };
