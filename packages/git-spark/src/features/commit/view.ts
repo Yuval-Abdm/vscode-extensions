@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { PushError, StashKeptError, type GitCommands } from '../../git/commands.ts';
 import { changedFileCount, type WorkingChange } from '../../git/parsers/status.ts';
 import type { Repos } from '../../git/repos.ts';
+import { setBadgeOwner, setContainerBadge } from '../../shared/containerBadge.ts';
 import { TimeoutError } from '../../git/runner.ts';
 import { errorText, showConflictsView, whereToFinish } from '../../shared/errors.ts';
 import { revisionUri } from '../../shared/revisions.ts';
@@ -40,8 +41,6 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
   #view: vscode.WebviewView | undefined;
   #root: string | undefined;
   #timer: ReturnType<typeof setTimeout> | undefined;
-  /** Fichiers modifiés du dépôt affiché : pastille sur la vue, reprise par l'icône Git Spark de la barre d'activité. */
-  #count = 0;
 
   constructor(git: GitCommands, repos: Repos, extensionUri: vscode.Uri) {
     this.#git = git;
@@ -58,6 +57,7 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
         if (e.affectsConfiguration('gitSpark.commit.pullBeforeCommit')) this.#schedule();
       }),
     ];
+    this.#schedule(); // pastille à jour dès l'activation
   }
 
   /** Dépôt affiché (tests e2e). */
@@ -68,6 +68,8 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
   dispose(): void {
     clearTimeout(this.#timer);
     for (const disposable of this.#disposables) disposable.dispose();
+    setBadgeOwner(undefined);
+    setContainerBadge(undefined);
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -77,12 +79,13 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
     view.webview.options = { enableScripts: true, localResourceRoots: [media, dist] };
     view.webview.html = this.#html(view.webview, media, dist);
     view.webview.onDidReceiveMessage((message: Incoming) => this.#receive(message));
-    this.#showCount(this.#count);
+    setBadgeOwner(view);
     view.onDidChangeVisibility(() => {
       if (view.visible) this.#schedule();
     });
     view.onDidDispose(() => {
       this.#view = undefined;
+      setBadgeOwner(undefined);
     });
   }
 
@@ -359,11 +362,10 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
   }
 
   #showCount(count: number): void {
-    this.#count = count;
-    if (!this.#view) return;
-    this.#view.badge = count
-      ? { value: count, tooltip: count === 1 ? vscode.l10n.t('1 changed file') : vscode.l10n.t('{0} changed files', count) }
-      : undefined;
+    // Fichiers modifiés du dépôt affiché : pastille de l'icône Git Spark, même avant la première ouverture de la vue.
+    setContainerBadge(
+      count ? { value: count, tooltip: count === 1 ? vscode.l10n.t('1 changed file') : vscode.l10n.t('{0} changed files', count) } : undefined,
+    );
   }
 
   #post(message: unknown): void {

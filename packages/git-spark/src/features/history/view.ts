@@ -10,6 +10,7 @@ import { CancelledError, GitError } from '../../git/runner.ts';
 import { absoluteDate, relativeTime } from '../../shared/dates.ts';
 import { revisionUri } from '../../shared/revisions.ts';
 import { changeDiffArgs, entryDiffArgs, mapToHead } from './model.ts';
+import { registerBadgeCarrier } from '../../shared/containerBadge.ts';
 
 const PAGE = 50;
 const FOLLOW_DELAY = 250;
@@ -46,6 +47,7 @@ export class HistoryView implements vscode.TreeDataProvider<Node>, vscode.Dispos
     const command = (id: string, run: (...args: never[]) => unknown) => vscode.commands.registerCommand(id, run);
     this.#disposables = [
       this.#view,
+      registerBadgeCarrier(this.#view),
       this.#changed,
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         clearTimeout(this.#followTimer);

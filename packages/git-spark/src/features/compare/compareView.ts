@@ -13,6 +13,7 @@ import { pickRepo } from '../../shared/pickRepo.ts';
 import { revisionUri } from '../../shared/revisions.ts';
 import { errorText } from '../../shared/errors.ts';
 import { buildFileTree, diffSides, type FolderEntry, type TreeEntry } from './model.ts';
+import { registerBadgeCarrier } from '../../shared/containerBadge.ts';
 
 export interface CompareSpec {
   root: string;
@@ -55,6 +56,7 @@ export class CompareView implements vscode.TreeDataProvider<Node>, vscode.Dispos
     const command = (id: string, run: (...args: never[]) => unknown) => vscode.commands.registerCommand(id, run);
     this.#disposables = [
       this.#view,
+      registerBadgeCarrier(this.#view),
       this.#changed,
       vscode.extensions.onDidChange(() => vscode.commands.executeCommand('setContext', 'gitSpark.deployAvailable', deployInstalled())),
       // Nouveau commit, checkout, fichier modifié : la comparaison affichée est recalculée.

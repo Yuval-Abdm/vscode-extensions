@@ -7,6 +7,7 @@ import { relativeTime } from '../../shared/dates.ts';
 import { currentRoot } from '../../shared/pickRepo.ts';
 import { revisionUri } from '../../shared/revisions.ts';
 import { errorText, showConflictsView, whereToFinish } from '../../shared/errors.ts';
+import { registerBadgeCarrier } from '../../shared/containerBadge.ts';
 
 const REFRESH_DELAY = 300;
 
@@ -32,6 +33,7 @@ export class StashView implements vscode.TreeDataProvider<Node>, vscode.Disposab
     const command = (id: string, run: (...args: never[]) => unknown) => vscode.commands.registerCommand(id, run);
     this.#disposables = [
       this.#view,
+      registerBadgeCarrier(this.#view),
       this.#changed,
       repos.onDidChange(() => this.#schedule()),
       vscode.window.onDidChangeActiveTextEditor(() => this.#schedule()),

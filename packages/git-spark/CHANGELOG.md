@@ -3,6 +3,7 @@
 ## 1.2.1
 
 - Pull before commit: when the remote branch has nothing new, nothing is set aside any more (no stash). When a file is rewritten while the changes are set aside (formatter, minifier…) and they cannot be put back, Git Spark now says so: nothing was committed, the changes are kept in the stash "git-spark: before pull", and the rewritten files are named.
+- The number of changed files now shows on the Git Spark icon of the activity bar as soon as VS Code starts, without opening the Git Spark sidebar first.
 
 ## 1.2.0
 

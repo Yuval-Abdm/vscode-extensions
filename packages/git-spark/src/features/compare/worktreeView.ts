@@ -9,6 +9,7 @@ import type { Repos } from '../../git/repos.ts';
 import { GitError } from '../../git/runner.ts';
 import { currentRoot } from '../../shared/pickRepo.ts';
 import { errorText } from '../../shared/errors.ts';
+import { registerBadgeCarrier } from '../../shared/containerBadge.ts';
 
 const REFRESH_DELAY = 300;
 
@@ -34,6 +35,7 @@ export class WorktreeView implements vscode.TreeDataProvider<Node>, vscode.Dispo
     const command = (id: string, run: (...args: never[]) => unknown) => vscode.commands.registerCommand(id, run);
     this.#disposables = [
       this.#view,
+      registerBadgeCarrier(this.#view),
       this.#changed,
       repos.onDidChange(() => this.#schedule()),
       vscode.window.onDidChangeActiveTextEditor(() => this.#schedule()),
