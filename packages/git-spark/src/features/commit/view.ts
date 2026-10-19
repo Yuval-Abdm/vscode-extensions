@@ -3,7 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import * as vscode from 'vscode';
-import { PushError, type GitCommands } from '../../git/commands.ts';
+import { PushError, StashKeptError, type GitCommands } from '../../git/commands.ts';
 import { changedFileCount, type WorkingChange } from '../../git/parsers/status.ts';
 import type { Repos } from '../../git/repos.ts';
 import { TimeoutError } from '../../git/runner.ts';
@@ -192,7 +192,23 @@ export class CommitView implements vscode.WebviewViewProvider, vscode.Disposable
         return true;
       });
     } catch (err) {
-      void vscode.window.showErrorMessage(vscode.l10n.t('Commit failed: {0}', errorText(err)));
+      if (err instanceof StashKeptError) {
+        // Modifications restées dans le stash : le dire, sinon elles semblent avoir disparu.
+        void vscode.window.showErrorMessage(
+          err.files.length
+            ? vscode.l10n.t(
+                'Nothing was committed: the pull failed and your changes could not be put back because {0} was rewritten meanwhile (formatter, minifier…?). They are kept in the stash "git-spark: before pull": discard the changes to {0}, then Pop it from the Stashes view. Git said: {1}',
+                err.files.join(', '),
+                errorText(err.reason),
+              )
+            : vscode.l10n.t(
+                'Nothing was committed: the pull failed and your changes could not be put back. They are kept in the stash "git-spark: before pull": Pop it from the Stashes view. Git said: {0}',
+                errorText(err.reason),
+              ),
+        );
+      } else {
+        void vscode.window.showErrorMessage(vscode.l10n.t('Commit failed: {0}', errorText(err)));
+      }
     } finally {
       this.#post({ type: 'busy', busy: false });
       await this.refresh();

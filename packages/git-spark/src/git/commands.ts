@@ -100,6 +100,23 @@ export class PushError extends Error {
   }
 }
 
+/**
+ * Pull avant commit impossible ET modifications impossibles à remettre en place : elles restent dans le stash
+ * « git-spark: before pull ». `files` : fichiers suivis réécrits entre-temps par un autre programme (minifier,
+ * formatter…), qui bloquent la remise en place. `reason` : l'erreur du pull.
+ */
+export class StashKeptError extends Error {
+  readonly files: string[];
+  readonly reason: unknown;
+
+  constructor(reason: unknown, files: string[]) {
+    super(reason instanceof Error ? reason.message : String(reason));
+    this.name = 'StashKeptError';
+    this.reason = reason;
+    this.files = files;
+  }
+}
+
 export type { Worktree };
 
 export class GitCommands {
@@ -625,24 +642,40 @@ export class GitCommands {
   }
 
   /**
-   * Pull (rebase) avant un commit, en gardant l'index exact : les modifications suivies sont mises de côté
-   * (`stash push`), puis `pull --rebase`, puis `stash pop --index` (--autostash, lui, perdrait l'indexation).
-   * 'no-upstream' : rien n'est fait ; 'conflicts' : le rebase s'est arrêté (modifications gardées dans le stash) ;
-   * 'stash-conflicts' : les modifications n'ont pas pu être réappliquées telles quelles (gardées dans le stash).
+   * Pull (rebase) avant un commit, en gardant l'index exact : `fetch` d'abord ; si la branche distante n'apporte
+   * rien, on s'arrête là (rien n'est mis de côté). Sinon les modifications suivies sont mises de côté
+   * (`stash push`), puis `rebase` sur la branche distante, puis `stash pop --index` (--autostash, lui, perdrait
+   * l'indexation). 'no-upstream' : rien n'est fait ; 'conflicts' : le rebase s'est arrêté (modifications gardées
+   * dans le stash) ; 'stash-conflicts' : les modifications n'ont pas pu être réappliquées telles quelles (gardées
+   * dans le stash). StashKeptError : rebase impossible et modifications impossibles à remettre (gardées dans le stash).
    */
   async pullBeforeCommit(root: string): Promise<'done' | 'no-upstream' | 'conflicts' | 'stash-conflicts'> {
     if (!(await this.status(root)).branch.upstream) return 'no-upstream';
+    await this.runner.write(root, ['fetch', '--quiet'], { timeoutMs: NETWORK_TIMEOUT });
+    // Déjà à jour (ou seulement en avance) : pas de stash, donc pas de fenêtre où un watcher pourrait tout bloquer.
+    if (await this.isAncestor(root, '@{upstream}', 'HEAD')) return 'done';
     const changes = await this.workingChanges(root);
     const dirty = changes.staged.length > 0 || changes.unstaged.some((change) => change.status !== '?');
     const before = await this.revParse(root, 'refs/stash');
     if (dirty) await this.runner.write(root, ['stash', 'push', '--quiet', '-m', 'git-spark: before pull'], { env: STASH_ENV });
     const stashed = dirty && (await this.revParse(root, 'refs/stash')) !== before;
     try {
-      await this.runner.write(root, ['pull', '--rebase', '--no-autostash', '--quiet'], { env: NO_EDITOR, timeoutMs: NETWORK_TIMEOUT });
+      // Sans argument, rebase sur la branche distante en mode fork-point, comme `pull --rebase`, sans repasser par le réseau.
+      await this.runner.write(root, ['rebase', '--no-autostash', '--quiet'], { env: NO_EDITOR });
     } catch (err) {
       if (err instanceof GitError && ((await this.operation(root))?.kind === 'rebase' || (await this.status(root)).conflicts.length)) return 'conflicts';
-      // Pull impossible (réseau, fichier non suivi qui serait écrasé…) : on remet les modifications comme avant.
-      if (stashed) await this.runner.write(root, ['stash', 'pop', '--index', '--quiet'], { env: STASH_ENV });
+      // Rebase impossible (fichier non suivi qui serait écrasé, fichier réécrit par un autre programme…) : on remet
+      // les modifications comme avant ; si même ça échoue, elles restent dans le stash et on le dit.
+      if (stashed) {
+        try {
+          await this.runner.write(root, ['stash', 'pop', '--index', '--quiet'], { env: STASH_ENV });
+        } catch (popErr) {
+          if (!(popErr instanceof GitError)) throw popErr;
+          const now = await this.workingChanges(root);
+          const files = [...new Set([...now.staged, ...now.unstaged].filter((change) => change.status !== '?').map((change) => change.path))];
+          throw new StashKeptError(err, files);
+        }
+      }
       throw err;
     }
     if (!stashed) return 'done';

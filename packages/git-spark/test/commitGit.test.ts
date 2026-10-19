@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it } from 'node:test';
-import { GitCommands } from '../src/git/commands.ts';
+import { GitCommands, StashKeptError } from '../src/git/commands.ts';
 import { parseWorkingChanges } from '../src/git/parsers/status.ts';
 import { GitRunner } from '../src/git/runner.ts';
 import { makeRemote, makeRepo } from './helpers/repo.ts';
@@ -202,6 +204,74 @@ describe('vue Commit : cas limites (revue)', () => {
       assert.deepEqual((await git.workingChanges(repo.root)).staged.map((c) => c.path), ['x*.txt']);
     } finally {
       repo.dispose();
+    }
+  });
+});
+
+describe('pull avant commit : fichier réécrit par un autre programme (minifier, formatter…)', () => {
+  /** Runner qui simule un watcher : juste après `stash push`, `write(root)` réécrit un fichier de l'arbre de travail. */
+  function gitWithWatcher(write: (root: string) => void): GitCommands {
+    const runner = new GitRunner('git');
+    const original = runner.write.bind(runner);
+    runner.write = async (cwd, args, options) => {
+      const result = await original(cwd, args, options);
+      if (args[0] === 'stash' && args[1] === 'push') write(cwd);
+      return result;
+    };
+    return new GitCommands(runner);
+  }
+
+  /** a : style.css et style.min.css poussés, puis modifiés et indexés. */
+  function stagedCss(remote: ReturnType<typeof makeRemote>) {
+    const a = remote.clone();
+    a.write('style.css', 'a{}\n');
+    a.write('style.min.css', 'a{}');
+    a.commit('base');
+    a.git('push', '-q', '-u', 'origin', 'main');
+    return a;
+  }
+
+  function editCss(a: ReturnType<ReturnType<typeof makeRemote>['clone']>) {
+    a.write('style.css', 'a{margin:0}\n');
+    a.write('style.min.css', 'a{margin:0}');
+    a.git('add', '-A');
+  }
+
+  const regenerate = (root: string) => writeFileSync(path.join(root, 'style.min.css'), 'regenerated');
+
+  it('déjà à jour avec le distant : rien n’est mis de côté, les modifications restent en place', async () => {
+    const remote = makeRemote();
+    try {
+      const a = stagedCss(remote);
+      editCss(a);
+      const before = a.git('status', '--porcelain');
+      assert.equal(await gitWithWatcher(regenerate).pullBeforeCommit(a.root), 'done');
+      assert.equal(a.git('status', '--porcelain'), before);
+      assert.equal(a.git('show', ':style.min.css'), 'a{margin:0}');
+      assert.equal(a.git('stash', 'list').trim(), '');
+    } finally {
+      remote.dispose();
+    }
+  });
+
+  it('en retard sur le distant : modifications gardées dans le stash, erreur qui nomme le fichier réécrit', async () => {
+    const remote = makeRemote();
+    try {
+      const a = stagedCss(remote);
+      const b = remote.clone();
+      b.write('other.txt', 'remote\n');
+      b.commit('remote work');
+      b.git('push', '-q');
+      editCss(a);
+      await assert.rejects(gitWithWatcher(regenerate).pullBeforeCommit(a.root), (err: unknown) => {
+        assert.ok(err instanceof StashKeptError);
+        assert.deepEqual(err.files, ['style.min.css']);
+        return true;
+      });
+      assert.match(a.git('stash', 'list'), /git-spark: before pull/);
+      assert.equal(a.git('show', 'stash@{0}:style.css'), 'a{margin:0}\n');
+    } finally {
+      remote.dispose();
     }
   });
 });

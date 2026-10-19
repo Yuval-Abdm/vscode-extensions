@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+- Pull before commit: when the remote branch has nothing new, nothing is set aside any more (no stash). When a file is rewritten while the changes are set aside (formatter, minifier…) and they cannot be put back, Git Spark now says so: nothing was committed, the changes are kept in the stash "git-spark: before pull", and the rewritten files are named.
+
 ## 1.2.0
 
 - Git asks for your SSH key passphrase (or HTTPS credentials) in a VS Code input box instead of failing.
