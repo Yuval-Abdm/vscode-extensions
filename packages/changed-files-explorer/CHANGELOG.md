@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Stage / Unstage Changes removed from the view (inline buttons and right-click menu): use the Source Control view.
+- Revert uploads: a button in the view title puts back on the server the files as they were before your uploads since the last commit (changed files restored, new files deleted, deleted files restored). Requires the FTP SFTP Deploy release that ships the same feature.
+
 ## 1.0.1
 - Repository, issues and homepage links on the Marketplace page.
 

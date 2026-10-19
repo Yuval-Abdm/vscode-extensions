@@ -28,8 +28,6 @@
   "Move to Trash": "Mettre à la corbeille",
   "Trash is unavailable. Permanently delete '{0}'?": "Corbeille indisponible. Supprimer définitivement « {0} » ?",
   "Delete Permanently": "Supprimer définitivement",
-  "Nothing to stage: no unstaged changes.": "Rien à indexer : aucune modification non indexée.",
-  "Nothing to unstage: no staged files in the selection.": "Rien à désindexer : aucun fichier indexé dans la sélection.",
   "No unstaged changes to discard.": "Aucune modification non indexée à ignorer.",
   "Are you sure you want to discard changes in '{0}'?\nThis is irreversible (untracked files will be deleted).": "Voulez-vous vraiment ignorer les modifications de « {0} » ?\nCette action est irréversible (les fichiers non suivis seront supprimés).",
   "Are you sure you want to discard changes in these {0} files?\nThis is irreversible (untracked files will be deleted).": "Voulez-vous vraiment ignorer les modifications de ces {0} fichiers ?\nCette action est irréversible (les fichiers non suivis seront supprimés).",
@@ -52,5 +50,6 @@
   "Upload only": "Uploader seulement",
   "The built-in Git extension was not found.": "L'extension Git intégrée est introuvable.",
   "{0} changed file(s)": "{0} fichier(s) modifié(s)",
-  "{0} path(s) copied to the clipboard.": "{0} chemin(s) copié(s) dans le presse-papiers."
+  "{0} path(s) copied to the clipboard.": "{0} chemin(s) copié(s) dans le presse-papiers.",
+  "Update the 'FTP SFTP Deploy' extension to revert uploads.": "Mettez à jour l'extension « FTP SFTP Deploy » pour annuler les envois."
 }

@@ -136,16 +136,6 @@
         "title": "%changedFiles.delete.title%"
       },
       {
-        "command": "changedFiles.stage",
-        "title": "%changedFiles.stage.title%",
-        "icon": "$(add)"
-      },
-      {
-        "command": "changedFiles.unstage",
-        "title": "%changedFiles.unstage.title%",
-        "icon": "$(remove)"
-      },
-      {
         "command": "changedFiles.discard",
         "title": "%changedFiles.discard.title%",
         "icon": "$(discard)"
@@ -173,6 +163,12 @@
         "command": "changedFiles.diffWithServer",
         "title": "%changedFiles.diffWithServer.title%",
         "icon": "$(cloud)"
+      },
+      {
+        "command": "changedFiles.revertUploads",
+        "title": "%changedFiles.revertUploads.title%",
+        "icon": "$(history)",
+        "category": "Changed Files Explorer"
       }
     ],
     "menus": {
@@ -183,24 +179,29 @@
           "group": "navigation@1"
         },
         {
-          "command": "changedFiles.selectBaseBranch",
-          "when": "view == changedFiles",
+          "command": "changedFiles.revertUploads",
+          "when": "view == changedFiles && changedFiles.canRevertUploads",
           "group": "navigation@2"
         },
         {
-          "command": "changedFiles.toggleGrouping",
+          "command": "changedFiles.selectBaseBranch",
           "when": "view == changedFiles",
           "group": "navigation@3"
         },
         {
-          "command": "changedFiles.copyList",
+          "command": "changedFiles.toggleGrouping",
           "when": "view == changedFiles",
           "group": "navigation@4"
         },
         {
-          "command": "changedFiles.refresh",
+          "command": "changedFiles.copyList",
           "when": "view == changedFiles",
           "group": "navigation@5"
+        },
+        {
+          "command": "changedFiles.refresh",
+          "when": "view == changedFiles",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [
@@ -208,16 +209,6 @@
           "command": "changedFiles.openDiff",
           "when": "view == changedFiles && viewItem == file",
           "group": "inline@1"
-        },
-        {
-          "command": "changedFiles.stage",
-          "when": "view == changedFiles && viewItem == file",
-          "group": "inline@2"
-        },
-        {
-          "command": "changedFiles.unstage",
-          "when": "view == changedFiles && viewItem == file",
-          "group": "inline@3"
         },
         {
           "command": "changedFiles.openToSide",
@@ -260,19 +251,9 @@
           "group": "6_copypath@2"
         },
         {
-          "command": "changedFiles.stage",
-          "when": "view == changedFiles && viewItem == file",
-          "group": "7_git@1"
-        },
-        {
-          "command": "changedFiles.unstage",
-          "when": "view == changedFiles && viewItem == file",
-          "group": "7_git@2"
-        },
-        {
           "command": "changedFiles.discard",
           "when": "view == changedFiles && viewItem == file",
-          "group": "7_git@3"
+          "group": "7_git@1"
         },
         {
           "command": "changedFiles.rename",
@@ -356,14 +337,6 @@
           "when": "false"
         },
         {
-          "command": "changedFiles.stage",
-          "when": "false"
-        },
-        {
-          "command": "changedFiles.unstage",
-          "when": "false"
-        },
-        {
           "command": "changedFiles.discard",
           "when": "false"
         },
@@ -386,6 +359,10 @@
         {
           "command": "changedFiles.uploadAll",
           "when": "ftpSftpDeploy.hasConfig"
+        },
+        {
+          "command": "changedFiles.revertUploads",
+          "when": "changedFiles.canRevertUploads"
         }
       ]
     },

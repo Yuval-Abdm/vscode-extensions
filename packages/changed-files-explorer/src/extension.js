@@ -352,6 +352,11 @@ function registerFileCommands(git, view, provider) {
   const uris = (node, nodes) => targets(node, nodes).filter(existsOnDisk).map((n) => n.entries[0].uri);
   const inCategory = (n, ...cats) => n.entries.some((e) => cats.includes(e.category));
   const exec = (cmd, ...args) => vscode.commands.executeCommand(cmd, ...args);
+  /**
+   * Session de sauvegarde des envois : le commit HEAD de chaque dépôt. Les envois faits avant un nouveau
+   * commit s'annulent ensemble ; le premier envoi après un commit repart d'une sauvegarde vide.
+   */
+  const backup = () => ({ backup: git.repositories.map((r) => r.state.HEAD?.commit ?? '').join(',') });
 
   /** Applique une opération git, dépôt par dépôt, aux fichiers concernés. */
   const gitOp = async (list, op) => {
@@ -420,16 +425,6 @@ function registerFileCommands(git, view, provider) {
       }
     },
 
-    stage: async (n, ns) => {
-      const list = targets(n, ns).filter((t) => inCategory(t, 'unstaged', 'untracked', 'conflicts'));
-      if (!list.length) return void vscode.window.showInformationMessage(vscode.l10n.t('Nothing to stage: no unstaged changes.'));
-      await gitOp(list, (repo, paths) => repo.add(paths));
-    },
-    unstage: async (n, ns) => {
-      const list = targets(n, ns).filter((t) => inCategory(t, 'staged'));
-      if (!list.length) return void vscode.window.showInformationMessage(vscode.l10n.t('Nothing to unstage: no staged files in the selection.'));
-      await gitOp(list, (repo, paths) => repo.revert(paths));
-    },
     discard: async (n, ns) => {
       const list = targets(n, ns).filter((t) => inCategory(t, 'unstaged', 'untracked'));
       if (!list.length) return void vscode.window.showInformationMessage(vscode.l10n.t('No unstaged changes to discard.'));
@@ -445,15 +440,19 @@ function registerFileCommands(git, view, provider) {
       const list = targets(n, ns);
       const skipped = list.length - list.filter(existsOnDisk).length;
       if (skipped) vscode.window.showInformationMessage(vscode.l10n.t("{0} deleted file(s) not uploaded: use 'Delete from server'.", skipped));
-      return api.upload(uris(n, ns));
+      return api.upload(uris(n, ns), backup());
     }),
-    deleteRemote: (n, ns) => withDeploy((api) => api.deleteRemote(targets(n, ns).map((t) => t.entries[0].uri))),
+    deleteRemote: (n, ns) => withDeploy((api) => api.deleteRemote(targets(n, ns).map((t) => t.entries[0].uri), backup())),
     diffWithServer: (n) => withDeploy((api) => targets(n).slice(0, 1).forEach((t) => api.diff(t.entries[0].uri))),
     uploadCategory: (n) => withDeploy((api) => n?.kind === 'category' && syncWithServer(api, fileNodes(n), n.label)),
     uploadAll: () => withDeploy(async (api) => {
       const all = [];
       for (const repo of git.repositories) all.push(...provider.groupByFile(repo, await provider.entriesOf(repo)));
       return syncWithServer(api, all, vscode.l10n.t('all changed files'));
+    }),
+    revertUploads: () => withDeploy((api) => {
+      if (api.revertBackup) return api.revertBackup();
+      vscode.window.showWarningMessage(vscode.l10n.t("Update the 'FTP SFTP Deploy' extension to revert uploads."));
     }),
   };
 
@@ -521,8 +520,8 @@ function registerFileCommands(git, view, provider) {
       : [UPLOAD];
     const choice = await vscode.window.showWarningMessage(message, { modal: true }, ...buttons);
     if (!choice) return;
-    if (toUpload.length) await api.upload(toUpload.map((t) => t.uri));
-    if (toDelete.length && choice !== UPLOAD_ONLY) await api.deleteRemote(toDelete.map((t) => t.uri), { confirm: false });
+    if (toUpload.length) await api.upload(toUpload.map((t) => t.uri), backup());
+    if (toDelete.length && choice !== UPLOAD_ONLY) await api.deleteRemote(toDelete.map((t) => t.uri), { confirm: false, ...backup() });
   }
 
   return Object.entries(commands).map(([id, fn]) => vscode.commands.registerCommand(`changedFiles.${id}`, fn));
@@ -580,6 +579,16 @@ async function activate(context) {
     }),
     { dispose: () => repoListeners.forEach((d) => d.dispose()) },
   );
+  watchUploadBackup(context);
+}
+
+/** Bouton « Annuler les envois » visible tant que FTP SFTP Deploy garde une sauvegarde. */
+async function watchUploadBackup(context) {
+  const api = await deployApi().catch(() => undefined);
+  if (!api?.onDidChangeBackup) return;
+  const update = () => vscode.commands.executeCommand('setContext', 'changedFiles.canRevertUploads', api.backupInfo().count > 0);
+  context.subscriptions.push(api.onDidChangeBackup(update));
+  update();
 }
 
 function deactivate() {}
