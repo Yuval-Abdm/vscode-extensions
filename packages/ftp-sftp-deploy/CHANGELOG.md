@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 - Public API: uploads and remote deletions can save the server version first (`backup` option), and `revertBackup()` puts it back. Used by Changed Files Explorer's « Revert uploads ».
 
 ## 1.1.0
