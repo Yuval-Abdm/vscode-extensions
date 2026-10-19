@@ -10,6 +10,7 @@ const { CancelledError } = require('./connections');
 // Libellés de boutons (comparés à la réponse de l'utilisateur)
 const DELETE_FROM_SERVER = () => vscode.l10n.t('Delete from server');
 const DOWNLOAD = () => vscode.l10n.t('Download');
+const REVERT = () => vscode.l10n.t('Restore');
 
 /**
  * @typedef {import('./config').Profile} Profile
@@ -22,12 +23,14 @@ class Deployer {
    * @param {import('./connections').ConnectionManager} connections
    * @param {import('./remoteFs').RemoteFileSystem} remoteFs
    * @param {vscode.OutputChannel} log
+   * @param {import('./backup').BackupStore} backups
    */
-  constructor(config, connections, remoteFs, log) {
+  constructor(config, connections, remoteFs, log, backups) {
     this.config = config;
     this.connections = connections;
     this.remoteFs = remoteFs;
     this.log = log;
+    this.backups = backups;
   }
 
   /**
@@ -123,12 +126,17 @@ class Deployer {
     }
   }
 
-  /** Upload de fichiers et/ou dossiers locaux, chacun à son emplacement relatif sur le serveur. */
-  async upload(uris, { silent = false } = {}) {
+  /**
+   * Upload de fichiers et/ou dossiers locaux, chacun à son emplacement relatif sur le serveur.
+   * `backup` : session de sauvegarde (voir BackupStore) ; la version serveur est gardée pour `revertBackup`.
+   */
+  async upload(uris, { silent = false, backup = undefined } = {}) {
     const files = await this.expandLocal(uris);
     const { targets, ignored, outside } = this.resolve(files);
     this.warnSkipped(ignored, outside, silent, targets.length);
+    if (backup !== undefined && targets.length) await this.backups.begin(String(backup));
     return this.batch(vscode.l10n.t('Upload'), targets, async (client, t, ctx) => {
+      if (backup !== undefined) await this.backups.capture(client, t.profile, t.remote);
       const dir = path.posix.dirname(t.remote);
       if (!ctx.dirs.has(dir)) {
         await client.mkdirp(dir);
@@ -140,7 +148,7 @@ class Deployer {
   }
 
   /** Supprime sur le serveur les fichiers/dossiers correspondant à ces chemins locaux (qui peuvent ne plus exister). */
-  async deleteRemote(uris, { confirm = true } = {}) {
+  async deleteRemote(uris, { confirm = true, backup = undefined } = {}) {
     const { targets } = this.resolve(uris);
     if (!targets.length) return { done: 0, failed: [] };
     if (confirm) {
@@ -151,9 +159,11 @@ class Deployer {
         { modal: true }, DELETE_FROM_SERVER());
       if (ok !== DELETE_FROM_SERVER()) return { done: 0, failed: [] };
     }
+    if (backup !== undefined) await this.backups.begin(String(backup));
     return this.batch(vscode.l10n.t('Remote delete'), targets, async (client, t) => {
       const s = await client.stat(t.remote);
       if (!s) return; // déjà absent : rien à faire
+      if (backup !== undefined) await this.backups.capture(client, t.profile, t.remote);
       if (s.type === 'dir') await client.deleteDir(t.remote);
       else await client.deleteFile(t.remote);
       this.remoteFs.fire({ type: vscode.FileChangeType.Deleted, uri: remoteUri(t.profile, t.remote) });
@@ -194,6 +204,44 @@ class Deployer {
       return;
     }
     return this.batch(vscode.l10n.t('Download'), targets, (client, t) => client.download(t.remote, t.uri.fsPath));
+  }
+
+  /** Remet sur le serveur la version sauvegardée avant les envois de la session en cours. */
+  async revertBackup() {
+    const entries = [...this.backups.entries];
+    if (!entries.length) return void vscode.window.showInformationMessage(vscode.l10n.t('No upload to revert.'));
+    const profiles = new Map(this.config.profiles().map((p) => [p.id, p]));
+    const missing = entries.filter((e) => !profiles.has(e.profileId));
+    const usable = entries.filter((e) => profiles.has(e.profileId));
+    const line = (e) => `${e.existed ? '↺' : '✕'} ${e.remote} (${e.profileName})`;
+    const list = usable.slice(0, 15).map(line).join('\n') + (usable.length > 15 ? '\n' + vscode.l10n.t('… and {0} more', usable.length - 15) : '');
+    const ok = await vscode.window.showWarningMessage(
+      vscode.l10n.t('Put back on the server the version of {0} file(s) from before your uploads?', usable.length),
+      {
+        modal: true,
+        detail: [
+          list,
+          vscode.l10n.t('↺ restored to the server version · ✕ did not exist before: deleted from the server'),
+          missing.length ? vscode.l10n.t('{0} file(s) skipped: their profile no longer exists.', missing.length) : '',
+        ].filter(Boolean).join('\n\n'),
+      },
+      REVERT());
+    if (ok !== REVERT()) return;
+
+    const restored = [];
+    /** @type {(Target & { entry: import('./backup').BackupEntry })[]} */
+    const targets = usable.map((entry) => {
+      const profile = /** @type {Profile} */ (profiles.get(entry.profileId));
+      const uri = this.localFor(profile, entry.remote) ?? profile.folder.uri;
+      return { uri, profile, rel: relativeRemote(profile.remotePath, entry.remote) ?? entry.remote, remote: entry.remote, entry };
+    });
+    const result = await this.batch(vscode.l10n.t('Revert uploads'), targets, async (client, t) => {
+      await this.backups.restore(client, t.entry);
+      restored.push(t.entry);
+      this.remoteFs.fire({ type: t.entry.existed ? vscode.FileChangeType.Changed : vscode.FileChangeType.Deleted, uri: remoteUri(t.profile, t.remote) });
+    });
+    await this.backups.drop([...restored, ...missing]);
+    return result;
   }
 
   /** Ouvre un diff « serveur ↔ local » pour un fichier. */

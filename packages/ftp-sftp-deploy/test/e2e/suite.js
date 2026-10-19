@@ -184,6 +184,19 @@ test('« Déployer tous les fichiers modifiés » : modifiés + nouveaux upload�
   assert.ok(!fs.existsSync(onSftp('debug.log')), 'les exclusions restent appliquées');
 });
 
+test('« Annuler les envois » : le serveur retrouve ses versions d’avant « Déployer tous les fichiers modifiés »', async () => {
+  const publicApi = vscode.extensions.getExtension('yuval-abdm.ftp-sftp-deploy').exports;
+  assert.strictEqual(publicApi.backupInfo().count, 4, 'index.php, app.js, new.php, old.php sauvegardés');
+  modals.length = 0;
+  await vscode.commands.executeCommand('changedFiles.revertUploads');
+  assert.ok(/version of 4 file\(s\) from before your uploads/.test(modals[0] ?? ''), modals[0]);
+  assert.strictEqual(read(onSftp('includes/js/app.js')), 'console.log(1);');
+  assert.strictEqual(read(onSftp('old.php')), 'old', 'old.php remis sur le serveur');
+  assert.ok(!fs.existsSync(onSftp('includes/new.php')), 'new.php n’existait pas : supprimé');
+  assert.strictEqual(read(onSftp('index.php')), '<?php echo "v2";', 'déjà à jour avant l’envoi : inchangé');
+  assert.strictEqual(publicApi.backupInfo().count, 0, 'sauvegarde vidée');
+});
+
 test('vue « Serveur distant » : arborescence, nouveau dossier, suppression avec confirmation', async () => {
   const roots = await api.remoteTree.getChildren();
   assert.deepStrictEqual(roots.map((r) => r.profile.name), ['ftp', 'sftp']);

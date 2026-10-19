@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Public API: uploads and remote deletions can save the server version first (`backup` option), and `revertBackup()` puts it back. Used by Changed Files Explorer's « Revert uploads ».
+
 ## 1.1.0
 - Search files on the server from the Remote Server view: a « Search a file… » row at the top of each server. Type part of the name or path, letters in order (`usrctl` finds `src/user/UserController.php`); the matching files replace the folders in the tree while you type, matched letters in bold, with their usual actions (open, compare, download…). « Clear the search » brings the folders back. The file list is read on first use and kept until something changes on the server (Refresh reads it again).
 

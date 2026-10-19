@@ -101,5 +101,11 @@
   "Search on which server?": "Rechercher sur quel serveur ?",
   "Search a file on {0}": "Rechercher un fichier sur {0}",
   "Part of the name or path, letters in order (e.g. \"usrctl\")": "Partie du nom ou du chemin, lettres dans l'ordre (ex. « usrctl »)",
-  "Results appear in the Remote Server view. Enter: close this box; empty: back to the folders.": "Les résultats s'affichent dans la vue Serveur distant. Entrée : fermer ce champ ; vide : retour aux dossiers."
+  "Results appear in the Remote Server view. Enter: close this box; empty: back to the folders.": "Les résultats s'affichent dans la vue Serveur distant. Entrée : fermer ce champ ; vide : retour aux dossiers.",
+  "Restore": "Restaurer",
+  "No upload to revert.": "Aucun envoi à annuler.",
+  "Put back on the server the version of {0} file(s) from before your uploads?": "Remettre sur le serveur la version de {0} fichier(s) d'avant vos envois ?",
+  "↺ restored to the server version · ✕ did not exist before: deleted from the server": "↺ remis dans sa version serveur · ✕ n'existait pas avant : supprimé du serveur",
+  "{0} file(s) skipped: their profile no longer exists.": "{0} fichier(s) ignoré(s) : leur profil n'existe plus.",
+  "Revert uploads": "Annulation des envois"
 }

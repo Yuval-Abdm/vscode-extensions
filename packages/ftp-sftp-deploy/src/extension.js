@@ -7,6 +7,7 @@ const { RemoteFileSystem, SCHEME } = require('./remoteFs');
 const { RemoteTreeProvider, registerRemoteCommands } = require('./remoteTree');
 const { Deployer } = require('./deployer');
 const { RemoteSearch } = require('./remoteSearch');
+const { BackupStore } = require('./backup');
 
 /** @param {vscode.ExtensionContext} context */
 async function activate(context) {
@@ -14,7 +15,9 @@ async function activate(context) {
   const config = new ConfigManager(context, log);
   const connections = new ConnectionManager(config, log);
   const remoteFs = new RemoteFileSystem(config, connections);
-  const deployer = new Deployer(config, connections, remoteFs, log);
+  const backups = new BackupStore(vscode.Uri.joinPath(context.storageUri ?? context.globalStorageUri, 'upload-backup').fsPath);
+  await backups.load();
+  const deployer = new Deployer(config, connections, remoteFs, log, backups);
   const remoteSearch = new RemoteSearch(config, connections, remoteFs);
   const remoteTree = new RemoteTreeProvider(config, remoteFs, remoteSearch);
   const remoteView = vscode.window.createTreeView('ftpSftpDeploy.remote', { treeDataProvider: remoteTree, canSelectMany: true, showCollapseAll: true });
@@ -145,8 +148,14 @@ async function activate(context) {
     onDidChangeConfig: config.onDidChange,
     /** Fichiers locaux → cibles distantes (profil actif, chemin relatif, chemin distant), hors exclusions. */
     resolve: (uris) => deployer.resolve(uris).targets.map((t) => ({ uri: t.uri, rel: t.rel, remote: t.remote, profile: t.profile.name, host: t.profile.host })),
-    upload: (uris) => deployer.upload(uris),
+    /** options.backup : session de sauvegarde (ex. : commit HEAD) ; une autre session efface la précédente. */
+    upload: (uris, options) => deployer.upload(uris, { backup: options?.backup }),
     deleteRemote: (uris, options) => deployer.deleteRemote(uris, options),
+    /** Sauvegarde des versions serveur remplacées par les envois faits avec `backup`. */
+    backupInfo: () => ({ session: backups.session, count: backups.entries.length }),
+    onDidChangeBackup: (/** @type {() => void} */ cb) => backups.onDidChange(cb),
+    /** Remet sur le serveur les versions sauvegardées (demande confirmation). */
+    revertBackup: () => deployer.revertBackup(),
     diff: (uri) => deployer.diff(uri),
     // Internes, pour les tests d'intégration
     _internals: { config, deployer, remoteTree, remoteSearch },
